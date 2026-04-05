@@ -61,9 +61,10 @@
               <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
               <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard">Pool Chemistry Dashboard</a>
               <a href="../Training/training.html" class="dropdown-item supervisor-only" data-nav="training-setup">Training Setup</a>
-              <a href="employees.html" class="dropdown-item supervisor-only active-page" data-nav="employees">Compliance</a>
+              <a href="employees.html" class="dropdown-item supervisor-only active-page" data-nav="employees">Performance Tracking</a>
               <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
               <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+              <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Daily Duties</a>
               <a href="#" class="dropdown-item logout" data-nav="logout" id="empLogoutBtn">Logout</a>
             </div>
           </div>
@@ -75,7 +76,7 @@
     </div>
 
     <div class="container">
-      <h2 class="page-content-title">Compliance</h2>
+      <h2 class="page-content-title" style="text-align:center;">Performance Tracking</h2>
 
       <!-- Page-level tabs -->
       <div class="emp-page-tabs">
@@ -318,9 +319,9 @@
         <div class="settings-section">
           <h3>Security</h3>
           <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
-          <div class="settings-row" style="margin-top: 10px;">
-            <div class="settings-field">
-              <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+          <div style="margin-top: 10px;">
+            <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+            <div style="margin-top: 4px;">
               <select id="securityTimeoutSelect">
                 <option value="never">Never</option>
                 <option value="15">15 minutes</option>
@@ -328,14 +329,14 @@
                 <option value="60">60 minutes</option>
               </select>
             </div>
-            <div class="settings-field">
-              <label style="display:flex;align-items:center;gap:8px;margin-top:24px;">
-                <input type="checkbox" id="securityRequirePassword" checked>
-                Require password confirmation before destructive actions
-              </label>
-            </div>
           </div>
-          <button type="button" id="securitySaveBtn" class="submit-btn" style="margin-top: 10px;">Save</button>
+          <div style="margin-top: 14px;">
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="securityRequirePassword" checked>
+              Require password confirmation before destructive actions
+            </label>
+          </div>
+          <button type="button" id="securitySaveBtn" class="editAndSave" style="margin-top: 14px;">Save</button>
         </div>
         <div class="settings-section">
           <h3>Site Appearance</h3>

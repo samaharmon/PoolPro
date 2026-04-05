@@ -336,6 +336,7 @@ function groupPoolsByMarket(pools) {
 
 function populatePoolSelects(pools) {
   poolsCache = pools || [];
+  window._poolsForDuties = pools || []; // expose for duties.js
   const groups = groupPoolsByMarket(pools);
 
   // Chemistry form pool select — grouped by market, value = pool.id
@@ -2127,4 +2128,175 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (dashboard && dashboard.classList.contains('show') && isSupervisor()) {
     loadDashboardData();
   }
+
+  // Supervisor Dashboard tab switching (Pool Chemistry vs Job Form Submissions)
+  const dashTabs = document.querySelectorAll('[data-dash-tab]');
+  dashTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      dashTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const which = tab.dataset.dashTab;
+      const chemPanel = document.getElementById('dashboardContent');
+      const jobPanel = document.getElementById('jobFormsContent');
+      if (which === 'chemistry') {
+        if (chemPanel) chemPanel.style.display = '';
+        if (jobPanel) jobPanel.style.display = 'none';
+      } else if (which === 'jobforms') {
+        if (chemPanel) chemPanel.style.display = 'none';
+        if (jobPanel) { jobPanel.style.display = ''; loadJobFormSubmissions(); }
+      }
+    });
+  });
 });
+
+// ============================================================
+// JOB FORM SUBMISSIONS (Duties page results)
+// ============================================================
+
+async function loadJobFormSubmissions() {
+  const container = document.getElementById('jobFormsContent');
+  if (!container) return;
+  container.innerHTML = '<p style="padding:16px;color:#666;">Loading submissions…</p>';
+
+  try {
+    const q = query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'));
+    const snap = await getDocs(q);
+    const submissions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderJobFormSubmissions(submissions, container);
+  } catch (err) {
+    console.error('[Duties] Error loading submissions:', err);
+    container.innerHTML = '<p style="color:red;padding:16px;">Error loading submissions.</p>';
+  }
+}
+
+function renderJobFormSubmissions(submissions, container) {
+  container.innerHTML = '';
+
+  if (!submissions.length) {
+    container.innerHTML = '<p style="padding:16px;color:#666;">No job form submissions yet.</p>';
+    return;
+  }
+
+  // Get selected markets
+  let selectedMarkets;
+  try {
+    const saved = JSON.parse(localStorage.getItem('chemlogMarkets') || '[]');
+    selectedMarkets = saved.length ? saved : null;
+  } catch (_) { selectedMarkets = null; }
+
+  // Group by market then pool
+  const marketMap = {};
+  poolsCache.forEach(pool => {
+    const markets = Array.isArray(pool.markets) ? pool.markets : (pool.market ? [pool.market] : ['Other']);
+    const primary = markets[0];
+    if (!marketMap[primary]) marketMap[primary] = [];
+    marketMap[primary].push(pool.name || pool.id);
+  });
+
+  const marketsToShow = selectedMarkets
+    ? selectedMarkets.filter(m => marketMap[m])
+    : Object.keys(marketMap).sort();
+
+  // Filter bar
+  const filterBar = document.createElement('div');
+  filterBar.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;';
+  filterBar.innerHTML = `<span class="filter-by-label">Filter By:</span>
+    <select id="jobMarketFilter" class="training-filter-select"><option value="all">All Markets</option></select>
+    <select id="jobPoolFilter" class="training-filter-select"><option value="all">All Pools</option></select>`;
+  container.appendChild(filterBar);
+
+  const marketSel = filterBar.querySelector('#jobMarketFilter');
+  const poolSel = filterBar.querySelector('#jobPoolFilter');
+  marketsToShow.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; marketSel.appendChild(o); });
+
+  const tablesWrap = document.createElement('div');
+  container.appendChild(tablesWrap);
+
+  function renderTables() {
+    tablesWrap.innerHTML = '';
+    const mFilter = marketSel.value;
+    const pFilter = poolSel.value;
+
+    const toShow = mFilter === 'all' ? marketsToShow : [mFilter];
+    toShow.forEach(market => {
+      const pools = marketMap[market] || [];
+      if (pFilter !== 'all' && !pools.includes(pFilter)) return;
+
+      const section = document.createElement('div');
+      section.className = 'dashboard-market-section';
+      const h2 = document.createElement('h2');
+      h2.className = 'dashboard-market-heading';
+      h2.textContent = market;
+      section.appendChild(h2);
+
+      const poolsToRender = pFilter === 'all' ? pools : pools.filter(p => p === pFilter);
+      poolsToRender.forEach(poolName => {
+        const poolSubs = submissions.filter(s => s.pool === poolName);
+        if (!poolSubs.length) return;
+
+        const h3 = document.createElement('h3');
+        h3.style.cssText = 'font-size:1rem;color:#69140e;margin:16px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px;';
+        h3.textContent = poolName;
+        section.appendChild(h3);
+
+        const table = document.createElement('table');
+        table.className = 'data-table dashboard-pool-table';
+        table.style.width = '100%';
+        table.innerHTML = `<thead><tr>
+          <th>Employee ID</th>
+          <th>Photos</th>
+          <th>Notes</th>
+          <th>Submitted</th>
+        </tr></thead>`;
+        const tbody = document.createElement('tbody');
+
+        poolSubs.forEach(sub => {
+          const tr = document.createElement('tr');
+          const ts = sub.timestamp?.toDate ? sub.timestamp.toDate() : null;
+          const timeStr = ts ? ts.toLocaleString() : '—';
+          const photoCells = (sub.photos || []).map(p =>
+            `<a href="${p.url}" target="_blank" rel="noopener">
+               <img src="${p.url}" alt="Photo" style="width:60px;height:60px;object-fit:cover;cursor:pointer;border:1px solid #ccc;margin:2px;"
+                 onclick="event.preventDefault();openPhotoModal('${p.url}')" />
+             </a>`
+          ).join('');
+          tr.innerHTML = `<td>${sub.guardId || '—'}</td>
+            <td style="white-space:nowrap;">${photoCells || '—'}</td>
+            <td>${sub.notes || '—'}</td>
+            <td style="white-space:nowrap;">${timeStr}</td>`;
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        section.appendChild(table);
+      });
+      tablesWrap.appendChild(section);
+    });
+  }
+
+  renderTables();
+  marketSel.addEventListener('change', () => {
+    poolSel.innerHTML = '<option value="all">All Pools</option>';
+    const pools = marketSel.value === 'all' ? Object.values(marketMap).flat() : (marketMap[marketSel.value] || []);
+    [...new Set(pools)].sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; poolSel.appendChild(o); });
+    renderTables();
+  });
+  poolSel.addEventListener('change', renderTables);
+}
+
+// Photo modal for job form submissions
+window.openPhotoModal = function(url) {
+  let overlay = document.getElementById('photoViewOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'photoViewOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+    overlay.addEventListener('click', () => overlay.style.display = 'none');
+    const img = document.createElement('img');
+    img.id = 'photoViewImg';
+    img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;box-shadow:0 0 20px rgba(0,0,0,0.5);';
+    overlay.appendChild(img);
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('photoViewImg').src = url;
+  overlay.style.display = 'flex';
+};

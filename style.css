@@ -2079,6 +2079,59 @@ body.dark-mode #trainingNotesInput {
 }
 
 /* ================================
+   Page-level tab component (shared: supervisor dashboard, employees page)
+   ================================ */
+
+.emp-page-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+  border-bottom: 2px solid #69140e;
+  width: fit-content;
+}
+
+.emp-page-tab {
+  padding: 10px 28px;
+  background: #eee;
+  border: 1px solid #ccc;
+  border-bottom: none;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #555;
+  border-radius: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  margin-right: 4px;
+}
+
+.emp-page-tab:last-child { margin-right: 0; }
+
+.emp-page-tab:hover { background: #ddd; }
+
+.emp-page-tab.active {
+  background: #69140e;
+  color: #fff;
+  border-color: #69140e;
+}
+
+body.dark-mode .emp-page-tab {
+  background: #444;
+  border-color: #666;
+  color: #ccc;
+}
+
+body.dark-mode .emp-page-tab.active {
+  background: #69140e;
+  color: #fff;
+  border-color: #69140e;
+}
+
+body.dark-mode .emp-page-tabs {
+  border-color: #ff8080;
+}
+
+/* ================================
    Supervisor dashboard layout
    ================================ */
 
@@ -2708,8 +2761,9 @@ textarea,
   pointer-events: auto;
 }
 
+/* Overlay starts below header row (~45px) and excludes Actions column (12% right) */
 #employeeTableSection.overlay-disabled::before {
-  inset: 0 12% 0 0;
+  inset: 45px 12% 0 0;
 }
 
 #employeeTableSection {

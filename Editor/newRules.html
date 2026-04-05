@@ -44,9 +44,10 @@
                             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
-                            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Compliance</a>
+                            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
                             <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+                            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Daily Duties</a>
                             <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
                         </div>
                     </div>
@@ -1447,9 +1448,6 @@
                 <select id="employeeHomePoolInput">
                   <option value="">Select pool</option>
                 </select>
-                <label for="employeePhoneInput">Phone number</label>
-                <!-- ✅ FIX #10: tel styled globally in CSS -->
-                <input type="tel" id="employeePhoneInput" />
                 </div>
 
                 <div class="settings-field">
@@ -1529,9 +1527,9 @@
                 <div class="settings-section">
                     <h3>Security</h3>
                     <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
-                    <div class="settings-row" style="margin-top: 10px;">
-                        <div class="settings-field">
-                            <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+                    <div style="margin-top: 10px;">
+                        <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+                        <div style="margin-top: 4px;">
                             <select id="securityTimeoutSelect">
                                 <option value="never">Never</option>
                                 <option value="15">15 minutes</option>
@@ -1539,14 +1537,14 @@
                                 <option value="60">60 minutes</option>
                             </select>
                         </div>
-                        <div class="settings-field">
-                            <label style="display:flex;align-items:center;gap:8px;margin-top:24px;">
-                                <input type="checkbox" id="securityRequirePassword" checked>
-                                Require password confirmation before destructive actions
-                            </label>
-                        </div>
                     </div>
-                    <button type="button" id="securitySaveBtn" class="submit-btn" style="margin-top: 10px;">Save</button>
+                    <div style="margin-top: 14px;">
+                        <label style="display:flex;align-items:center;gap:8px;">
+                            <input type="checkbox" id="securityRequirePassword" checked>
+                            Require password confirmation before destructive actions
+                        </label>
+                    </div>
+                    <button type="button" id="securitySaveBtn" class="editAndSave" style="margin-top: 14px;">Save</button>
                 </div>
                 <!-- Site Appearance Section -->
                     <div class="settings-section">

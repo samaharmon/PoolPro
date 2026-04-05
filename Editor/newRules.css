@@ -496,10 +496,21 @@ body.dark-mode .pool-rule-block {
     background-color: #303030;      /* darker block background */
 }
 
-/* Very obvious “view‑only” state */
+/* View-only state — matches SET Performance table overlay opacity */
 .pool-rule-block.disabled-block {
-    opacity: 0.45;
-    filter: grayscale(70%);
+    opacity: 1;
+    filter: none;
+    position: relative;
+}
+
+.pool-rule-block.disabled-block::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.18);
+    opacity: 0.35;
+    pointer-events: none;
+    z-index: 2;
 }
 
 /* Editing state pops out */
@@ -576,6 +587,11 @@ body.dark-mode .pool-rule-block {
     cursor: pointer;
     line-height: 1.4;
     font-family: Georgia, serif;
+    margin-right: 3px;
+}
+
+.formatting-toolbar .format-btn:last-child {
+    margin-right: 3px;
 }
 
 .formatting-toolbar .format-btn:disabled {

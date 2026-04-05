@@ -16,7 +16,8 @@ import {
   query,
   Timestamp,
   writeBatch,
-  deleteDoc
+  deleteDoc,
+  serverTimestamp
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 
 import {
@@ -141,6 +142,7 @@ export {
   orderBy,
   query,
   Timestamp,
+  serverTimestamp,
   writeBatch,
   deleteDoc,
   onAuthStateChanged,

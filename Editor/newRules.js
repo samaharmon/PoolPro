@@ -1380,18 +1380,18 @@ function applyConcernToRow(select) {
 
   const level = select.value || 'none';
   const cls =
-    level === 'major' ? 'concern-major' :
-    level === 'minor' ? 'concern-minor' :
+    (level === 'major' || level === 'red') ? 'concern-major' :
+    (level === 'minor' || level === 'yellow') ? 'concern-minor' :
     'concern-none';
 
   row.classList.add(cls);
   select.classList.add(cls);
   if (responseArea) responseArea.classList.add(cls);
 
-  if (level === 'major') {
+  if (level === 'major' || level === 'red') {
     select.style.backgroundColor = '#8b0000';
     select.style.color = '#fff';
-  } else if (level === 'minor') {
+  } else if (level === 'minor' || level === 'yellow') {
     select.style.backgroundColor = '#c89a00';
     select.style.color = '#fff';
   } else {

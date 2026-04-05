@@ -1,0 +1,93 @@
+/* duties.css — Daily Duties Job Form Submission */
+
+.duties-photo-box {
+  margin-bottom: 30px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #ddd;
+}
+
+.duties-photo-box:last-child {
+  border-bottom: none;
+}
+
+.duties-photo-label h3 {
+  font-size: 18px;
+  color: #69140e;
+  margin-bottom: 4px;
+}
+
+.duties-upload-area {
+  margin-top: 12px;
+  width: 100%;
+  max-width: 400px;
+  min-height: 180px;
+  border: 2px dashed #aaa;
+  background-color: #c8c8c8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.duties-upload-area:hover {
+  border-color: #69140e;
+  background-color: #bbb;
+}
+
+.duties-upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #555;
+  font-size: 14px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.duties-upload-icon {
+  font-size: 36px;
+}
+
+.duties-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.duties-clear-btn {
+  margin-top: 8px;
+  background-color: #444;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.duties-clear-btn:hover {
+  background-color: #222;
+}
+
+body.dark-mode .duties-photo-box {
+  border-color: #444;
+}
+
+body.dark-mode .duties-upload-area {
+  background-color: #3a3a3a;
+  border-color: #666;
+}
+
+body.dark-mode .duties-upload-area:hover {
+  border-color: #ff8080;
+  background-color: #444;
+}
+
+body.dark-mode .duties-upload-placeholder {
+  color: #bbb;
+}
