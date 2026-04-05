@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pool Pro</title>
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ChemLog">
+  <meta name="theme-color" content="#69140e">
+
+  <link rel="icon" type="image/png" href="../Images/Logos/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="../Images/Logos/favicon.svg" />
+  <link rel="shortcut icon" href="../Images/Logos/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="../Images/Logos/apple-touch-icon.png" />
+
+  <link rel="stylesheet" href="../style.css" />
+  <link rel="stylesheet" href="employees.css" />
+</head>
+
+<body>
+
+  <!-- ===== AUTH GATE ===== -->
+  <div id="authGate" class="emp-auth-gate hidden">
+    <div class="emp-auth-box">
+      <h2>Supervisor Login Required</h2>
+      <p>This page is for supervisors only. Please log in.</p>
+      <div class="emp-auth-form">
+        <div class="form-group">
+          <label for="empAuthEmail">Email</label>
+          <input type="email" id="empAuthEmail" placeholder="supervisor@example.com" />
+        </div>
+        <div class="form-group">
+          <label for="empAuthPassword">Password</label>
+          <input type="password" id="empAuthPassword" />
+        </div>
+        <button type="button" id="empAuthLoginBtn" class="submit-btn">Log In</button>
+        <p id="empAuthError" class="emp-auth-error hidden"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN PAGE ===== -->
+  <div id="empPageContent" class="hidden">
+
+    <div class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <div>
+            <h1>PoolPro</h1>
+            <p>Capital City Aquatics &amp; Upstate Pool Management</p>
+          </div>
+          <div class="menu-container">
+            <button class="menu-btn" onclick="toggleMenu(this)">
+              <span>≡</span>
+              <span>Menu</span>
+            </button>
+            <div class="dropdown-menu" id="dropdownMenu">
+              <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
+              <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+              <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard">Pool Chemistry Dashboard</a>
+              <a href="../Training/training.html" class="dropdown-item supervisor-only" data-nav="training-setup">Training Setup</a>
+              <a href="employees.html" class="dropdown-item supervisor-only active-page" data-nav="employees">Compliance</a>
+              <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+              <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+              <a href="#" class="dropdown-item logout" data-nav="logout" id="empLogoutBtn">Logout</a>
+            </div>
+          </div>
+        </div>
+        <div class="header-right">
+          <img id="logo" src="../Images/Logos/logo.png" alt="Pool Pro logo" />
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <h2 class="page-content-title">Compliance</h2>
+
+      <!-- Page-level tabs -->
+      <div class="emp-page-tabs">
+        <button class="emp-page-tab active" data-tab="training">Training Completion</button>
+        <button class="emp-page-tab" data-tab="set">SET Performance</button>
+        <button class="emp-page-tab" data-tab="set-metrics">SET Metrics</button>
+      </div>
+
+      <!-- ===== TRAINING COMPLETION SECTION ===== -->
+      <div id="trainingSection" class="emp-tab-panel active">
+
+        <div class="emp-global-filter-bar">
+          <span class="filter-by-label">Filter By:</span>
+          <select id="trainingMarketFilter" class="training-filter-select">
+            <option value="all">All Markets</option>
+          </select>
+          <select id="trainingPoolFilter" class="training-filter-select">
+            <option value="all">All Pools</option>
+          </select>
+          <select id="trainingCompletionFilter" class="training-filter-select">
+            <option value="all">All Progress</option>
+            <option value="complete">Complete</option>
+            <option value="incomplete">Incomplete</option>
+          </select>
+        </div>
+
+        <div id="trainingTablesContainer">
+          <!-- Market sections injected by JS -->
+        </div>
+      </div>
+
+      <!-- ===== SET PERFORMANCE SECTION ===== -->
+      <div id="setSection" class="emp-tab-panel hidden">
+
+        <div class="emp-global-filter-bar">
+          <span class="filter-by-label">Filter By:</span>
+          <select id="setMarketFilter" class="training-filter-select">
+            <option value="all">All Markets</option>
+          </select>
+          <select id="setPoolFilter" class="training-filter-select">
+            <option value="all">All Pools</option>
+          </select>
+        </div>
+
+        <div id="setTablesContainer">
+          <!-- Market sections injected by JS -->
+        </div>
+      </div>
+
+      <div id="setMetricsSection" class="emp-tab-panel hidden">
+        <h3 class="emp-market-heading" style="margin-bottom: 14px;">Overall Performance</h3>
+        <div class="emp-global-filter-bar" id="overallPerfFilterBar">
+          <span class="filter-by-label">Filter By:</span>
+          <select id="overallMarketFilter" class="training-filter-select">
+            <option value="all">All Markets</option>
+          </select>
+          <select id="overallPoolFilter" class="training-filter-select">
+            <option value="all">All Pools</option>
+          </select>
+        </div>
+        <div id="overallPerfContainer"></div>
+
+        <h3 class="emp-market-heading" style="margin-top: 40px; margin-bottom: 14px;">Performance by Topic</h3>
+        <div class="emp-global-filter-bar" id="questionMetricsFilterBar">
+          <span class="filter-by-label">Filter By:</span>
+          <select id="metricsMarketFilter" class="training-filter-select">
+            <option value="all">All Markets</option>
+          </select>
+          <select id="metricsPoolFilter" class="training-filter-select">
+            <option value="all">All Pools</option>
+          </select>
+          <select id="metricsWeekFilter" class="training-filter-select">
+            <option value="all">All Weeks</option>
+          </select>
+        </div>
+        <div id="questionMetricsContainer"></div>
+
+        <h3 class="emp-market-heading" style="margin-top: 40px; margin-bottom: 14px;">Performance Trends</h3>
+        <div class="emp-global-filter-bar" id="perfGraphFilterBar">
+          <span class="filter-by-label">Filter By:</span>
+          <select id="graphTestFilter" class="training-filter-select">
+            <option value="all">All Tests</option>
+            <option value="dropTest">Drop Test</option>
+            <option value="cprTest">CPR Test</option>
+            <option value="rescueBreathing">Rescue Breathing Test</option>
+            <option value="performanceAudit">Performance Audit</option>
+          </select>
+          <select id="graphMarketFilter" class="training-filter-select">
+            <option value="all">All Markets</option>
+          </select>
+          <select id="graphPoolFilter" class="training-filter-select">
+            <option value="all">All Pools</option>
+          </select>
+          <select id="graphTimeFilter" class="training-filter-select">
+            <option value="All Time">All Time</option>
+            <option value="Past Week">Past Week</option>
+            <option value="Past 2 Weeks">Past 2 Weeks</option>
+            <option value="Past Month">Past Month</option>
+            <option value="Past 3 Months">Past 3 Months</option>
+            <option value="This Calendar Year">This Calendar Year</option>
+          </select>
+          <select id="graphTopicFilter" class="training-filter-select">
+            <option value="all">All Topics</option>
+          </select>
+        </div>
+        <div id="performanceGraphContainer"></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <em>Developed by Sam Harmon | 2025<br>v1.0</em>
+    </div>
+  </div>
+
+  <!-- Dark overlay behind Settings modal -->
+  <div class="modal-overlay" id="settingsOverlay"></div>
+
+  <div id="settingsModal">
+    <div class="modal-content settings-modal-content">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <span class="close" onclick="closeSettings()">&times;</span>
+      </div>
+      <div class="settings-section">
+        <h3>Website Setup</h3>
+        <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
+      </div>
+      <div class="settings-section">
+        <h3>Market</h3>
+        <p class="section-subtitle">Select which markets' pools are visible on the supervisor dashboard.</p>
+        <div id="marketSection" class="sanitation-section overlay-disabled">
+          <div class="market-options">
+            <label class="market-option">
+              <input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Columbia"> Columbia
+            </label>
+            <label class="market-option">
+              <input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Greenville"> Greenville
+            </label>
+            <label class="market-option">
+              <input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Charlotte"> Charlotte
+            </label>
+            <label class="market-option">
+              <input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Charleston"> Charleston
+            </label>
+          </div>
+        </div>
+        <div class="toggle-btn">
+          <div class="sanitation-controls">
+            <button type="button" class="editAndSave active" id="marketEditBtn">Edit</button>
+            <button type="button" class="editAndSave" id="marketSaveBtn" disabled>Save</button>
+          </div>
+        </div>
+      </div>
+      <section class="settings-section settings-group" id="employeeSettings">
+        <h3>Employees</h3>
+        <p class="section-subtitle">Add employee information by uploading a master staffing file, or add employees individually.</p>
+        <div class="settings-row employee-file-row" style="margin-top: 20px;">
+          <input type="file" id="employeeFileInput" accept=".csv,.txt,.xlsx,.xls" />
+        </div>
+        <div class="settings-row employee-add-row">
+          <div class="settings-field">
+            <label for="employeeIdInput">Employee ID</label>
+            <input type="text" id="employeeIdInput" maxlength="10" />
+          </div>
+          <div class="settings-field">
+            <label for="employeeFirstNameInput">First name</label>
+            <input type="text" id="employeeFirstNameInput" />
+          </div>
+          <div class="settings-field">
+            <label for="employeeLastNameInput">Last name</label>
+            <input type="text" id="employeeLastNameInput" />
+          </div>
+          <div class="settings-field">
+            <label for="employeeHomePoolInput">Home Pool</label>
+            <select id="employeeHomePoolInput">
+              <option value="">Select pool</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label for="employeePhoneInput">Phone number</label>
+            <input type="tel" id="employeePhoneInput" />
+          </div>
+        </div>
+        <div class="employee-add-btn-row">
+          <button type="button" class="submit-btn button-shadow employee-action-btn" id="employeeAddBtn">Add</button>
+        </div>
+        <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
+          <span class="filter-by-label">Filter By:</span>
+          <select id="employeeMarketFilter" class="training-filter-select">
+            <option value="all">Market</option>
+            <option value="Charleston">Charleston</option>
+            <option value="Charlotte">Charlotte</option>
+            <option value="Columbia">Columbia</option>
+            <option value="Greenville">Greenville</option>
+          </select>
+          <select id="employeePoolFilter" class="training-filter-select">
+            <option value="all">Home Pool</option>
+          </select>
+        </div>
+        <div id="employeeTableSection" class="sanitation-section overlay-disabled">
+          <table class="employee-table">
+            <thead>
+              <tr>
+                <th>Employee ID</th>
+                <th>First name</th>
+                <th>Last name</th>
+                <th>Home Pool</th>
+                <th>Phone</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="employeesTableBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:10px;">
+          <button type="button" id="employeeDeleteAllBtn" class="submit-btn danger-button">Delete All Employees</button>
+        </div>
+      </section>
+      <div class="settings-section">
+        <div id="sanitationMethodsSection">
+          <h3>Sanitation Methods</h3>
+          <p class="section-subtitle">Sanitation methods are managed per market. Only markets selected below are shown.</p>
+          <div class="sanitation-section overlay-disabled">
+            <div id="sanitationTablesContainer"></div>
+          </div>
+          <div class="toggle-btn">
+            <div id="sanitationControls" class="sanitation-controls">
+              <div class="sanitation-controls-thumb" style="transform:translateX(100%)"></div>
+              <button type="button" class="editAndSave" id="sanitationEditBtn">Edit</button>
+              <button type="button" class="editAndSave active" id="sanitationSaveBtn" disabled>Save</button>
+            </div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Data Storage</h3>
+          <button id="clearAllData" class="submit-btn">Clear All Chemistry Log Data</button>
+          <br>
+          <button id="exportCsvBtn" class="submit-btn">Export Data to CSV</button>
+        </div>
+        <div class="settings-section">
+          <h3>Security</h3>
+          <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
+          <div class="settings-row" style="margin-top: 10px;">
+            <div class="settings-field">
+              <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+              <select id="securityTimeoutSelect">
+                <option value="never">Never</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">60 minutes</option>
+              </select>
+            </div>
+            <div class="settings-field">
+              <label style="display:flex;align-items:center;gap:8px;margin-top:24px;">
+                <input type="checkbox" id="securityRequirePassword" checked>
+                Require password confirmation before destructive actions
+              </label>
+            </div>
+          </div>
+          <button type="button" id="securitySaveBtn" class="submit-btn" style="margin-top: 10px;">Save</button>
+        </div>
+        <div class="settings-section">
+          <h3>Site Appearance</h3>
+          <br>
+          <label class="theme-toggle">
+            <div class="theme-switch">
+              <input type="checkbox" id="darkModeToggle" />
+              <div class="theme-switch-track">
+                <span class="theme-switch-text theme-light-text">Light</span>
+                <span class="theme-switch-text theme-dark-text">Dark</span>
+                <div class="theme-switch-thumb"></div>
+              </div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script type="module" src="../script.js"></script>
+  <script type="module" src="employees.js"></script>
+</body>
+</html>

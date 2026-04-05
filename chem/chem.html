@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>ChemLog</title>
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ChemLog">
+  <meta name="theme-color" content="69140e">
+  <meta name="msapplication-navbutton-color" content="#69140e">
+  <meta name="msapplication-TileColor" content="#69140e">
+
+  <link rel="icon" type="image/png" href="../Images/Logos/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="../Images/Logos/favicon.svg" />
+  <link rel="shortcut icon" href="../Images/Logos/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="../Images/Logos/apple-touch-icon.png" />
+
+
+  <link rel="stylesheet" href="../style.css" />
+</head>
+
+<body>
+
+    <div id="mainForm">
+        <div class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div>
+                        <h1>PoolPro</h1>
+                        <p>Capital City Aquatics & Upstate Pool Management</p>
+                    </div>
+                    <img id="logo" src="../Images/Logos/logo.png" alt="Pool Pro logo" />
+                    <div class="menu-container">
+                    <button class="menu-btn" onclick="toggleMenu(this)">
+                        <span>≡</span>
+                        <span>Menu</span>
+                    </button>
+                        <div class="dropdown-menu" id="dropdownMenu">
+                            <a href="chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
+                            <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
+                            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Compliance</a>
+                            <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+                            <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <h2 class="page-content-title">Pool Chemistry Log</h2>
+            <div class="form-container">
+                <div class="section">
+                    <h2>Pool Selection</h2>
+                    <div class="form-group full-width">
+                        <label for="poolLocation">Which pool are you recording data for?</label>
+                        <select id="poolLocation" name="poolLocation" required style="width: 70.5%;">
+                            <option value="">Select</option>
+                            <!-- Options will be injected by script.js, grouped by market -->
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-container">
+                <div class="section">
+                    <h2>Water Chemistry</h2>
+                    
+                    <div class="pool-section" id="mainPoolSection">
+                        <h3>Pool 1 (Main Pool)</h3>
+                        <div class="pool-section-content">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="mainPoolPH">What is the Main Pool pH?</label>
+                                    <select id="mainPoolPH" name="mainPoolPH" required>
+                                        <option value="">Select</option>
+                                        <option value="< 7.0">< 7.0</option>
+                                        <option value="7.0">7.0</option>
+                                        <option value="7.2">7.2</option>
+                                        <option value="7.4">7.4</option>
+                                        <option value="7.6">7.6</option>
+                                        <option value="7.8">7.8</option>
+                                        <option value="8.0">8.0</option>
+                                        <option value="> 8.0">> 8.0</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mainPoolCl">What is the Main Pool Cl level?</label>
+                                    <select id="mainPoolCl" name="mainPoolCl" required>
+                                        <option value="">Select</option>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="5">5</option>
+                                        <option value="7.5">7.5</option>
+                                        <option value="10">10</option>
+                                        <option value="> 10">> 10</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pool-section" id="secondaryPoolSection">
+                        <h3>Pool 2</h3>
+                        <div class="pool-section-content">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="secondaryPoolPH">What is the Secondary Pool pH?</label>
+                                    <select id="secondaryPoolPH" name="secondaryPoolPH" required>
+                                        <option value="">Select</option>
+                                        <option value="< 7.0">< 7.0</option>
+                                        <option value="7.0">7.0</option>
+                                        <option value="7.2">7.2</option>
+                                        <option value="7.4">7.4</option>
+                                        <option value="7.6">7.6</option>
+                                        <option value="7.8">7.8</option>
+                                        <option value="8.0">8.0</option>
+                                        <option value="> 8.0">> 8.0</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="secondaryPoolCl">What is the Secondary Pool Cl level?</label>
+                                    <select id="secondaryPoolCl" name="secondaryPoolCl" required>
+                                        <option value="">Select</option>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="5">5</option>
+                                        <option value="7.5">7.5</option>
+                                        <option value="10">10</option>
+                                        <option value="> 10">> 10</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pool 3 -->
+                    <div class="pool-section hidden" id="pool3Section">
+                        <h3>Pool 3</h3>
+                        <div class="pool-section-content">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="pool3PH">What is Pool 3 pH?</label>
+                                    <select id="pool3PH" name="pool3PH">
+                                        <option value="">Select</option>
+                                        <option value="< 7.0">< 7.0</option>
+                                        <option value="7.0">7.0</option>
+                                        <option value="7.2">7.2</option>
+                                        <option value="7.4">7.4</option>
+                                        <option value="7.6">7.6</option>
+                                        <option value="7.8">7.8</option>
+                                        <option value="8.0">8.0</option>
+                                        <option value="> 8.0">> 8.0</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="pool3Cl">What is Pool 3 Cl level?</label>
+                                    <select id="pool3Cl" name="pool3Cl">
+                                        <option value="">Select</option>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="5">5</option>
+                                        <option value="7.5">7.5</option>
+                                        <option value="10">10</option>
+                                        <option value="> 10">> 10</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pool 4 -->
+                    <div class="pool-section hidden" id="pool4Section">
+                        <h3>Pool 4</h3>
+                        <div class="pool-section-content">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="pool4PH">What is Pool 4 pH?</label>
+                                    <select id="pool4PH" name="pool4PH">
+                                        <option value="">Select</option>
+                                        <option value="< 7.0">< 7.0</option>
+                                        <option value="7.0">7.0</option>
+                                        <option value="7.2">7.2</option>
+                                        <option value="7.4">7.4</option>
+                                        <option value="7.6">7.6</option>
+                                        <option value="7.8">7.8</option>
+                                        <option value="8.0">8.0</option>
+                                        <option value="> 8.0">> 8.0</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="pool4Cl">What is Pool 4 Cl level?</label>
+                                    <select id="pool4Cl" name="pool4Cl">
+                                        <option value="">Select</option>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="5">5</option>
+                                        <option value="7.5">7.5</option>
+                                        <option value="10">10</option>
+                                        <option value="> 10">> 10</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pool 5 -->
+                    <div class="pool-section hidden" id="pool5Section">
+                        <h3>Pool 5</h3>
+                        <div class="pool-section-content">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="pool5PH">What is Pool 5 pH?</label>
+                                    <select id="pool5PH" name="pool5PH">
+                                        <option value="">Select</option>
+                                        <option value="< 7.0">< 7.0</option>
+                                        <option value="7.0">7.0</option>
+                                        <option value="7.2">7.2</option>
+                                        <option value="7.4">7.4</option>
+                                        <option value="7.6">7.6</option>
+                                        <option value="7.8">7.8</option>
+                                        <option value="8.0">8.0</option>
+                                        <option value="> 8.0">> 8.0</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="pool5Cl">What is Pool 5 Cl level?</label>
+                                    <select id="pool5Cl" name="pool5Cl">
+                                        <option value="">Select</option>
+                                        <option value="0">0</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="5">5</option>
+                                        <option value="7.5">7.5</option>
+                                        <option value="10">10</option>
+                                        <option value="> 10">> 10</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="submitBtn" class="submit-btn">Submit</button>
+                    <p> Note: Your name, selected pool, and chemical log data will be stored securely for internal use by supervisors. This information is not shared outside the organization.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <em>September 2025<br>v3.1</em>
+        </div>
+    </div>
+        </div>
+        
+
+    </div> <div id="supervisorDashboard">
+        <div class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    <div>
+                        <h1>PoolPro</h1>
+                        <p>Capital City Aquatics & Upstate Pool Management</p>
+                    </div>
+                    <img id="logo" src="../Images/Logos/logo.png" alt="Pool Pro logo" />
+                    <div class="menu-container">
+                        <button class="menu-btn" onclick="toggleMenu(this)">
+                            <span>≡</span>
+                            <span>Menu</span>
+                        </button>
+                        <div class="dropdown-menu" id="dropdownMenu">
+                            <a href="chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
+                            <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
+                            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Compliance</a>
+                            <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+                            <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container" style="max-width: calc(100vw - 100px);">
+            <h2 class="page-content-title">Supervisor Dashboard</h2>
+            <div id="dashboardContent">
+                <!-- Market tables with pool tabs are injected by script.js -->
+            </div>
+        </div>
+            <div class="footer">
+                <em>Developed by Sam Harmon | 2025<br>v2.1</em>
+            </div>
+    </div> 
+
+    <!-- Dark overlay behind the Settings modal -->
+    <div class="modal-overlay" id="settingsOverlay"></div>
+
+    <div id="settingsModal">
+        <div class="modal-content settings-modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <span class="close" onclick="closeSettings()">&times;</span>
+            </div>
+            <div class="settings-section">
+                <h3>Website Setup</h3>
+                <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
+            </div>
+            <div class="settings-section">
+                <h3>Market</h3>
+                <p class="section-subtitle">
+                    Select which markets' pools are visible on the supervisor dashboard.
+                </p>
+                <div id="marketSection" class="sanitation-section overlay-disabled">
+                <div class="market-options">
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Columbia"
+                        >
+                        Columbia
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Greenville"
+                        >
+                        Greenville
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Charlotte"
+                        >
+                        Charlotte
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Charleston"
+                        >
+                        Charleston
+                    </label>
+                </div>
+                </div>
+                <div class="toggle-btn">
+                    <div class="sanitation-controls">
+                        <button type="button" class="editAndSave active" id="marketEditBtn">Edit</button>
+                        <button type="button" class="editAndSave" id="marketSaveBtn" disabled>Save</button>
+                    </div>
+                </div>
+                </div>
+            <!-- ===== Employees section ===== -->
+            <section class="settings-section settings-group" id="employeeSettings">
+            <h3>Employees</h3>
+            <p class="section-subtitle">
+                Add employee information by uploading a master staffing file, or add in employees individually.
+            </p>
+
+            <div class="settings-row employee-file-row" style="margin-top: 20px;">
+                <input
+                type="file"
+                id="employeeFileInput"
+                accept=".csv,.txt,.xlsx,.xls"
+                />
+            </div>
+
+            <div class="settings-row employee-add-row">
+                <div class="settings-field">
+                <label for="employeeIdInput">Employee ID</label>
+                <input type="text" id="employeeIdInput" maxlength="10" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeFirstNameInput">First name</label>
+                <input type="text" id="employeeFirstNameInput" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeLastNameInput">Last name</label>
+                <input type="text" id="employeeLastNameInput" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeHomePoolInput">Home Pool</label>
+                <select id="employeeHomePoolInput">
+                  <option value="">Select pool</option>
+                  <!-- options populated by script.js -->
+                </select>
+                </div>
+
+                <div class="settings-field">
+                <label for="employeePhoneInput">Phone number</label>
+                <input type="tel" id="employeePhoneInput" />
+                </div>
+            </div>
+
+            <div class="employee-add-btn-row">
+                <button
+                    type="button"
+                    class="submit-btn button-shadow employee-action-btn"
+                    id="employeeAddBtn"
+                >
+                    Add
+                </button>
+            </div>
+
+            <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
+              <span class="filter-by-label">Filter By:</span>
+              <select id="employeeMarketFilter" class="training-filter-select">
+                <option value="all">Market</option>
+                <option value="Charleston">Charleston</option>
+                <option value="Charlotte">Charlotte</option>
+                <option value="Columbia">Columbia</option>
+                <option value="Greenville">Greenville</option>
+              </select>
+              <select id="employeePoolFilter" class="training-filter-select">
+                <option value="all">Home Pool</option>
+              </select>
+            </div>
+
+            <div id="employeeTableSection" class="sanitation-section overlay-disabled">
+            <table class="employee-table">
+                <thead>
+                <tr>
+                    <th>Employee ID</th>
+                    <th>First name</th>
+                    <th>Last name</th>
+                    <th>Home Pool</th>
+                    <th>Phone</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody id="employeesTableBody"></tbody>
+            </table>
+            </div>
+            <div style="margin-top:10px;">
+              <button type="button" id="employeeDeleteAllBtn" class="submit-btn danger-button">Delete All Employees</button>
+            </div>
+            </section>
+            <div class="settings-section">
+                <div id="sanitationMethodsSection">
+                    <h3>Sanitation Methods</h3>
+                    <p class="section-subtitle">
+                        Sanitation methods are managed per market. Only markets selected below are shown.
+                    </p>
+                    <div class="sanitation-section overlay-disabled">
+                    <div id="sanitationTablesContainer">
+                        <!-- Tables are injected by script.js -->
+                    </div>
+                    </div>
+                    <div class="toggle-btn">
+                    <div id="sanitationControls" class="sanitation-controls">
+                        <div class="sanitation-controls-thumb" style="transform:translateX(100%)"></div>
+                        <button type="button" class="editAndSave" id="sanitationEditBtn">Edit</button>
+                        <button type="button" class="editAndSave active" id="sanitationSaveBtn" disabled>Save</button>
+                    </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Data Storage</h3>
+                    <button id="clearAllData" class="submit-btn">Clear All Chemistry Log Data</button>
+                    <br>
+                    <button id="exportCsvBtn" class="submit-btn">Export Data to CSV</button>
+                </div>
+                <div class="settings-section">
+                    <h3>Security</h3>
+                    <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
+                    <div class="settings-row" style="margin-top: 10px;">
+                        <div class="settings-field">
+                            <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+                            <select id="securityTimeoutSelect">
+                                <option value="never">Never</option>
+                                <option value="15">15 minutes</option>
+                                <option value="30">30 minutes</option>
+                                <option value="60">60 minutes</option>
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <label style="display:flex;align-items:center;gap:8px;margin-top:24px;">
+                                <input type="checkbox" id="securityRequirePassword" checked>
+                                Require password confirmation before destructive actions
+                            </label>
+                        </div>
+                    </div>
+                    <button type="button" id="securitySaveBtn" class="submit-btn" style="margin-top: 10px;">Save</button>
+                </div>
+                <!-- Site Appearance Section -->
+                    <div class="settings-section">
+                    <h3>Site Appearance</h3>
+                    <br>
+                    <label class="theme-toggle">
+                        <div class="theme-switch">
+                            <input type="checkbox" id="darkModeToggle" />
+                            <div class="theme-switch-track">
+                                <span class="theme-switch-text theme-light-text">Light</span>
+                                <span class="theme-switch-text theme-dark-text">Dark</span>
+                                <div class="theme-switch-thumb"></div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div> 
+    <div id="feedbackModal" class="feedback-modal" style="display: none;">
+        <button type="button" class="close-btn" id="feedbackCloseBtn" onclick="closeModal()">×</button>
+        <div class="feedback-content" id="feedbackContent">
+            <div id="modalContent"></div>
+        </div>
+        <div id="supervisorNotifySection" class="supervisor-notify-section" style="display: none;">
+            <div class="supervisor-notify-inner">
+                <label style="font-weight: bold; display: block; margin-bottom: 6px;">Select supervisors to notify:</label>
+                <select id="supervisorSelect" multiple size="4"></select>
+                <button type="button" class="notify-action-btn" onclick="sendSupervisorNotification()">Notify</button>
+            </div>
+        </div>
+    </div>
+
+
+<!-- ✅ Required for Excel import/export -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Confetti animation for clean submission -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script type="module" src="../script.js"></script>
+
+
+</body>
+</html>

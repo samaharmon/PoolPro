@@ -1,0 +1,1586 @@
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Pool Pro</title>
+    <link rel="stylesheet" href="../style.css">
+    <!-- Page-specific styling for the pool rule editor -->
+    <link rel="stylesheet" href="newRules.css">
+ 
+     <meta name="mobile-web-app-capable" content="yes">
+     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+     <meta name="apple-mobile-web-app-title" content="ChemLog">
+     <meta name="theme-color" content="69140e">
+     <meta name="msapplication-navbutton-color" content="#69140e">
+     <meta name="msapplication-TileColor" content="#69140e">
+ 
+     <link rel="icon" type="image/png" href="../Images/Logos/favicon-96x96.png" sizes="96x96" />
+     <link rel="icon" type="image/svgxml" href="../Images/Logos/favicon.svg" />
+     <link rel="shortcut icon" href="../Images/Logos/favicon.ico" />
+     <link rel="apple-touch-icon" sizes="180x180" href="../Images/Logos/apple-touch-icon.png" />
+     <link rel="manifest" href="../site.webmanifest" />
+     
+ </head>
+
+<body>
+    <div id="mainForm" style="min-height: 100vh; display: flex; flex-direction: column;">
+        <div class="header">
+            <div class="header-content">
+                <div class="header-left">
+                    
+                    <div>
+                        <h1>PoolPro</h1>
+                        <p>Capital City Aquatics &amp; Upstate Pool Management</p>
+                    </div>
+                    <img id="logo" src="../Images/Logos/logo.png" alt="Pool Pro logo" />
+                    <div class="menu-container">
+                        <button class="menu-btn" onclick="toggleMenu(this)">
+                            <span>≡</span>
+                            <span>Menu</span>
+                        </button>
+                        <div class="dropdown-menu" id="dropdownMenu">
+                            <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
+                            <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
+                            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Compliance</a>
+                            <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+                            <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+                            <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <div class="container">
+        <h2 class="page-content-title">Site Editor</h2>
+        <div class="form-container" id="ruleEditorContent">
+            <div class="section" id="poolRuleEditorSection">
+                <h2>Pool Editor</h2>
+                <div class="form-row" id="editorModeRow" style="gap: 10px;">
+                    <button type="button" id="editorModeAdd" class="editAndSave mode-toggle">
+                        Add new pool
+                    </button>
+                    <button type="button" id="editorModeEdit" class="editAndSave mode-toggle">
+                        Edit existing pool
+                    </button>
+                </div>
+                <div class="form-group hidden" id="editorPoolSelectWrapper">
+                    <label for="editorPoolSelect">Choose a pool to edit</label>
+                    <select id="editorPoolSelect" class="button-shadow">
+                        <option value="">Select an existing pool...</option>
+                    </select>
+                </div>
+
+                <div class="form-group hidden" id="rockbridgePresetWrapper" style="display: none;">
+                    <button type="button" id="rockbridgePresetsBtn" class="submit-btn">Use Rockbridge presets</button>
+                    <small style="display: block; margin-top: 4px;">Clone Rockbridge main/secondary rules into the new pool slots.</small>
+                </div>
+
+                <div class="section hidden" id="poolMetadataSection">
+                    <div class="metadata-content">
+                        <h3>Pool Metadata</h3>
+
+                        <div class="form-group">
+                            <label for="editorPoolName">Pool name</label>
+                            <input type="text" id="editorPoolName" class="adjustment-feedback" value="New Pool" disabled>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="editorNumPools">Number of pools</label>
+                            <select id="editorNumPools" disabled>
+                                <option value="1">1</option>
+                                <option value="2" selected>2</option>
+                                <option value="3">3</option>
+                                <option value="4">4</option>
+                                <option value="5">5</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Market</label>
+                            <div class="market-options">
+                                <label class="market-option">
+                                    <input
+                                        type="checkbox"
+                                        class="sanitation-checkbox market-checkbox"
+                                        name="editorMarket"
+                                        value="Columbia"
+                                        disabled
+                                    >
+                                    Columbia
+                                </label>
+                                <label class="market-option">
+                                    <input
+                                        type="checkbox"
+                                        class="sanitation-checkbox market-checkbox"
+                                        name="editorMarket"
+                                        value="Greenville"
+                                        disabled
+                                    >
+                                    Greenville
+                                </label>
+                                <label class="market-option">
+                                    <input
+                                        type="checkbox"
+                                        class="sanitation-checkbox market-checkbox"
+                                        name="editorMarket"
+                                        value="Charlotte"
+                                        disabled
+                                    >
+                                    Charlotte
+                                </label>
+                                <label class="market-option">
+                                    <input
+                                        type="checkbox"
+                                        class="sanitation-checkbox market-checkbox"
+                                        name="editorMarket"
+                                        value="Charleston"
+                                        disabled
+                                    >
+                                    Charleston
+                                </label>
+                            </div>
+                        </div>
+                    </div> <!-- .metadata-content -->
+
+                    <div class="form-row" style="gap: 10px; margin-top: 10px; justify-content: flex-start;">
+                        <button type="button" class="editAndSave" id="editMetadataBtn">Edit</button>
+                        <button type="button" class="editAndSave" id="saveMetadataBtn" disabled>Save</button>
+                        <button type="button" id="deletePoolBtn" class="editAndSave danger-button">Delete Pool</button>
+                    </div>
+                </div>
+                <div id="ruleEditorSection" class="hidden">
+                    <h3>ChemLog Feedback Editor</h3>
+                    <div id="poolRuleBlocks">
+                        <div class="pool-rule-block" data-pool-index="1">
+                            <div class="pool-rule-header">
+                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 1:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                <h4>Pool 1 — Main Pool</h4>
+                                <div class="sanitation-tabs">
+                                    <button
+                                        type="button"
+                                        class="sanitation-tab active"
+                                        data-pool-index="1"
+                                        data-method="bleach"
+                                    >
+                                        Bleach
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="sanitation-tab"
+                                        data-pool-index="1"
+                                        data-method="granular"
+                                    >
+                                        Granular
+                                    </button>
+                                </div>
+                                
+                                <!-- Edit / Save moved up into the header -->
+                                <div class="rule-buttons">
+                                    <button type="button" class="editAndSave pool-edit-btn">Edit</button>
+                                    <button type="button" class="editAndSave pool-save-btn">Save</button>
+                                </div>
+                            </div>
+                            <div class="copy-rules-row">
+                                <label class="copy-rules-label">Copy from:</label>
+                                <select class="copy-rules-location" data-pool-index="1">
+                                    <option value="">— Pool location —</option>
+                                </select>
+                                <select class="copy-rules-block" data-pool-index="1" disabled>
+                                    <option value="">— Rule block —</option>
+                                </select>
+                                <button type="button" class="editAndSave copy-rules-btn" data-pool-index="1" disabled>Copy</button>
+                            </div>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="sanitation-tabs">
+                                        <button type="button" class="sanitation-tab active" data-pool-index="1" data-method="bleach">Bleach</button>
+                                        <button type="button" class="sanitation-tab" data-pool-index="1" data-method="granular">Granular</button>
+                                    </div>
+                                    <div class="rules-table ph-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">pH</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&lt; 7.0</div>
+                                            <div class="table-cell"><textarea id="pool1_ph_lt_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_ph_lt_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.0</div>
+                                            <div class="table-cell"><textarea id="pool1_ph_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_ph_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.2</div>
+                                            <div class="table-cell"><textarea id="pool1_ph_7_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_ph_7_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.4</div>
+                                            <div class="table-cell"><textarea id="pool1_ph_7_4" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_ph_7_4_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.6</div>
+                                            <div class="table-cell"><textarea id="pool1_ph_7_6" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_ph_7_6_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.8</div>
+                                            <div class="table-cell"><textarea id="pool1_ph_7_8" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_ph_7_8_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">8.0</div>
+                                            <div class="table-cell"><textarea id="pool1_ph_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_ph_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 8.0</div>
+                                            <div class="table-cell"><textarea id="pool1_ph_gt_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_ph_gt_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="rules-table cl-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">Cl</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">0</div>
+                                            <div class="table-cell"><textarea id="pool1_cl_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_cl_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">1</div>
+                                            <div class="table-cell"><textarea id="pool1_cl_1" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_cl_1_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">2</div>
+                                            <div class="table-cell"><textarea id="pool1_cl_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_cl_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">3</div>
+                                            <div class="table-cell"><textarea id="pool1_cl_3" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_cl_3_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">5</div>
+                                            <div class="table-cell"><textarea id="pool1_cl_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_cl_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.5</div>
+                                            <div class="table-cell"><textarea id="pool1_cl_7_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_cl_7_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">10</div>
+                                            <div class="table-cell"><textarea id="pool1_cl_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_cl_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 10</div>
+                                            <div class="table-cell"><textarea id="pool1_cl_gt_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool1_cl_gt_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <div class="pool-rule-block" data-pool-index="2">
+                            <div class="pool-rule-header">
+                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 2:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                <h4>Pool 2</h4>
+                                <div class="sanitation-tabs">
+                                    <button
+                                        type="button"
+                                        class="sanitation-tab active"
+                                        data-pool-index="2"
+                                        data-method="bleach"
+                                    >
+                                        Bleach
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="sanitation-tab"
+                                        data-pool-index="2"
+                                        data-method="granular"
+                                    >
+                                        Granular
+                                    </button>
+                                </div>
+                                <!-- Edit / Save moved up into the header -->
+                                <div class="rule-buttons">
+                                    <button type="button" class="editAndSave pool-edit-btn">Edit</button>
+                                    <button type="button" class="editAndSave pool-save-btn">Save</button>
+                                </div>
+                            </div>
+                            <div class="copy-rules-row">
+                                <label class="copy-rules-label">Copy from:</label>
+                                <select class="copy-rules-location" data-pool-index="2">
+                                    <option value="">— Pool location —</option>
+                                </select>
+                                <select class="copy-rules-block" data-pool-index="2" disabled>
+                                    <option value="">— Rule block —</option>
+                                </select>
+                                <button type="button" class="editAndSave copy-rules-btn" data-pool-index="2" disabled>Copy</button>
+                            </div>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="sanitation-tabs">
+                                        <button type="button" class="sanitation-tab active" data-pool-index="2" data-method="bleach">Bleach</button>
+                                        <button type="button" class="sanitation-tab" data-pool-index="2" data-method="granular">Granular</button>
+                                    </div>
+                                    <div class="rules-table ph-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">pH</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&lt; 7.0</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_lt_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_lt_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.0</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.2</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.4</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_4" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_4_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.6</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_6" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_6_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.8</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_8" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_8_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">8.0</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 8.0</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_gt_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_gt_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="rules-table cl-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">Cl</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">0</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">1</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_1" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_1_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">2</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">3</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_3" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_3_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">5</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.5</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_7_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_7_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">10</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 10</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_gt_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_gt_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <div class="pool-rule-block" data-pool-index="3">
+                            <div class="pool-rule-header">
+                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 3:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                <div class="rule-buttons">
+                                    <button type="button" class="editAndSave pool-edit-btn">Edit</button>
+                                    <button type="button" class="editAndSave pool-save-btn">Save</button>
+                                </div>
+                            </div>
+                            <div class="copy-rules-row">
+                                <label class="copy-rules-label">Copy from:</label>
+                                <select class="copy-rules-location" data-pool-index="3">
+                                    <option value="">— Pool location —</option>
+                                </select>
+                                <select class="copy-rules-block" data-pool-index="3" disabled>
+                                    <option value="">— Rule block —</option>
+                                </select>
+                                <button type="button" class="editAndSave copy-rules-btn" data-pool-index="3" disabled>Copy</button>
+                            </div>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="sanitation-tabs">
+                                        <button type="button" class="sanitation-tab active" data-pool-index="3" data-method="bleach">Bleach</button>
+                                        <button type="button" class="sanitation-tab" data-pool-index="3" data-method="granular">Granular</button>
+                                    </div>
+                                    <div class="rules-table ph-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">pH</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&lt; 7.0</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_lt_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_lt_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.0</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.2</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.4</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_4" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_4_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.6</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_6" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_6_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.8</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_7_8" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_7_8_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">8.0</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 8.0</div>
+                                            <div class="table-cell"><textarea id="pool2_ph_gt_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_ph_gt_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="rules-table cl-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">Cl</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">0</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">1</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_1" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_1_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">2</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">3</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_3" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_3_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">5</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.5</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_7_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_7_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">10</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 10</div>
+                                            <div class="table-cell"><textarea id="pool2_cl_gt_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool2_cl_gt_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pool-rule-block" data-pool-index="4">
+                                <div class="pool-rule-header">
+                                    <h4 class="pool-rule-title"><span class="pool-number-label">Pool 4:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                    <h4>Pool 4</h4>
+                                    <div class="sanitation-tabs">
+                                        <button
+                                            type="button"
+                                            class="sanitation-tab active"
+                                            data-pool-index="4"
+                                            data-method="bleach"
+                                        >
+                                            Bleach
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="sanitation-tab"
+                                            data-pool-index="4"
+                                            data-method="granular"
+                                        >
+                                            Granular
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Edit / Save moved up into the header -->
+                                    <div class="rule-buttons">
+                                        <button type="button" class="editAndSave pool-edit-btn">Edit</button>
+                                        <button type="button" class="editAndSave pool-save-btn">Save</button>
+                                    </div>
+                                </div>
+                                <div class="copy-rules-row">
+                                    <label class="copy-rules-label">Copy from:</label>
+                                    <select class="copy-rules-location" data-pool-index="4">
+                                        <option value="">— Pool location —</option>
+                                    </select>
+                                    <select class="copy-rules-block" data-pool-index="4" disabled>
+                                        <option value="">— Rule block —</option>
+                                    </select>
+                                    <button type="button" class="editAndSave copy-rules-btn" data-pool-index="4" disabled>Copy</button>
+                                </div>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="sanitation-tabs">
+                                        <button type="button" class="sanitation-tab active" data-pool-index="4" data-method="bleach">Bleach</button>
+                                        <button type="button" class="sanitation-tab" data-pool-index="4" data-method="granular">Granular</button>
+                                    </div>
+                                    <div class="rules-table ph-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">pH</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&lt; 7.0</div>
+                                            <div class="table-cell"><textarea id="pool4_ph_lt_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_ph_lt_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.0</div>
+                                            <div class="table-cell"><textarea id="pool4_ph_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_ph_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.2</div>
+                                            <div class="table-cell"><textarea id="pool4_ph_7_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_ph_7_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.4</div>
+                                            <div class="table-cell"><textarea id="pool4_ph_7_4" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_ph_7_4_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.6</div>
+                                            <div class="table-cell"><textarea id="pool4_ph_7_6" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_ph_7_6_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.8</div>
+                                            <div class="table-cell"><textarea id="pool4_ph_7_8" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_ph_7_8_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">8.0</div>
+                                            <div class="table-cell"><textarea id="pool4_ph_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_ph_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 8.0</div>
+                                            <div class="table-cell"><textarea id="pool4_ph_gt_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_ph_gt_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="rules-table cl-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">Cl</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">0</div>
+                                            <div class="table-cell"><textarea id="pool4_cl_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_cl_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">1</div>
+                                            <div class="table-cell"><textarea id="pool4_cl_1" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_cl_1_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">2</div>
+                                            <div class="table-cell"><textarea id="pool4_cl_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_cl_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">3</div>
+                                            <div class="table-cell"><textarea id="pool4_cl_3" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_cl_3_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">5</div>
+                                            <div class="table-cell"><textarea id="pool4_cl_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_cl_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.5</div>
+                                            <div class="table-cell"><textarea id="pool4_cl_7_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_cl_7_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">10</div>
+                                            <div class="table-cell"><textarea id="pool4_cl_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_cl_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 10</div>
+                                            <div class="table-cell"><textarea id="pool4_cl_gt_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool4_cl_gt_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="pool-rule-block" data-pool-index="5">
+                                <div class="pool-rule-header">
+                                    <h4 class="pool-rule-title"><span class="pool-number-label">Pool 5:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                    <h4>Pool 5</h4>
+                                    <div class="sanitation-tabs">
+                                        <button
+                                            type="button"
+                                            class="sanitation-tab active"
+                                            data-pool-index="5"
+                                            data-method="bleach"
+                                        >
+                                            Bleach
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="sanitation-tab"
+                                            data-pool-index="5"
+                                            data-method="granular"
+                                        >
+                                            Granular
+                                        </button>
+                                    </div>
+
+                                    <!-- Edit / Save moved up into the header -->
+                                    <div class="rule-buttons">
+                                        <button type="button" class="editAndSave pool-edit-btn">Edit</button>
+                                        <button type="button" class="editAndSave pool-save-btn">Save</button>
+                                    </div>
+                                </div>
+                                <div class="copy-rules-row">
+                                    <label class="copy-rules-label">Copy from:</label>
+                                    <select class="copy-rules-location" data-pool-index="5">
+                                        <option value="">— Pool location —</option>
+                                    </select>
+                                    <select class="copy-rules-block" data-pool-index="5" disabled>
+                                        <option value="">— Rule block —</option>
+                                    </select>
+                                    <button type="button" class="editAndSave copy-rules-btn" data-pool-index="5" disabled>Copy</button>
+                                </div>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="sanitation-tabs">
+                                        <button type="button" class="sanitation-tab active" data-pool-index="5" data-method="bleach">Bleach</button>
+                                        <button type="button" class="sanitation-tab" data-pool-index="5" data-method="granular">Granular</button>
+                                    </div>
+                                    <div class="rules-table ph-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">pH</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&lt; 7.0</div>
+                                            <div class="table-cell"><textarea id="pool5_ph_lt_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_ph_lt_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.0</div>
+                                            <div class="table-cell"><textarea id="pool5_ph_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_ph_7_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.2</div>
+                                            <div class="table-cell"><textarea id="pool5_ph_7_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_ph_7_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.4</div>
+                                            <div class="table-cell"><textarea id="pool5_ph_7_4" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_ph_7_4_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.6</div>
+                                            <div class="table-cell"><textarea id="pool5_ph_7_6" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_ph_7_6_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.8</div>
+                                            <div class="table-cell"><textarea id="pool5_ph_7_8" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_ph_7_8_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">8.0</div>
+                                            <div class="table-cell"><textarea id="pool5_ph_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_ph_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 8.0</div>
+                                            <div class="table-cell"><textarea id="pool5_ph_gt_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_ph_gt_8_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <br>
+                                <div class="table-wrapper" style="flex: 1 1 300px;">
+                                    <div class="rules-table cl-table">
+                                        <div class="table-row table-header">
+                                            <div class="table-cell header-cell">Cl</div>
+                                            <div class="table-cell header-cell">Response</div>
+                                            <div class="table-cell header-cell">Concern</div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">0</div>
+                                            <div class="table-cell"><textarea id="pool5_cl_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_cl_0_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">1</div>
+                                            <div class="table-cell"><textarea id="pool5_cl_1" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_cl_1_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">2</div>
+                                            <div class="table-cell"><textarea id="pool5_cl_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_cl_2_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">3</div>
+                                            <div class="table-cell"><textarea id="pool5_cl_3" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_cl_3_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">5</div>
+                                            <div class="table-cell"><textarea id="pool5_cl_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_cl_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">7.5</div>
+                                            <div class="table-cell"><textarea id="pool5_cl_7_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_cl_7_5_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">10</div>
+                                            <div class="table-cell"><textarea id="pool5_cl_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_cl_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="table-row">
+                                            <div class="table-cell">&gt; 10</div>
+                                            <div class="table-cell"><textarea id="pool5_cl_gt_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell">
+                                                <select id="pool5_cl_gt_10_level" class="concernLevel" disabled>
+                                                    <option value="none">None</option>
+                                                    <option value="yellow">Minor</option>
+                                                    <option value="red">Major</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!--end of final pool rule blocks-->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end of form-container / sections -->
+<div class="footer" style="margin-top: auto;">
+    <em>Developed by Sam Harmon | 2025<br>v2.1</em>
+</div>
+</div> <!-- #mainForm -->
+
+<!-- Dark overlay behind the Settings modal -->
+<div class="modal-overlay" id="settingsOverlay"></div>
+
+    <div id="settingsModal">
+        <div class="modal-content settings-modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <span class="close" onclick="closeSettings()">&times;</span>
+            </div>
+            <div class="settings-section">
+                <h3>Website Setup</h3>
+                <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
+            </div>
+            <div class="settings-section">
+                <h3>Market</h3>
+                <p class="section-subtitle">
+                    Select which markets' pools are visible on the supervisor dashboard.
+                </p>
+                <div id="marketSection" class="sanitation-section overlay-disabled">
+                <div class="market-options">
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Columbia"
+                        >
+                        Columbia
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Greenville"
+                        >
+                        Greenville
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Charlotte"
+                        >
+                        Charlotte
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Charleston"
+                        >
+                        Charleston
+                    </label>
+                </div>
+                </div>
+                <div class="toggle-btn">
+                    <div class="sanitation-controls">
+                        <button type="button" class="editAndSave active" id="marketEditBtn">Edit</button>
+                        <button type="button" class="editAndSave" id="marketSaveBtn" disabled>Save</button>
+                    </div>
+                </div>
+                </div>
+            <!-- ===== Employees section ===== -->
+
+            <!-- ===== Employees section ===== -->
+            <section class="settings-section settings-group" id="employeeSettings">
+            <h3>Employees</h3>
+            <p class="section-subtitle">
+                Add employee information by uploading a master staffing file, or add in employees individually.
+            </p>
+
+            <div class="settings-row employee-file-row" style="margin-top: 20px;">
+
+            <!-- ✅ FIX #10/11/12: Excel accepted + flex row + consistent button -->
+            <div class="settings-row employee-file-row">
+                <input
+                type="file"
+                id="employeeFileInput"
+                accept=".csv,.xlsx,.xls"
+                />
+            </div>
+
+            <div class="settings-row employee-add-row">
+                <div class="settings-field">
+                <label for="employeeIdInput">Employee ID</label>
+                <input type="text" id="employeeIdInput" maxlength="10" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeFirstNameInput">First name</label>
+                <input type="text" id="employeeFirstNameInput" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeLastNameInput">Last name</label>
+                <input type="text" id="employeeLastNameInput" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeHomePoolInput">Home Pool</label>
+                <select id="employeeHomePoolInput">
+                  <option value="">Select pool</option>
+                </select>
+                <label for="employeePhoneInput">Phone number</label>
+                <!-- ✅ FIX #10: tel styled globally in CSS -->
+                <input type="tel" id="employeePhoneInput" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeePhoneInput">Phone number</label>
+                <input type="tel" id="employeePhoneInput" />
+                </div>
+            </div>
+
+            <div class="employee-add-btn-row">
+                <button
+                    type="button"
+                    class="submit-btn button-shadow employee-action-btn"
+                    id="employeeAddBtn"
+                >
+                    Add
+                </button>
+            </div>
+
+            <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
+              <span class="filter-by-label">Filter By:</span>
+              <select id="employeeMarketFilter" class="training-filter-select">
+                <option value="all">Market</option>
+                <option value="Charleston">Charleston</option>
+                <option value="Charlotte">Charlotte</option>
+                <option value="Columbia">Columbia</option>
+                <option value="Greenville">Greenville</option>
+              </select>
+              <select id="employeePoolFilter" class="training-filter-select">
+                <option value="all">Home Pool</option>
+              </select>
+            </div>
+
+            <div id="employeeTableSection" class="sanitation-section overlay-disabled">
+            <table class="employee-table">
+                <thead>
+                <tr>
+                    <th>Employee ID</th>
+                    <th>First name</th>
+                    <th>Last name</th>
+                    <th>Home Pool</th>
+                    <th>Phone</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody id="employeesTableBody"></tbody>
+            </table>
+            </div>
+            <div style="margin-top:10px;">
+              <button type="button" id="employeeDeleteAllBtn" class="submit-btn danger-button">Delete All Employees</button>
+            </div>
+            </section>
+            <div class="settings-section">
+                <div id="sanitationMethodsSection">
+                    <h3>Sanitation Methods</h3>
+                    <p class="section-subtitle">
+                        Sanitation methods are managed per market. Only markets selected below are shown.
+                    </p>
+                    <div class="sanitation-section overlay-disabled">
+                    <div id="sanitationTablesContainer">
+                        <!-- Tables are injected by script.js -->
+                    </div>
+                    </div>
+                <div class="toggle-btn">
+                    <div id="sanitationControls" class="sanitation-controls">
+                        <div class="sanitation-controls-thumb" style="transform:translateX(100%)"></div>
+                        <button type="button" class="editAndSave" id="sanitationEditBtn">Edit</button>
+                        <button type="button" class="editAndSave active" id="sanitationSaveBtn" disabled>Save</button>
+                    </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Data Storage</h3>
+                    <button id="clearAllData" class="submit-btn">Clear All Chemistry Log Data</button>
+                    <br>
+                    <button id="exportCsvBtn" class="submit-btn">Export Data to CSV</button>
+                </div>
+                <div class="settings-section">
+                    <h3>Security</h3>
+                    <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
+                    <div class="settings-row" style="margin-top: 10px;">
+                        <div class="settings-field">
+                            <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+                            <select id="securityTimeoutSelect">
+                                <option value="never">Never</option>
+                                <option value="15">15 minutes</option>
+                                <option value="30">30 minutes</option>
+                                <option value="60">60 minutes</option>
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <label style="display:flex;align-items:center;gap:8px;margin-top:24px;">
+                                <input type="checkbox" id="securityRequirePassword" checked>
+                                Require password confirmation before destructive actions
+                            </label>
+                        </div>
+                    </div>
+                    <button type="button" id="securitySaveBtn" class="submit-btn" style="margin-top: 10px;">Save</button>
+                </div>
+                <!-- Site Appearance Section -->
+                    <div class="settings-section">
+                    <h3>Site Appearance</h3>
+                    <br>
+                    <label class="theme-toggle">
+                        <div class="theme-switch">
+                            <input type="checkbox" id="darkModeToggle" />
+                            <div class="theme-switch-track">
+                                <span class="theme-switch-text theme-light-text">Light</span>
+                                <span class="theme-switch-text theme-dark-text">Dark</span>
+                                <div class="theme-switch-thumb"></div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div> 
+
+<!-- Delete pool confirmation modal -->
+<div id="deletePoolModal" class="feedback-modal" style="display: none;">
+    <button type="button" class="close-btn" id="cancelDeletePoolBtn">×</button>
+    <div class="feedback-content">
+        <h2>Delete this pool location?</h2>
+        <p>Click to confirm deletion.</p>
+        <button type="button" id="confirmDeletePoolBtn" class="notify-btn">
+            Delete pool
+        </button>
+    </div>
+</div>
+
+    <script type="module" src="../script.js"></script>
+    <script type="module" src="newRules.js"></script>
+
+</body>
+</html>

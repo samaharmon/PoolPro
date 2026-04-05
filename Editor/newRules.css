@@ -1,0 +1,836 @@
+/* New Pool Rule Editor Styles */
+.container {
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.form-container {
+    width: calc(100vw - 100px);
+    background-color: white;
+    padding: 30px;
+    border-radius: 0;
+    box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
+}
+ 
+.section {
+  margin-bottom: 24px;
+ }
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+#editorPoolSelect,
+#rockbridgePresetsBtn,
+.editAndSave,
+.submit-btn,
+.button-shadow {
+  border-radius: 0;
+}
+
+#editorPoolSelect {
+  padding: 10px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+
+  /* NEW: make this dropdown noticeably longer */
+  width: 320px;
+  max-width: 70%;
+}
+
+
+
+#rockbridgePresetsBtn {
+  margin-top: 6px;
+}
+
+#poolMetadataSection {
+  background: #464646;
+}
+
+#poolMetadataSection h3 {
+  margin-top: 0;
+}
+
+#poolMetadataSection input[type="text"],
+#poolMetadataSection input[type="number"] {
+  padding: 10px;
+  font-size: 14px;
+   background-color: #eee;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#poolMetadataSection input[type="text"]:enabled,
+#poolMetadataSection input[type="number"]:enabled,
+#poolMetadataSection select:enabled {
+    background-color: #fff;
+}
+ 
+#poolMetadataSection .form-row {
+  justify-content: flex-start;
+}
+
+#poolMetadataSection .editAndSave {
+  min-width: 80px;
+ }
+
+/* Make the Delete pool button match Edit / Save sizing */
+#poolMetadataSection #deletePoolBtn {
+  padding: 6px 12px !important;      /* same vertical/horizontal padding as edit/save */
+  height: 34px !important;
+  line-height: 1;
+  min-width: 120px;       /* wide enough so “Delete pool” is on one line */
+  white-space: nowrap;    /* prevent wrapping */
+  border-radius: 0;       /* override any .danger-button radius */
+}
+
+.market-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.market-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.market-checkbox {
+    appearance: none; /* Remove default browser styling */
+    -webkit-appearance: none; /* Remove Safari default styling */
+    -moz-appearance: none; /* Remove Firefox default styling */
+    margin-right: 10px; /* Space between checkbox and text */
+    width: 18px; /* Ensure consistent width */
+    height: 18px; /* Ensure consistent height */
+    cursor: pointer;
+    border: 1px solid #69140e; /* 1px border of header red color */
+    background-color: white; /* Default white background */
+    border-radius: 0; /* Ensure perfect squares */
+    display: inline-block; /* Prevent layout issues */
+    position: relative; /* For positioning the checkmark */
+    flex-shrink: 0; /* Prevent shrinking */
+}
+ 
+#ruleEditorSection h3 {
+  margin-bottom: 12px;
+ }
+ 
+/* Container that holds all pool rule blocks */
+#poolRuleBlocks {
+  width: 100%;         /* align with metadata section */
+}
+
+/* Individual pool rule block */
+.pool-rule-block {
+  width: 100%;
+  box-sizing: border-box;
+  background-color: #464646;
+  margin-bottom: 24px;
+}
+
+ 
+.pool-rule-block h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+ }
+ 
+.rule-tables {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+ }
+ 
+.table-wrapper {
+  flex: 1 1 320px;
+ }
+
+.table-wrapper h5 {
+  margin: 0 0 8px;
+ }
+ 
+.rules-table {
+  width: 100%;
+  border-collapse: collapse;
+ }
+ 
+.table-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 120px;
+  align-items: stretch;
+ }
+
+.table-cell {
+  border: 1px solid #464646;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+ }
+ 
+
+.table-cell:first-child {
+  background: #464646;
+  font-weight: 600;
+  justify-content: center;
+ }
+ 
+.ruleResponse {
+  width: 100%;
+  min-height: 48px;
+  resize: none;
+  overflow-y: hidden;
+  padding: 8px;
+  border: 1px solid #ccc;
+  background: #f3f3f3;
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  color: white;
+  white-space: pre-wrap;
+  word-break: break-word;
+  display: block;
+}
+
+.ruleResponse[contenteditable="false"],
+.ruleResponse.readonly-editor {
+  cursor: not-allowed;
+  opacity: 0.92;
+}
+ 
+.concernLevel {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  background: #f3f3f3;
+  font-size: 14px;
+  box-sizing: border-box;
+ }
+ 
+ 
+ .hidden {
+   display: none !important;
+ }
+ 
+@media (max-width: 640px) {
+  .table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .table-cell:first-child {
+    justify-content: flex-start;
+  }
+ }
+
+ /* ----------------- Pool Rule Editor Layout ----------------- */
+
+#mainForm .container {
+    max-width: 1100px;
+    width: 100%;
+    margin: 40px auto;
+    padding: 0 50px;
+    box-sizing: border-box;
+    flex: 1;
+}
+
+/* Mode toggle buttons ("Add new pool" / "Edit existing pool") */
+.mode-toggle {
+    min-width: 160px;
+    text-align: center;
+}
+
+/* Visually highlight the active mode button */
+.mode-toggle.active {
+    background-color: #521008;
+    color: #fff;
+}
+
+/* Stack the Market checkbox list vertically */
+.market-options {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+/* Make metadata selects match your text input styling */
+#poolMetadataSection select,
+#poolMetadataSection input[type="text"] {
+    width: 100%;
+    padding: 10px;
+    border-bottom: 2px solid #69140e;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-radius: 0;
+    font-size: 14px;
+    font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+    background-color: #C8C8C8;
+    color: #464646;
+}
+
+/* Ensure concern-level dropdowns fill their cell neatly */
+#ruleEditorSection .concernLevel {
+    width: 100%;
+}
+
+.pool-rule-block {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Make sure the table wrappers inside each block also stretch */
+.pool-rule-block .table-wrapper {
+    width: 100%;
+    padding-top: 10px;
+}
+
+
+/* Center the main editor container */
+#mainForm {
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+/* Make the Add/Edit buttons behave like toggles */
+.mode-toggle {
+  margin-right: 8px;
+}
+
+.mode-toggle.active {
+  background-color: #69140e;
+  color: #fff;
+}
+
+/* Stack market options vertically */
+.market-options {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* --- Full-width header just on the rule editor page --- */
+body.dark-mode #mainForm .header {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  border-radius: 0;
+}
+
+/* --- Darken hidden/inner sections so they match the main content --- */
+body.dark-mode #poolMetadataSection,
+body.dark-mode #ruleEditorSection,
+body.dark-mode .pool-rule-block {
+  background-color: #2e2e2e;
+}
+
+/* --- Column header row for the rule tables --- */
+.rules-table .table-header-row {
+  display: grid;
+  grid-template-columns: 0.9fr 3fr 1.1fr;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 8px;
+  border-bottom: 1px solid #555;
+}
+
+.rules-table .table-header-cell {
+  padding: 0 6px;
+}
+
+/* --- Bleach / Granular tabs in each pool rule block --- */
+.pool-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+/* ----------------- Pool Rule Header Sliders ----------------- */
+
+/* Pool rule block header — title + Edit/Save toggle on one row */
+.pool-rule-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background-color: #1a1a1a;
+}
+
+/* “Pool N: [name input]” as a flex row */
+.pool-rule-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 18px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  color: #fff;
+}
+
+.pool-number-label {
+  white-space: nowrap;
+}
+
+/* Pool name input — styled like settings modal inputs */
+.pool-name-input {
+  font-size: 18px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  background-color: #444;
+  color: #fff;
+  border: none;
+  border-bottom: 2px solid #69140e;
+  padding: 4px 8px;
+  min-width: 160px;
+  outline: none;
+}
+
+.pool-name-input:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* Rule buttons container (holds JS-created Edit/Save theme toggle) */
+.rule-buttons {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Copy Existing Rules row */
+.copy-rules-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background-color: #222;
+  border-bottom: 1px solid #444;
+  flex-wrap: wrap;
+}
+
+.copy-rules-label {
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 13px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.copy-rules-row select {
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 13px;
+  background-color: #333;
+  color: #ddd;
+  border: 1px solid #555;
+  border-radius: 0;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.copy-rules-row select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.copy-rules-btn {
+  font-size: 12px !important;
+  padding: 4px 12px !important;
+  margin: 0 !important;
+}
+
+/* Bleach / Granular tabs — now inside .table-wrapper, above table rows */
+.sanitation-tabs {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 2px solid #69140e;
+}
+
+.sanitation-tab {
+  padding: 7px 20px;
+  background-color: #2a2a2a;
+  border: 1px solid #555;
+  border-bottom: none;
+  color: #999;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.sanitation-tab.active {
+  background-color: #69140e;
+  border-color: #69140e;
+  color: #fff;
+}
+
+.sanitation-tab:not(.active):hover {
+  background-color: #3a3a3a;
+  color: #ddd;
+}
+
+/* Disabled state for all buttons in pool rule headers */
+.pool-rule-header button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+
+.pool-rule-block {
+    background-color: #303030;      /* darker block background */
+}
+
+/* Very obvious “view‑only” state */
+.pool-rule-block.disabled-block {
+    opacity: 0.45;
+    filter: grayscale(70%);
+}
+
+/* Editing state pops out */
+.pool-rule-block.editing {
+    opacity: 1;
+    filter: none;
+    box-shadow: 0 0 0 2px #69140e;
+}
+
+/* Inputs themselves when disabled */
+.pool-rule-block select:disabled,
+.pool-rule-block .ruleResponse[contenteditable="false"] {
+    background-color: #2b2b2b;
+    color: #888;
+}
+
+.table-header-row .header-cell {
+    font-weight: bold;
+    background-color: #252525;
+}
+
+/* concern-level visual states */
+.table-row.concern-none select.concernLevel {
+    background-color: transparent;
+}
+
+.table-row.concern-minor .ruleResponse {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.table-row.concern-minor select.concernLevel {
+    background-color: #c89a00 !important;
+    color: #fff !important;
+}
+
+.table-row.concern-major .ruleResponse {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+.table-row.concern-major select.concernLevel {
+    background-color: #8b0000 !important;
+    color: #fff !important;
+}
+
+/* Greyed-out state for saved rule blocks: affect only the rule tables */
+.pool-rule-block.disabled-block .rules-table,
+.pool-rule-block.disabled-block .rules-table .ruleResponse,
+.pool-rule-block.disabled-block .rules-table select {
+    opacity: 0.35;
+}
+
+.pool-rule-block.disabled-block .rules-table .ruleResponse,
+.pool-rule-block.disabled-block .rules-table select {
+    background-color: #2b2b2b;
+    color: #aaaaaa;
+}
+
+/* Formatting toolbar for rule response textareas */
+.formatting-toolbar {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 3px;
+}
+
+.formatting-toolbar .format-btn {
+    background-color: #555;
+    color: white;
+    border: 1px solid #777;
+    border-radius: 0;
+    padding: 2px 8px;
+    font-size: 13px;
+    cursor: pointer;
+    line-height: 1.4;
+    font-family: Georgia, serif;
+}
+
+.formatting-toolbar .format-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.formatting-toolbar .format-btn:not(:disabled):hover {
+    background-color: #69140e;
+    border-color: #69140e;
+}
+
+.pool-rule-block {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* The two table wrappers under each pool should also stretch */
+#ruleEditorSection .table-wrapper {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.rules-table.overlay-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  position: relative;
+}
+
+.rules-table.overlay-disabled::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.48);
+  pointer-events: auto;
+  z-index: 3;
+}
+
+/* Full grey-out overlay for the Pool Metadata section when locked */
+#poolMetadataSection {
+  position: relative;
+}
+
+#poolMetadataSection.overlay-disabled .metadata-content {
+  position: relative;
+  pointer-events: none;            /* block clicks on the fields */
+}
+
+#poolMetadataSection.overlay-disabled .metadata-content::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45); /* translucent grey layer */
+  pointer-events: auto;
+  z-index: 1;
+}
+
+/* Keep the actual metadata content above the section background */
+#poolMetadataSection.overlay-disabled .metadata-content > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* But leave the Edit / Save / Delete buttons clickable */
+#poolMetadataSection .form-row {
+  position: relative;
+  z-index: 3;
+}
+
+/* Pool metadata overlay – grey out the entire metadata area except buttons */
+#poolMetadataSection {
+    position: relative;
+}
+
+#poolMetadataSection.overlay-disabled .metadata-content {
+    position: relative;
+    opacity: 0.6;          /* visual grey-out */
+}
+
+/* Optional: more explicit overlay */
+#poolMetadataSection.overlay-disabled .metadata-content::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.58);
+    pointer-events: auto;
+}
+
+/* Market filter section inside Settings modal */
+.market-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.market-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.market-option input[type="checkbox"] {
+    margin: 0;
+}
+
+/* Make the metadata inputs a bit shorter than full row width */
+#editorPoolName,
+#editorNumPools {
+  width: 60%;
+  max-width: 420px;
+}
+
+/* Make "Choose a pool to edit" longer */
+#editorPoolSelect {
+  padding: 10px;
+  border: 1px solid #ccc;
+  background-color: #fff;
+  font-size: 14px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+
+  /* NEW */
+  width: 320px;
+  max-width: 70%;
+}
+
+/* Make Pool name + Number of pools inputs shorter */
+#editorPoolName,
+#editorNumPools {
+  width: 60%;
+  max-width: 420px;
+}
+
+/* Layout for the top of the Pool Editor */
+
+.pool-editor-header {
+    margin-bottom: 20px;
+}
+
+/* Mode buttons row (Add new pool / Edit existing pool) */
+.pool-editor-mode-buttons {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+/* Pool metadata section spacing */
+#poolMetadataSection {
+    margin-top: 25px;
+    margin-bottom: 25px;
+}
+
+/* Subsection headings inside the editor */
+#poolMetadataSection h3,
+#poolRuleEditorSection h3 {
+    margin-top: 18px;
+    margin-bottom: 8px;
+}
+
+/* Make sure rule headers don’t get smashed against the tables */
+.pool-rule-block {
+    margin-top: 18px;
+}
+
+/* Generic hidden helper (shared with script.js expectations) */
+.hidden {
+  display: none !important;
+}
+
+/* Section spacing inside the pool editor */
+#poolMetadataSection,
+#ruleEditorSection {
+  margin-top: 24px;
+}
+
+/* Restore vertical spacing between labels/inputs in metadata */
+#poolMetadataSection .form-group,
+#poolMetadataSection .form-row {
+  margin-bottom: 14px;
+}
+
+/* Hide the old Rockbridge preset CTA (presets are auto-applied on Add New Pool) */
+#rockbridgePresetWrapper {
+  display: none !important;
+}
+
+/* Edit/Save theme-switch toggle sizing for rule blocks */
+.rule-buttons .theme-switch-track {
+  width: 110px;
+  height: 34px;
+}
+
+.rule-buttons .theme-switch-text {
+  line-height: 34px;
+  font-size: 14px;
+}
+
+.rule-buttons .theme-switch-thumb {
+  height: 34px;
+}
+
+.pool-rule-block.is-saved-mode .copy-rules-row,
+.pool-rule-block.is-saved-mode .table-wrapper,
+.pool-rule-block.is-saved-mode .rules-table,
+.pool-rule-block.is-saved-mode .rules-table * {
+  cursor: not-allowed !important;
+}
+
+body.dark-mode .pool-rule-block .ruleResponse,
+body.dark-mode .pool-rule-block .concernLevel {
+  background-color: #3a3a3a;
+  color: #f0f0f0;
+  border-color: #666;
+}
+
+/* ---- Mobile responsive ---- */
+@media (max-width: 768px) {
+  #mainForm .container {
+    padding: 0 12px;
+    margin: 16px auto;
+  }
+
+  /* Rules table: allow horizontal scroll */
+  .rules-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rules-table table {
+    min-width: 480px;
+  }
+
+  /* Pool rule header: stack vertically */
+  .pool-rule-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Mode toggle buttons: full width */
+  .mode-toggle-row {
+    flex-wrap: wrap;
+  }
+
+  .mode-toggle {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  /* Metadata grid: single column */
+  .pool-metadata-grid,
+  .metadata-row {
+    grid-template-columns: 1fr !important;
+    flex-direction: column;
+  }
+}

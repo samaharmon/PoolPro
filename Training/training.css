@@ -1,0 +1,2301 @@
+/* Base page styling to match main ChemLog app */
+
+html {
+  background-color: #69140e; /* top red band */
+  background-image: linear-gradient(#69140e, #69140e), linear-gradient(#666, #666);
+  background-repeat: no-repeat, no-repeat;
+  background-position: top, bottom;
+  background-size: 100% 100px, 100% 100px;
+  height: 100%;
+}
+
+body {
+  background-color: white;
+  min-height: 100vh;
+  background-clip: content-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Franklin Gothic Medium", "Franklin Gothic Medium Cond", Arial, sans-serif;
+  color: #333;
+}
+
+p {
+  font-size: 14px;
+  color: grey;
+  margin-top: 5px;
+}
+
+#CCA {
+  color: white;
+  font-size: 18px;
+}
+
+/* Header – red ChemLog band with square button */
+.app-header {
+  background-color: #69140e;
+  color: white;
+  padding: 20px;
+  position: relative;
+  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3);
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid #fff;
+}
+
+/* Logo — same position as main site */
+#logo {
+  position: absolute;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  top: 37.75px !important;
+  right: 20px !important;
+  height: 125px !important;
+  width: auto !important;
+  object-fit: contain;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.training-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.training-header-right {
+  display: flex;
+  align-items: center;
+}
+
+.app-title {
+  font-size: 55px;
+  margin: 0;
+}
+
+.supervisor-login-btn {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 2px solid white;
+  border-radius: 0;
+  padding: 10px 18px;
+  cursor: pointer;
+  font-size: 16px;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.supervisor-login-btn:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Main layout + card panels */
+.training-main {
+  margin: 30px 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  align-items: center;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.card {
+  width: calc(100vw - 100px);
+  max-width: 1100px;
+  background-color: white;
+  padding: 30px;
+  border-radius: 0;
+  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Page-level section title (Training Signup / Training Setup at top of page) */
+.page-content-title {
+  font-size: 40pt;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  color: #fff;
+  font-weight: bold;
+  font-style: italic;
+  text-transform: uppercase;
+  border-bottom: 2px solid #ff8080;
+  padding-bottom: 6px;
+  margin: 20px 0 12px;
+}
+
+.training-card h2 {
+  font-size: 24px;
+  color: #333;
+  margin: 0 0 10px;
+}
+
+.training-card h2.page-content-title {
+  font-size: 40pt;
+  color: #fff;
+  font-weight: bold;
+  font-style: italic;
+  text-transform: uppercase;
+  border-bottom: 2px solid #ff8080;
+  padding-bottom: 6px;
+  margin: 20px 0 12px;
+}
+
+/* "Scheduling Form" label inside admin panel */
+.training-admin-section-label {
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: #69140e;
+  margin: 0 0 6px;
+}
+
+body.dark-mode .training-admin-section-label {
+  color: #ff8080;
+}
+
+.card-subtitle {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: grey;
+}
+
+/* Form layout – match main ChemLog forms */
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: min(10%, 90px);
+  margin-bottom: 15px;
+  margin-right: min(10%, 30px);
+  margin-left: min(10%, 30px);
+}
+
+.form-group {
+  flex: 1;
+  max-width: 35%;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  font-weight: bold;
+}
+
+.form-group:last-child {
+  margin-right: 0;
+}
+
+/* On the Schedule Trainings panel, allow Notes to span both columns */
+#scheduleTrainingsSection .form-group.full-width {
+    max-width: 100%;
+    margin-left: 30px;
+    margin-right: 30px;
+}
+
+.login-input {
+  flex: 1;
+  max-width: 100%;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  font-weight: bold;
+}
+
+label {
+  display: block;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 5px;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="tel"],
+select {
+  width: 100%;
+  padding: 10px;
+  border-bottom: 2px solid #69140e;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-radius: 0;
+  font-size: 14px;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  background-color: #c8c8c8;
+  color: #333;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+}
+
+/* Placeholder text color */
+::placeholder {
+  color: #aaa;
+}
+
+/* Submit buttons – same red ChemLog buttons */
+.submit-btn {
+  background-color: #69140e;
+  color: white;
+  border: none;
+  border-radius: 0;
+  padding: 15px 30px;
+  font-size: 18px;
+  font-weight: bold;
+  width: auto;
+  max-width: 400px;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  cursor: pointer;
+  margin-top: 20px;
+  transition: background-color 0.3s;
+}
+
+.submit-btn:hover {
+  background-color: #521008;
+}
+
+.employee-table .submit-btn {
+  margin-top: 0;
+}
+
+.submit-btn.small {
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+.submit-btn.secondary {
+  background-color: #f5f5f5;
+  color: #333;
+  border: 1px solid #ccc;
+}
+
+/* Messages */
+.form-message {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.form-message.success {
+  color: #187b32;
+}
+
+.form-message.error {
+  color: #b32020;
+}
+
+.help-text {
+  font-size: 12px;
+  color: grey;
+}
+
+/* Match Settings modal section styling */
+.settings-section {
+  margin-top: 30px;
+  padding-top: 10px;
+  border-top: 1px solid #ccc;
+}
+
+#scheduleTrainingsSection p {
+  margin-bottom: 12px;
+}
+
+/* Grey ChemLog fields for Schedule Trainings */
+#scheduleTrainingsSection input[type="date"],
+#scheduleTrainingsSection input[type="number"],
+#scheduleTrainingsSection input[type="text"],
+#scheduleTrainingsSection select {
+  width: 100%;
+  padding: 10px;
+  border-bottom: 2px solid #69140e;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-radius: 0;
+  font-size: 14px;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  background-color: #c8c8c8;
+  color: #333;
+  -webkit-appearance: none;
+}
+
+/* Notes textarea just like main app */
+#trainingNotesInput {
+  width: 100%;
+  min-height: 60px;
+  padding: none;
+  border-bottom: 2px solid #69140e;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-radius: 0;
+  background-color: #c8c8c8;
+  color: #333;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  font-size: 14px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+#trainingCapacityInfo {
+  font-size: 0.9rem;
+}
+
+/* Month group headings */
+.training-month-group {
+  margin-top: 15px;
+}
+
+.training-month-group h5 {
+  margin: 10px 0 5px;
+  font-size: 18px;
+  color: #333;
+}
+
+/* Sanitation Methods section grey-out, but keep title readable */
+.sanitation-section {
+    position: relative;
+    margin-top: 24px;
+    padding-top: 12px;
+    border-top: 1px solid #777;
+}
+
+/* View-only mode */
+.sanitation-section.overlay-disabled h3 {
+    opacity: 1;           /* title stays normal */
+}
+
+.sanitation-section.overlay-disabled p,
+.sanitation-section.overlay-disabled #sanitationTablesContainer {
+    opacity: 0.45;        /* grey everything else */
+}
+
+/* Let the mouse through; actual disabling is handled via JS */
+.sanitation-section.overlay-disabled #sanitationTablesContainer {
+    pointer-events: none;
+}
+
+/* Editing mode (no overlay class) – normal opacity & interactions */
+.sanitation-section:not(.overlay-disabled) p,
+.sanitation-section:not(.overlay-disabled) #sanitationTablesContainer {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Reset any absolute positioning from older styles */
+.training-schedule-table td.actions-cell .training-edit-btn,
+.training-schedule-table td.actions-cell .training-delete-btn,
+.training-schedule-table td.actions-cell .training-roster-btn {
+  position: static;
+  transform: none;
+  margin: 2px 0;
+}
+
+/* === Attendance / Roster modal layout === */
+.attendance-modal .modal-content.large {
+  max-width: 1100px;
+  width: 90%;
+  margin: 40px auto;
+  padding: 24px 24px 28px;
+  box-sizing: border-box;
+}
+
+/* Header: title + X aligned */
+.attendance-modal .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.attendance-modal .modal-title {
+  font-size: 28px;
+  margin: 0;
+}
+
+/* Close button inside the modal header (not the screen corner) */
+.attendance-close-btn {
+  position: static;
+  background: none;
+  border: none;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  color: #aaa;
+  font-weight: bold;
+  margin-left: auto;
+  padding-right: 20px;
+}
+
+.attendance-modal .modal-header h2 {
+  padding: 20px;
+}
+
+.attendance-close-btn:hover {
+  color: #fff;
+}
+
+/* Submit button: neutral grey to match file-input style */
+.attendance-submit-btn {
+  background: #555 !important;
+  color: #fff !important;
+  border: none;
+  padding: 8px 18px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.attendance-submit-btn:hover {
+  background: #444 !important;
+}
+
+/* Top row with Excel button */
+.attendance-modal .attendance-modal-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 16px;
+}
+
+/* Make the Excel button match the primary "Save training session" button */
+.attendance-modal #attendanceSubmitBtn.primary-btn {
+  display: inline-block;
+}
+
+/* Main body: table on the left, add‑participant form below/alongside */
+.attendance-modal .attendance-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Table wrapper grows full width */
+.attendance-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* Match training schedule table look */
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 10px;
+}
+
+.attendance-table thead tr {
+  background-color: #000;
+  color: #fff;
+}
+
+.attendance-table th,
+.attendance-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #ccc;
+  text-align: left;
+  font-size: 14px;
+}
+
+.attendance-table tbody tr:nth-child(odd) {
+  background-color: #f5f5f5;
+}
+
+/* Add participant section heading spacing */
+.attendance-add-section-title {
+  font-size: 20px;
+  margin: 4px 0 8px;
+}
+
+/* Grid for the add‑participant inputs */
+.attendance-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Make all inputs (including phone) and the home pool select match */
+.attendance-add-grid input[type='text'],
+.attendance-add-grid input[type='email'],
+.attendance-add-grid input[type='tel'],
+.attendance-add-grid select {
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 2px solid #69140e;
+  background-color: #c8c8c8;
+  color: #333;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+  border-radius: 0;
+  box-sizing: border-box;
+  height: 36px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Placeholder color for home pool select */
+.attendance-add-grid select.is-placeholder {
+  color: #999;
+}
+
+body.dark-mode .attendance-add-grid select.is-placeholder {
+  color: #aaa !important;
+}
+
+/* Make the Add button look like the other small brown buttons */
+#attendanceAddBtn {
+  background-color: #69140e;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 0;
+  white-space: nowrap;
+}
+
+#attendanceAddBtn:hover {
+  background-color: #4e0f0b;
+}
+
+/* Adjust these right offsets to taste */
+.training-schedule-table td.actions-cell .training-edit-btn {
+  right: 180px;
+}
+
+.training-schedule-table td.actions-cell .training-delete-btn {
+  right: 100px;
+}
+
+.training-schedule-table td.actions-cell .training-roster-btn {
+  right: 20px;
+}
+
+/* Edit / Delete buttons */
+.editAndSave {
+  background-color: #69140e;
+  color: white;
+  border: none;
+  border-radius: 0;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: bold;
+  width: auto;
+  height: auto;
+  max-width: 70px;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  cursor: pointer;
+  margin-top: 0;
+  transition: background-color 0.3s;
+}
+
+.editAndSave:hover {
+  background-color: #521008;
+}
+
+/* Red "danger" variant for Delete */
+.danger-button {
+  background-color: #69140e;
+  border-color: #69140e;
+  color: #ffffff;
+  border-radius: 0;
+}
+
+.danger-button:hover {
+  background-color: #d93636;
+}
+
+/* Login modal – ChemLog-style rectangular modal */
+.modal {
+  display: none;
+  position: fixed;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+.modal-content {
+    background-color: white;
+    margin-top: 200px;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 30px;
+    border-radius: 0px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.training-modal-content h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 24px;
+  color: #69140e;
+}
+
+.modal .close {
+  position: absolute;
+  right: 12px;
+  top: 8px;
+  font-size: 28px;
+  font-weight: bold;
+  color: #aaa;
+  cursor: pointer;
+}
+
+.modal .close:hover {
+  color: #000;
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+  .training-main {
+    margin: 20px;
+  }
+
+  .card {
+    width: 100%;
+    padding: 20px;
+  }
+
+  .form-row {
+    flex-direction: column;
+  }
+}
+
+/* Menu button styles for dashboard */
+.menu-container {
+    position: relative; /* NEW: Essential for positioning the dropdown menu */
+    /* Adjust margin/padding as needed relative to other header-left content */
+    /* Example: If you want menu button higher than text: margin-bottom: auto; */
+}
+
+.menu-btn {
+    display: flex; /* NEW & CRUCIAL: Makes children (spans) line up horizontally */
+    align-items: center; /* NEW: Vertically aligns the icon and text */
+    gap: 5px; /* NEW: Adds space between the icon and the word "Menu" */
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 2px solid white;
+    border-radius: 0;
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 18px;
+    font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+    transition: background-color 0.3s;
+}
+
+.menu-btn span {
+    /* NEW: Ensure spans inside the button don't break the flex layout */
+    display: inline-block;
+    vertical-align: middle; /* Helps ensure icon and text align well */
+}
+
+.menu-btn:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+button,
+.submit-btn {
+  transition: background-color 0.15s ease, transform 0.05s ease;
+}
+
+button:active,
+.submit-btn:active {
+  background-color: #2b54c2; /* lighter than #1f3c88 */
+  transform: translateY(1px);
+}
+
+/* Dropdown Menu Styles with roll-down animation */
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 180px;
+  background-color: #333;
+  border: 1px solid #ddd;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+  z-index: 1000;
+  border-radius: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+
+  opacity: 0;
+  transform-origin: top;
+  transform: translateY(-8px) scaleY(0.9);
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    max-height 0.25s ease;
+}
+
+.dropdown-menu.show {
+  opacity: 1;
+  transform: translateY(0) scaleY(1);
+  max-height: 400px;
+  pointer-events: auto;
+}
+
+
+.dropdown-item {
+    display: block;
+    padding: 10px 15px;
+    text-decoration: none;
+    color: #fff;                  /* white text */
+    background-color: #333;
+    font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+    font-size: 16px;
+    border-bottom: 1px solid #ccc;
+}
+
+.dropdown-item:hover {
+    background-color: #444;
+}
+
+.dropdown-menu .dropdown-item:last-child {
+    border-bottom: none;
+}
+
+.dropdown-item.supervisor-only {
+  border-bottom: none;
+  border-top: none;
+  border-left: 3px solid white;
+  border-right: 3px solid white;
+}
+
+.dropdown-item.supervisor-only:nth-child(3) {
+  border-top: 3px solid white;
+}
+
+.dropdown-item.supervisor-only:nth-child(7) {
+  border-bottom: 3px solid white;
+}
+
+.dropdown-item.logout {
+  background-color: #69140e;
+  color: #fff;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+}
+
+.dropdown-item.logout:hover {
+  background-color: #521008;
+}
+
+/* Sanitation Table Styles */
+.sanitation-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background-color: white;
+    font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+/* Training schedule table reuses sanitation-table styling */
+.training-schedule-table th,
+.training-schedule-table td {
+    font-size: 13px;
+}
+
+.training-schedule-table .actions-cell button {
+    margin-right: 0;
+}
+
+.training-schedule-table td.actions-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+/* Make capacity input match the other fields and keep its spinner inside */
+#scheduleTrainingsSection #trainingCapacityInput {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+#scheduleTrainingsSection .form-row .form-group.full-width {
+    flex: 0 0 100%;
+    width: 100%;
+}
+
+#trainingCapacityInfo {
+    font-size: 0.9rem;
+}
+
+.sanitation-table th,
+.sanitation-table td {
+    border: 1px solid #ddd;
+    padding: 12px;
+    text-align: left;
+    font-size: 14px;
+}
+
+/* Make columns consistent across ALL sanitation tables */
+.sanitation-table th:nth-child(1),
+.sanitation-table td:nth-child(1) {
+    width: 60%;   /* Pool name */
+}
+
+.sanitation-table th:nth-child(2),
+.sanitation-table td:nth-child(2),
+.sanitation-table th:nth-child(3),
+.sanitation-table td:nth-child(3) {
+    width: 20%;   /* Bleach / Granular */
+}
+
+.sanitation-table th {
+    background-color: #69140e;
+    color: white;
+    font-weight: bold;
+}
+
+.sanitation-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.sanitation-table td {
+    text-align: center;
+}
+
+.sanitation-table td:first-child {
+    text-align: left;
+    font-weight: bold;
+}
+
+/* Schedule Trainings layout tweaks */
+#scheduleTrainingsSection p {
+    margin-bottom: 12px; /* gap under subtitle */
+}
+
+/* Make training inputs look like the other grey ChemLog fields */
+#scheduleTrainingsSection input[type="date"],
+#scheduleTrainingsSection input[type="number"],
+#scheduleTrainingsSection input[type="text"],
+#scheduleTrainingsSection select {
+    width: 100%;
+    padding: 10px;
+    border-bottom: 2px solid #69140e;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+    border-radius: 0;
+    font-size: 14px;
+    font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+    background-color: #C8C8C8;
+    color: #333;
+    -webkit-appearance: none;
+}
+
+/* Dark‑mode override so notes still look good */
+body.dark-mode #trainingNotesInput {
+    background-color: #C8C8C8 !important;
+    color: black !important;
+    border-bottom: 2px solid #69140e !important;
+}
+
+/* Month groups for scheduled sessions */
+.training-month-group {
+    margin-top: 15px;
+}
+
+.training-month-group h5 {
+    margin: 10px 0 5px;
+    font-size: 18px;
+    color: white;
+}
+
+/* Ensure Edit / Delete buttons center their text and aren't cramped */
+.training-schedule-table .editAndSave,
+.training-schedule-table .danger-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 70px;
+    max-width: none; /* override global 50px cap */
+}
+
+/* =========================
+   Attendance / roster modal
+   ========================= */
+
+.attendance-modal .modal-content.large {
+  max-width: 1000px;
+  width: 90%;
+}
+
+.attendance-modal .modal-title {
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+/* Submit button row at the top of the modal */
+.attendance-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+/* Two‑column layout: roster table on the left, Add‑participant pane on the right */
+.attendance-modal-body {
+  display: grid;
+  grid-template-columns: minmax(0, 2.2fr) minmax(260px, 1fr);
+  gap: 18px;
+  align-items: flex-start;
+  padding-top: 10px;
+}
+
+/* Roster table side */
+.attendance-table-wrapper {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  background: #fff;
+}
+
+.attendance-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.attendance-table th,
+.attendance-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+.attendance-table th:last-child,
+.attendance-table td:last-child,
+.attendance-table th:nth-last-child(2),
+.attendance-table td:nth-last-child(2) {
+  text-align: center;
+}
+
+/* Wider name column, smaller attendance column in roster */
+.attendance-table th:nth-child(1),
+.attendance-table td:nth-child(1) {
+  width: 22%;
+}
+.attendance-table th:nth-child(5),
+.attendance-table td:nth-child(5) {
+  width: 8%;
+  text-align: center;
+}
+
+/* Add‑participant side */
+.attendance-add-panel {
+  background: #f7f7f7;
+  border: 1px solid #ddd;
+  padding: 10px 12px 14px;
+}
+
+.attendance-add-panel h3 {
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+.attendance-add-row {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid #ddd;
+}
+
+.attendance-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+}
+
+.attendance-add-grid input,
+.attendance-add-grid select {
+  width: 100%;
+}
+
+/* ===============================
+   Scheduled Training Tables
+   (supervisor + lifeguard)
+   =============================== */
+
+.training-schedule-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin: 1.5rem 0;
+}
+
+.training-schedule-table thead {
+    background-color: #5d130f;
+}
+
+.training-schedule-table thead th {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.training-schedule-table th,
+.training-schedule-table td {
+    padding: 8px 12px;
+    border: 1px solid #555;
+    font-size: 14px;
+    text-align: left;
+    vertical-align: top;
+}
+
+.training-schedule-table tbody tr:nth-child(odd) {
+    background-color: #f7f7f7;
+}
+
+.training-schedule-table tbody tr:nth-child(even) {
+    background-color: #dedede;
+}
+
+.training-schedule-table tbody tr.no-training-row td {
+    text-align: center;
+    font-style: italic;
+}
+
+/* Center the date column */
+.training-schedule-table td:first-child,
+.training-schedule-table th:first-child {
+    text-align: center;
+}
+
+/* Supervisor tables
+   6 columns: Date, Time, Location, Spots, Notes, Actions */
+.training-schedule-table.training-schedule-table--admin th:nth-child(1),
+.training-schedule-table.training-schedule-table--admin td:nth-child(1) {
+    width: 12.5%;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(2),
+.training-schedule-table.training-schedule-table--admin td:nth-child(2) {
+    width: 12.5%;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(3),
+.training-schedule-table.training-schedule-table--admin td:nth-child(3) {
+    width: 20%;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(4),
+.training-schedule-table.training-schedule-table--admin td:nth-child(4) {
+    width: 10%;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(5),
+.training-schedule-table.training-schedule-table--admin td:nth-child(5) {
+    width: 35%;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(6),
+.training-schedule-table.training-schedule-table--admin td:nth-child(6) {
+    width: 10%;
+}
+
+/* Lifeguard tables
+   5 columns: Date, Time, Location, Notes, Spots */
+.training-schedule-table.training-schedule-table--public th:nth-child(1),
+.training-schedule-table.training-schedule-table--public td:nth-child(1) {
+    width: 12%;
+}
+
+.training-schedule-table.training-schedule-table--public th:nth-child(2),
+.training-schedule-table.training-schedule-table--public td:nth-child(2) {
+    width: 12%;
+}
+
+.training-schedule-table.training-schedule-table--public th:nth-child(3),
+.training-schedule-table.training-schedule-table--public td:nth-child(3) {
+    width: 22%;
+}
+
+.training-schedule-table.training-schedule-table--public th:nth-child(4),
+.training-schedule-table.training-schedule-table--public td:nth-child(4) {
+    width: 36%;
+}
+
+.training-schedule-table.training-schedule-table--public th:nth-child(5),
+.training-schedule-table.training-schedule-table--public td:nth-child(5) {
+    width: 18%;
+}
+
+/* Notes column wraps instead of overflowing */
+.training-schedule-table .notes-cell {
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* Action buttons stay inside the Actions cell and wrap when narrow */
+.training-schedule-table .training-actions-cell {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-start;
+}
+
+.training-schedule-table .training-actions-cell .secondary-btn {
+    margin: 0;
+}
+
+/* Action buttons aligned and spaced */
+.training-actions-cell button {
+    margin-right: 8px;
+}
+
+
+/* ================================
+   Scheduled Trainings Tables
+   (Supervisor + Lifeguard)
+   ================================ */
+
+.training-schedule-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 24px;
+  table-layout: fixed; /* percentages + wrapping */
+}
+
+.training-schedule-table th,
+.training-schedule-table td {
+  padding: 10px 8px;
+  border: 1px solid #a0a0a0;
+  font-size: 14px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  color: #000;
+  vertical-align: middle;
+  word-wrap: break-word;
+}
+
+.training-schedule-table thead th {
+  background-color: #69140e;
+  color: #000;            /* you asked for black header text */
+  font-weight: bold;
+  text-align: left;
+}
+
+.training-schedule-table tbody tr:nth-child(odd) {
+  background-color: #ffffff;
+}
+
+.training-schedule-table tbody tr:nth-child(even) {
+  background-color: #f3f3f3;
+}
+
+/* --- Supervisor tables: 6 columns (Date, Time, Location, Spots, Notes, Actions) --- */
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(1),
+.training-schedule-table.training-schedule-table--admin td:nth-child(1) {
+  width: 14%;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(2),
+.training-schedule-table.training-schedule-table--admin td:nth-child(2) {
+  width: 14%;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(3),
+.training-schedule-table.training-schedule-table--admin td:nth-child(3) {
+  width: 18%;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(4),
+.training-schedule-table.training-schedule-table--admin td:nth-child(4) {
+  width: 10%;
+}
+
+/* Notes column: make this the widest, allow wrapping */
+.training-schedule-table.training-schedule-table--admin th:nth-child(5),
+.training-schedule-table.training-schedule-table--admin td:nth-child(5) {
+  width: 34%;
+  white-space: normal;
+}
+
+/* Actions column: just big enough for the three buttons */
+.training-schedule-table.training-schedule-table--admin th:nth-child(6),
+.training-schedule-table.training-schedule-table--admin td:nth-child(6) {
+  width: 10%;
+}
+
+/* --- Lifeguard tables: 5 columns (Date, Time, Location, Notes, Spots) --- */
+
+.training-schedule-table.training-schedule-table--public th:nth-child(1),
+.training-schedule-table.training-schedule-table--public td:nth-child(1) {
+  width: 16%;
+}
+
+.training-schedule-table.training-schedule-table--public th:nth-child(2),
+.training-schedule-table.training-schedule-table--public td:nth-child(2) {
+  width: 16%;
+}
+
+.training-schedule-table.training-schedule-table--public th:nth-child(3),
+.training-schedule-table.training-schedule-table--public td:nth-child(3) {
+  width: 20%;
+}
+
+/* Notes column, wide + wrapping */
+.training-schedule-table.training-schedule-table--public th:nth-child(4),
+.training-schedule-table.training-schedule-table--public td:nth-child(4) {
+  width: 38%;
+  white-space: normal;
+}
+
+/* Spots filled column */
+.training-schedule-table.training-schedule-table--public th:nth-child(5),
+.training-schedule-table.training-schedule-table--public td:nth-child(5) {
+  width: 10%;
+}
+
+/* Button row in Actions col (supervisor) */
+.training-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.training-action-btn {
+  min-width: 64px;
+  padding: 6px 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  background-color: #69140e;
+  color: #fff;
+}
+
+.training-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* mobile: allow the three supervisor buttons to wrap cleanly */
+@media (max-width: 768px) {
+  .training-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* ==========================================================
+   Training schedule tables: FINAL overrides (paste at END)
+   ========================================================== */
+
+.training-schedule-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.training-schedule-table th,
+.training-schedule-table td {
+  padding: 12px;
+  border: 1px solid #ccc;
+  vertical-align: top;
+}
+
+.training-schedule-table thead th {
+  background-color: #69140e;
+  color: White !important; /* override the later black-text block */
+  font-weight: bold;
+}
+
+.training-schedule-table tbody td {
+  color: #000;
+  word-break: break-word;
+}
+
+.training-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Admin table widths: Training Type | Date & Time | Location | Notes | Spots Filled | Actions */
+.training-schedule-table--admin th:nth-child(1),
+.training-schedule-table--admin td:nth-child(1) { width: 12%; }
+
+.training-schedule-table--admin th:nth-child(2),
+.training-schedule-table--admin td:nth-child(2) { width: 14%; }
+
+.training-schedule-table--admin th:nth-child(3),
+.training-schedule-table--admin td:nth-child(3) { width: 16%; }
+
+.training-schedule-table--admin th:nth-child(4),
+.training-schedule-table--admin td:nth-child(4) { width: 8%; }
+
+.training-schedule-table--admin th:nth-child(5),
+.training-schedule-table--admin td:nth-child(5) { width: 38%; }
+
+.training-schedule-table--admin th:nth-child(6),
+.training-schedule-table--admin td:nth-child(6) { width: 12%; }
+
+/* Public table widths: Training Type | Date & Time | Location | Notes | Spots Filled */
+.training-schedule-table--public th:nth-child(1),
+.training-schedule-table--public td:nth-child(1) { width: 15%; }
+
+.training-schedule-table--public th:nth-child(2),
+.training-schedule-table--public td:nth-child(2) { width: 15%; }
+
+.training-schedule-table--public th:nth-child(3),
+.training-schedule-table--public td:nth-child(3) { width: 15%; }
+
+.training-schedule-table--public th:nth-child(4),
+.training-schedule-table--public td:nth-child(4) { width: 48%; }
+
+.training-schedule-table--public th:nth-child(5),
+.training-schedule-table--public td:nth-child(5) { width: 7%; }
+
+/* Admin form 2-column layout */
+.admin-form-cols {
+  align-items: flex-start;
+  gap: 32px;
+}
+.admin-form-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Training type filter bar above Scheduled Sessions tables */
+.training-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 12px;
+}
+
+.filter-by-label {
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 0.9rem;
+  color: #333;
+  white-space: nowrap;
+}
+
+.training-filter-select {
+  border: none;
+  border-bottom: 2px solid #69140e;
+  border-radius: 0;
+  background-color: #c8c8c8;
+  color: #333;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  width: 150px !important;
+  cursor: pointer;
+}
+
+/* Dim rows where capacity is fully filled */
+.session-row-full td {
+  background-color: rgba(105, 20, 14, 0.07) !important;
+  color: #888 !important;
+}
+
+body.dark-mode .session-row-full td {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #666 !important;
+}
+
+body.dark-mode .filter-by-label {
+  color: #fff;
+}
+
+body.dark-mode .training-filter-select {
+  background-color: #444;
+  color: #fff;
+  border-bottom-color: #c0392b;
+}
+
+/* Footer (match main app footer styling) */
+.footer {
+  background-color: #666;
+  min-height: 100px;
+  margin-top: 40px;
+  display: flex;
+  align-items: center;
+  border-top: 2px solid #fff;
+  justify-content: center;
+  color: #fff;
+  text-align: center;
+  padding: 12px 16px;
+}
+
+.site-footer-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.site-footer-logo {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.site-footer-divider {
+  width: 1px;
+  height: 42px;
+  background: #fff;
+}
+
+.site-footer-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.site-footer-title {
+  color: #fff;
+  font-size: 14pt;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.site-footer-date {
+  color: #fff;
+  font-size: 14pt;
+  line-height: 1.1;
+}
+
+/* =========================
+   Training page hard fixes
+   ========================= */
+
+/* Needed so training.js can hide the "current section" menu item */
+.hidden {
+  display: none !important;
+}
+
+/* Center the supervisor login modal */
+#trainingLoginModal.modal {
+  display: none;               /* training.js flips to flex */
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.55);
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal content panel */
+#trainingLoginModal .training-modal-content {
+  width: min(420px, 92vw);
+  background: #ffffff;
+  padding: 18px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+/* Keep training schedule table headers white (text) */
+.training-schedule-table thead th,
+.training-schedule-table th {
+  color: #ffffff !important;
+}
+
+/* =========================
+   Global button shadows (Training)
+   ========================= */
+button,
+.submit-btn,
+.editAndSave,
+.danger-button,
+.supervisor-login-btn,
+.training-action-btn,
+.training-edit-btn,
+.training-delete-btn,
+.training-roster-btn,
+#attendanceAddBtn {
+  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
+}
+
+button:active,
+.submit-btn:active,
+.editAndSave:active,
+.danger-button:active,
+.supervisor-login-btn:active,
+.training-action-btn:active,
+.training-edit-btn:active,
+.training-delete-btn:active,
+.training-roster-btn:active,
+#attendanceAddBtn:active {
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* ===============================
+   Attendance roster row styling
+   =============================== */
+
+.att-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 2px solid #69140e;
+  background-color: #c8c8c8;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  font-size: 14px;
+  border-radius: 0;
+  box-sizing: border-box;
+}
+
+.attendance-edit-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+/* Small button used for row-level actions */
+.small-button {
+  display: inline-block;
+  padding: 6px 12px;
+  margin-top: 4px;
+  border: none;
+  border-radius: 0;
+  background-color: #69140e;
+  color: #fff;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+
+.small-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Edit / Save theme slider in roster rows */
+.toggle-pill {
+  display: inline-flex;
+  border: 1px solid #69140e;
+  border-radius: 0;
+  overflow: hidden;
+  background-color: #333;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+
+.toggle-pill--small {
+  height: 32px;
+}
+
+.toggle-pill .toggle-option {
+  flex: 1;
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: #aaa;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toggle-pill .toggle-option.active {
+  background-color: #69140e;
+  color: #ffffff;
+}
+
+.toggle-pill .toggle-option:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* Use sanitation checkbox look in Attendance column */
+.attendance-checkbox-cell .sanitation-checkbox {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+/* =========================
+   Settings modal (shared with main ChemLog — training.css must
+   hide it by default since this page does not load style.css)
+   ========================= */
+
+#settingsModal {
+  display: none;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -54%) scale(0.96);
+  z-index: 9999;
+  padding: 20px 30px 80px 30px;
+  border-radius: 0;
+  width: 90vw;
+  max-width: 1100px;
+  height: auto;
+  text-align: left;
+  max-height: 90vh;
+  overflow-y: auto;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#settingsModal.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+@media (max-width: 768px) {
+  #settingsModal {
+    width: 95vw;
+    max-width: 95vw;
+    height: 95vh;
+    padding: 15px;
+  }
+  .settings-modal-content {
+    padding: 10px;
+  }
+}
+
+/* Settings Modal Content - Centered */
+.settings-modal-content {
+    margin-top: 50px !important;
+    max-width: 800px !important;
+    width: 95% !important;
+    max-height: 80vh;
+    overflow-y: auto;
+    padding: 20px;
+    border: 4px solid #69140e; /* Add red border */
+    border-radius: 0px;
+    background-color: white;
+}
+
+/* Scrollable settings modal with sticky header */
+#settingsModal .modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background-color: #000;
+  border-bottom: 1px solid #555;
+}
+
+/* Settings modal header styling */
+#settingsModal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #ddd;
+  background-color: #f8f9fa92;
+}
+
+#settingsModal .modal-header h2 {
+  margin: 0;
+  color: #69140e;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+#settingsModal .modal-header .close {
+  font-size: 36px;
+  font-weight: bold;
+  color: #aaa;
+  cursor: pointer;
+}
+
+#settingsModal .modal-header .close:hover {
+  color: #000;
+}
+
+#settingsModal h3 {
+  font-size: 24px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modal-header h2 {
+  color: #69140e;
+  font-size: 24px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.close {
+  color: #aaa;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.close:hover {
+  color: #000;
+}
+
+body.dark-mode #settingsModal .modal-header {
+  background-color: #000000;
+}
+
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 998;
+}
+
+/* =========================
+   Market checkboxes (copied from style.css)
+   ========================= */
+
+.market-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.market-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.market-filter-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  margin-right: 10px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  border: 1px solid #69140e;
+  background-color: white;
+  border-radius: 0;
+  display: inline-block;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.market-filter-checkbox:checked {
+  background-color: #69140e;
+  border-color: black;
+}
+
+.market-filter-checkbox:checked::after {
+  content: '✓';
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+}
+
+/* =========================
+   Theme toggle (copied from style.css)
+   ========================= */
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  font-size: 14px;
+}
+
+.theme-switch {
+  position: relative;
+  display: inline-block;
+}
+
+.theme-switch input[type="checkbox"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+.theme-switch-track {
+  position: relative;
+  width: 150px;
+  height: 40px;
+  background-color: #333;
+  border: 1px solid #69140e;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+
+.theme-switch-text {
+  position: relative;
+  flex: 1;
+  text-align: center;
+  line-height: 40px;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  z-index: 1;
+  color: #999;
+  pointer-events: none;
+}
+
+.theme-light-text { text-align: center; }
+.theme-dark-text  { text-align: center; }
+
+.theme-switch-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background-color: #69140e;
+  z-index: 0;
+  transition: transform 0.22s ease;
+}
+
+.theme-switch input[type="checkbox"]:checked + .theme-switch-track .theme-switch-thumb {
+  transform: translateX(100%);
+}
+
+.theme-switch input[type="checkbox"]:not(:checked) + .theme-switch-track .theme-light-text,
+.theme-switch input[type="checkbox"]:checked + .theme-switch-track .theme-dark-text {
+  color: #ffffff;
+}
+
+/* =========================
+   Employee table + settings rows (copied from style.css)
+   ========================= */
+
+.employee-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+.employee-table th,
+.employee-table td {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+}
+
+.employee-table th {
+  background-color: #69140e;
+  color: #fff;
+}
+
+.employee-table th:nth-child(1),
+.employee-table td:nth-child(1) { width: 13%; min-width: 120px; white-space: nowrap; }
+
+.employee-table th:nth-child(2),
+.employee-table td:nth-child(2),
+.employee-table th:nth-child(3),
+.employee-table td:nth-child(3) { width: 25%; }
+
+.employee-table th:nth-child(4),
+.employee-table td:nth-child(4) { width: 20%; }
+
+.employee-table th:nth-child(5),
+.employee-table td:nth-child(5) { width: 15%; white-space: nowrap; text-align: center; }
+
+#employeeTableSection.overlay-disabled {
+  pointer-events: auto;
+}
+
+#employeeTableSection.overlay-disabled::before {
+  inset: 0 12% 0 0;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.settings-field label {
+  font-size: 13px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.employee-add-row {
+  display: grid;
+  grid-template-columns: 0.8fr 1fr 1fr 1.2fr auto;
+  gap: 8px;
+  margin: 10px 0 16px;
+}
+
+.employee-add-btn-cell {
+  display: flex;
+  align-items: flex-end;
+}
+
+.employee-action-btn {
+  padding: 8px 18px;
+  font-size: 14px;
+  margin-top: 0;
+}
+
+.employee-add-btn-cell .employee-action-btn {
+  height: 44px;
+  width: 100%;
+}
+
+.employee-file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.employee-delete-inline-btn {
+  margin-left: auto;
+  align-self: center;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+}
+
+#employeeHomePoolInput {
+  min-height: 40px;
+  height: 40px;
+  box-sizing: border-box;
+}
+
+.security-require-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.security-section.overlay-disabled .security-require-row {
+  cursor: not-allowed;
+}
+
+#securityControls {
+  position: relative;
+  display: inline-flex;
+  border: 1px solid #69140e;
+  border-radius: 0;
+  overflow: hidden;
+  background-color: #333;
+  height: 40px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+
+#securityControls .editAndSave {
+  flex: 1;
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: #aaa;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+
+#securityControls .editAndSave.active {
+  color: #fff;
+  opacity: 1;
+}
+
+#securityControls .editAndSave:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+#securityControls .editAndSave.active:disabled {
+  opacity: 1;
+}
+
+#employeeFileInput {
+  color: #333;
+  max-width: 100%;
+}
+
+#employeeFileInput::file-selector-button {
+  background-color: #69140e;
+  color: #fff;
+  border: none;
+  border-radius: 0;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-weight: bold;
+  cursor: pointer;
+  margin-right: 12px;
+}
+
+#employeeFileInput::file-selector-button:hover {
+  background-color: #521008;
+}
+
+/* =========================
+   Dark Mode — Training Page
+   ========================= */
+
+body.dark-mode {
+  background-color: #000 !important;
+  color: #fff;
+}
+
+body.dark-mode .app-header {
+  background-color: #69140e;
+}
+
+body.dark-mode .card,
+body.dark-mode .training-card {
+  background-color: #2e2e2e !important;
+  color: #fff !important;
+}
+
+body.dark-mode .training-schedule-table th {
+  background-color: #69140e !important;
+}
+
+body.dark-mode .training-schedule-table td,
+body.dark-mode .attendance-table td,
+body.dark-mode .attendance-table th,
+body.dark-mode .sanitation-table td,
+body.dark-mode .sanitation-table th,
+body.dark-mode .employee-table td,
+body.dark-mode .employee-table th {
+  color: #fff !important;
+}
+
+body.dark-mode .training-schedule-table,
+body.dark-mode .attendance-table,
+body.dark-mode .sanitation-table,
+body.dark-mode .employee-table {
+  background-color: #2e2e2e !important;
+}
+
+body.dark-mode .training-schedule-table tbody tr:nth-child(even),
+body.dark-mode .attendance-table tbody tr:nth-child(even),
+body.dark-mode .sanitation-table tr:nth-child(even),
+body.dark-mode .employee-table tr:nth-child(even) {
+  background-color: #3a3a3a !important;
+}
+
+body.dark-mode .training-schedule-table tbody tr:nth-child(odd),
+body.dark-mode .attendance-table tbody tr:nth-child(odd),
+body.dark-mode .sanitation-table tr:nth-child(odd),
+body.dark-mode .employee-table tr:nth-child(odd) {
+  background-color: #2e2e2e !important;
+}
+
+body.dark-mode input[type="text"],
+body.dark-mode input[type="email"],
+body.dark-mode input[type="tel"],
+body.dark-mode input[type="date"],
+body.dark-mode input[type="password"],
+body.dark-mode input[type="number"],
+body.dark-mode select,
+body.dark-mode textarea {
+  background-color: #555 !important;
+  color: #fff !important;
+  border-color: #888 !important;
+}
+
+body.dark-mode label,
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode p,
+body.dark-mode small {
+  color: #fff !important;
+}
+
+body.dark-mode .dropdown-menu {
+  background-color: #2e2e2e;
+  border-color: #555;
+}
+
+body.dark-mode .dropdown-item {
+  color: #fff !important;
+}
+
+body.dark-mode .dropdown-item:hover {
+  background-color: #444;
+}
+
+body.dark-mode .modal-content,
+body.dark-mode .settings-modal-content,
+body.dark-mode .training-modal-content {
+  background-color: #2e2e2e !important;
+  color: #fff !important;
+}
+
+body.dark-mode .modal-header {
+  background-color: #000 !important;
+}
+
+body.dark-mode .modal-header h2 {
+  color: #fff !important;
+}
+
+body.dark-mode .submit-btn {
+  color: #fff !important;
+}
+
+body.dark-mode .editAndSave {
+  color: #fff !important;
+}
+
+.scheduled-section h3 {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #69140e;
+  border-bottom: 2px solid #69140e;
+  padding-bottom: 4px;
+  margin-bottom: 8px;
+}
+
+body.dark-mode .scheduled-section h3 {
+  color: #ff8080;
+  border-bottom-color: #ff8080;
+}
+
+.scheduled-section .emp-metrics-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #69140e;
+  background: #1f1f1f;
+  color: #fff;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+  margin: 10px 0 8px;
+}
+
+.scheduled-section .emp-metrics-arrow {
+  width: 14px;
+  display: inline-block;
+}
+
+.scheduled-section .emp-metrics-body.hidden {
+  display: none;
+}
+
+body.dark-mode .help-text {
+  color: #bbb !important;
+}
+
+/* =========================
+   Concern Level Highlights
+   ========================= */
+
+.concern-minor {
+  background-color: #ffe066 !important;
+  color: #333 !important;
+}
+
+.concern-major {
+  background-color: #e03131 !important;
+  color: #fff !important;
+}
+
+/* ==========================================================
+   Settings modal — sanitation-section overlay (Market + Employees)
+   Works on training.html (overrides the older opacity approach)
+   ========================================================== */
+.settings-modal-content .sanitation-section {
+  position: relative;
+}
+
+.settings-modal-content .sanitation-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 0.25s ease;
+}
+
+.settings-modal-content .sanitation-section.overlay-disabled::before {
+  opacity: 1;
+}
+
+.settings-modal-content .sanitation-section.overlay-disabled {
+  pointer-events: none;
+}
+
+/* ---- Mobile responsive ---- */
+@media (max-width: 768px) {
+  /* Training page main container */
+  .training-container,
+  .training-content {
+    padding: 0 10px;
+  }
+
+  /* Roster table: horizontal scroll */
+  .roster-table-wrapper,
+  .training-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .roster-table {
+    min-width: 540px;
+  }
+
+  /* Signup form: full width */
+  .signup-form-row {
+    flex-direction: column;
+  }
+
+  /* Attendance modal: fill screen */
+  .attendance-modal .modal-content.large {
+    width: 95vw;
+    max-width: 95vw;
+    margin: 4vh auto;
+    padding: 14px;
+  }
+
+  /* Attendance roster table: scroll */
+  .attendance-modal-body {
+    overflow-x: auto;
+  }
+
+  .roster-table {
+    min-width: 480px;
+  }
+
+  /* Public sessions table: scroll */
+  .public-sessions-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .public-sessions-table table {
+    min-width: 400px;
+  }
+}

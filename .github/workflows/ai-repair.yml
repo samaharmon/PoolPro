@@ -1,0 +1,55 @@
+name: AI Repair Loop
+
+on:
+  push:
+    branches: [new]
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: '20'
+
+      - name: Install HTML/CSS/JS checkers
+        run: |
+          npm install -g htmlhint stylelint jshint
+          echo '{"rules":{"tag-pair":true,"attr-value-double-quotes":true,"doctype-first":true}}' > .htmlhintrc
+          echo '{"rules":{"color-no-invalid-hex":true,"declaration-block-no-duplicate-properties":true}}' > .stylelintrc.json
+
+      - name: Run checks on all files and save errors
+        run: |
+          echo "=== HTML ===" > errors.log
+          find . -name "*.html" -not -path "*/node_modules/*" | xargs htmlhint >> errors.log 2>&1 || true
+          echo "=== CSS ===" >> errors.log
+          find . -name "*.css" -not -path "*/node_modules/*" | xargs stylelint >> errors.log 2>&1 || true
+          echo "=== JavaScript ===" >> errors.log
+          find . -name "*.js" -not -path "*/node_modules/*" | xargs jshint >> errors.log 2>&1 || true
+          cat errors.log
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run Claude Code repair loop
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.Anthropic_key }}
+        run: |
+          cat errors.log | claude --print --max-turns 5 \
+            --allowedTools "Bash,Edit,Read" \
+            -p "Read the errors from stdin. For each error, find the file it refers to and fix it. \
+            After fixing, re-run the checkers to confirm errors are gone. \
+            Never delete content, only fix errors. \
+            Explain each fix in plain English at the end."
+
+      - name: Report results
+        run: |
+          git diff --quiet && echo "✅ No issues found" || \
+            echo "⚠️ Claude found issues - check the log above for details"

@@ -1,0 +1,818 @@
+/* employees.css — Employee Performance Dashboard */
+
+/* ============================================================
+   Auth gate
+   ============================================================ */
+
+.emp-auth-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background-color: #222;
+}
+
+.emp-auth-box {
+  background-color: #333;
+  border: 2px solid #69140e;
+  padding: 30px 40px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+}
+
+.emp-auth-box h2 {
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.emp-auth-box > p {
+  color: #bbb;
+  margin-bottom: 20px;
+}
+
+.emp-auth-form .form-group {
+  margin-bottom: 14px;
+}
+
+.emp-auth-form label {
+  display: block;
+  color: #ccc;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.emp-auth-form input {
+  width: 100%;
+  padding: 10px;
+  background-color: #c8c8c8;
+  border: none;
+  border-bottom: 2px solid #69140e;
+  color: #333;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.emp-auth-error {
+  color: #ff7777;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* ============================================================
+   Page layout
+   ============================================================ */
+
+.hidden {
+  display: none !important;
+}
+
+.container {
+  width: calc(100vw - 100px);
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 20px 30px;
+  display: block;
+}
+
+.emp-page-header {
+  margin: 20px 0 10px;
+}
+
+.emp-page-header h2 {
+  font-size: 1.6rem;
+  color: #69140e;
+  border-bottom: 2px solid #69140e;
+  padding-bottom: 6px;
+}
+
+body.dark-mode .emp-page-header h2 {
+  color: #ff8080;
+  border-color: #ff8080;
+}
+
+/* ============================================================
+   Page-level tabs (Training Completion / SET Performance)
+   ============================================================ */
+
+.emp-page-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 0;
+  border-bottom: 2px solid #69140e;
+  width: fit-content;
+}
+
+.emp-page-tab {
+  padding: 10px 28px;
+  background: #eee;
+  border: 1px solid #ccc;
+  border-bottom: none;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 15px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #555;
+  border-radius: 0;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  margin-right: 4px;
+}
+
+.emp-page-tab:last-child {
+  margin-right: 0;
+}
+
+.emp-page-tab:hover {
+  background: #ddd;
+}
+
+.emp-page-tab.active {
+  background: #69140e;
+  color: #fff;
+  border-color: #69140e;
+}
+
+body.dark-mode .emp-page-tab {
+  background: #444;
+  border-color: #666;
+  color: #ccc;
+}
+
+body.dark-mode .emp-page-tab.active {
+  background: #69140e;
+  color: #fff;
+  border-color: #69140e;
+}
+
+body.dark-mode .emp-page-tabs {
+  border-color: #ff8080;
+}
+
+.emp-tab-panel {
+  padding-top: 24px;
+  width: 100%;
+}
+
+#trainingTablesContainer,
+#setTablesContainer {
+  width: 100%;
+}
+
+/* ============================================================
+   Global filter bar
+   ============================================================ */
+
+.emp-global-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+/* ============================================================
+   Market section
+   ============================================================ */
+
+.emp-market-section {
+  margin-bottom: 48px;
+  width: 100%;
+}
+
+.emp-market-heading {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #69140e;
+  border-bottom: 2px solid #69140e;
+  padding-bottom: 4px;
+  margin-bottom: 0;
+}
+
+body.dark-mode .emp-market-heading {
+  color: #ff8080;
+  border-color: #ff8080;
+}
+
+/* ============================================================
+   Table wrapper with overlay
+   ============================================================ */
+
+.emp-table-section {
+  position: relative;
+  overflow: visible;
+}
+
+.emp-table-section.overlay-disabled {
+  pointer-events: none;
+}
+
+.emp-table-section.overlay-disabled::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 0 22%;
+  background: rgba(0, 0, 0, 0.18);
+  opacity: 0.35;
+  pointer-events: auto;
+  cursor: not-allowed;
+  z-index: 1;
+}
+
+/* Keep controls outside overlay — always clickable */
+.emp-controls-row {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+}
+
+/* ============================================================
+   Employee table
+   ============================================================ */
+
+.emp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  table-layout: fixed;
+  min-width: 560px;
+}
+
+.emp-table thead tr {
+  background-color: #69140e;
+  color: #fff;
+}
+
+.emp-table th {
+  padding: 10px 12px;
+  text-align: center;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-weight: bold;
+  font-size: 13px;
+  border: 1px solid #8b1a14;
+}
+
+.emp-table th:first-child {
+  text-align: left;
+}
+
+.emp-table td {
+  padding: 9px 12px;
+  border: 1px solid #ddd;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.emp-table tbody tr:nth-child(even) {
+  background-color: #f8f8f8;
+}
+
+.emp-table tbody tr:hover {
+  background-color: #f0e8e8;
+}
+
+body.dark-mode .emp-table th {
+  background-color: #69140e;
+  border-color: #8b1a14;
+}
+
+body.dark-mode .emp-table td {
+  border-color: #444;
+  background-color: #2a2a2a;
+  color: #ddd;
+}
+
+body.dark-mode .emp-table tbody tr:nth-child(even) td {
+  background-color: #252525;
+}
+
+body.dark-mode .emp-table tbody tr:hover td {
+  background-color: #3a2020;
+}
+
+/* Column widths — Training table */
+.emp-table th:nth-child(1),
+.emp-table td:nth-child(1) {
+  width: 22%;
+  text-align: left;
+}
+
+.emp-table th:nth-child(2),
+.emp-table th:nth-child(3),
+.emp-table th:nth-child(4),
+.emp-table th:nth-child(5),
+.emp-table td:nth-child(2),
+.emp-table td:nth-child(3),
+.emp-table td:nth-child(4),
+.emp-table td:nth-child(5) {
+  width: 19.5%;
+}
+
+/* ============================================================
+   Employee name cell with tooltip
+   ============================================================ */
+
+.emp-name-cell {
+  position: relative;
+  z-index: 5;
+}
+
+.emp-complete-check {
+  color: #1a8a1a;
+  font-weight: bold;
+  font-size: 1em;
+}
+
+/* ============================================================
+   Overall Performance table
+   ============================================================ */
+
+.emp-overall-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.emp-overall-table th,
+.emp-overall-table td {
+  border: 1px solid #ccc;
+  padding: 8px 12px;
+  text-align: center;
+  font-size: 13px;
+}
+
+.emp-overall-table th {
+  background-color: #333;
+  color: #fff;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 12px;
+}
+
+.emp-overall-table td:first-child {
+  text-align: left;
+  font-weight: bold;
+}
+
+.emp-metrics-toggle {
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #69140e;
+  background: #1f1f1f;
+  color: #fff;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.emp-metrics-arrow {
+  width: 14px;
+  display: inline-block;
+}
+
+.emp-metrics-body {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.emp-question-type-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #ccc;
+  border-bottom: 2px solid #69140e;
+  background: #f7f7f7;
+}
+
+.emp-question-type-cell {
+  position: relative;
+}
+
+.emp-qtype-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.emp-qtype-controls {
+  display: inline-flex;
+  border: 1px solid #69140e;
+}
+
+.emp-qtype-controls .editAndSave {
+  min-width: 52px;
+  padding: 5px 10px;
+  border: none;
+  background: #333;
+  color: #aaa;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.emp-qtype-controls .editAndSave.active {
+  background: #69140e;
+  color: #fff;
+}
+
+.emp-topic-col-saved .emp-question-type-input {
+  cursor: not-allowed;
+}
+
+.emp-topic-col-saved td.emp-question-type-cell,
+.emp-topic-col-saved th.emp-question-type-th {
+  position: relative;
+}
+
+.emp-topic-col-saved td.emp-question-type-cell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  opacity: 0.35;
+  pointer-events: auto;
+  cursor: not-allowed;
+}
+
+.emp-trend-bar {
+  width: 100%;
+  height: 12px;
+  background: #e0e0e0;
+}
+
+.emp-trend-fill {
+  height: 100%;
+}
+
+.emp-graph-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.emp-line-graph {
+  width: 100%;
+  min-width: 780px;
+  display: block;
+  background: #1f1f1f;
+  border: 1px solid #3f3f3f;
+}
+
+.emp-graph-axis {
+  stroke: #9a9a9a;
+  stroke-width: 1.2;
+}
+
+.emp-graph-grid {
+  stroke: #373737;
+  stroke-width: 1;
+}
+
+.emp-graph-line {
+  fill: none;
+  stroke: #ff8080;
+  stroke-width: 2.6;
+}
+
+.emp-graph-bestfit {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.emp-graph-axis-text {
+  fill: #d0d0d0;
+  font-size: 12px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.emp-graph-xlabel {
+  font-size: 10px;
+}
+
+.emp-graph-label {
+  fill: #f0f0f0;
+  font-size: 13px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-weight: 700;
+}
+
+body.dark-mode .emp-overall-table th,
+body.dark-mode .emp-overall-table td {
+  border-color: #444;
+  color: #ddd;
+}
+
+body.dark-mode .emp-overall-table th {
+  background-color: #1a1a1a;
+}
+
+body.dark-mode .emp-question-type-input {
+  background-color: #333;
+  border-color: #555;
+  color: #ddd;
+}
+
+body.dark-mode .emp-trend-bar {
+  background: #3a3a3a;
+}
+
+body.dark-mode .emp-line-graph {
+  background: #1d1d1d;
+  border-color: #444;
+}
+
+.emp-name-text {
+  cursor: default;
+  border-bottom: 1px dashed #999;
+}
+
+.emp-name-tooltip {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: #333;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 500;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  border: 1px solid #69140e;
+  border-radius: 0;
+  pointer-events: none;
+  line-height: 1.6;
+}
+
+.emp-name-cell:hover .emp-name-tooltip {
+  display: block;
+}
+
+/* ============================================================
+   Training checkbox cell
+   ============================================================ */
+
+.emp-check-cell {
+  text-align: center;
+}
+
+.emp-training-cb {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Disabled checkboxes stay styled but not interactive */
+.emp-table-section.overlay-disabled .emp-training-cb,
+.emp-table-section.overlay-disabled .emp-result-select,
+.emp-table-section.overlay-disabled .emp-retrain-cb {
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   SET Performance table — wider columns for dropdowns
+   ============================================================ */
+
+.emp-set-table th:nth-child(1),
+.emp-set-table td:nth-child(1) {
+  width: 18%;
+}
+
+.emp-set-table th:nth-child(n+2),
+.emp-set-table td:nth-child(n+2) {
+  width: 20.5%;
+}
+
+.emp-set-cell {
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.emp-set-cell-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.emp-result-select {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  border: 1px solid #ccc;
+  border-bottom: 2px solid #69140e;
+  background-color: #f5f5f5;
+  color: #333;
+  cursor: pointer;
+}
+
+.emp-result-select:disabled {
+  background-color: #e8e8e8;
+  cursor: default;
+}
+
+body.dark-mode .emp-result-select {
+  background-color: #3a3a3a;
+  color: #ddd;
+  border-color: #555;
+  border-bottom-color: #69140e;
+}
+
+body.dark-mode .emp-result-select:disabled {
+  background-color: #333;
+}
+
+.emp-retrain-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.emp-retrain-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #555;
+  cursor: pointer;
+}
+
+body.dark-mode .emp-retrain-label {
+  color: #aaa;
+}
+
+/* ============================================================
+   Edit/Save controls (sanitation-controls style)
+   ============================================================ */
+
+.emp-edit-save-controls {
+  position: relative;
+  display: inline-flex;
+  border: 1px solid #69140e;
+  border-radius: 0;
+  overflow: hidden;
+  background-color: #333;
+  box-shadow: 0 3px 6px rgba(0,0,0,0.3);
+}
+
+.emp-edit-save-controls .editAndSave {
+  flex: 1;
+  min-width: 72px;
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  color: #aaa;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+
+.emp-edit-save-controls .editAndSave.active {
+  color: #fff;
+}
+
+.emp-edit-save-controls .editAndSave:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.emp-edit-save-controls .editAndSave.active:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.emp-edit-save-controls .sanitation-controls-thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background-color: #69140e;
+  z-index: 0;
+  transition: transform 0.22s ease;
+}
+
+/* ============================================================
+   Active nav link
+   ============================================================ */
+
+.dropdown-item.active-page {
+  background-color: rgba(105, 20, 14, 0.15);
+}
+
+/* ============================================================
+   Dark mode: market-filter-checkbox override
+   ============================================================ */
+
+body.dark-mode .market-filter-checkbox {
+  background-color: #444;
+  border-color: #69140e;
+}
+
+body.dark-mode .market-filter-checkbox:checked {
+  background-color: #69140e;
+}
+
+/* ============================================================
+   Dark mode: additional components
+   ============================================================ */
+
+body.dark-mode .emp-global-filter-bar .filter-by-label {
+  color: #aaa;
+}
+
+body.dark-mode .emp-global-filter-bar .training-filter-select {
+  background-color: #333;
+  color: #ddd;
+  border-color: #555;
+}
+
+body.dark-mode .emp-table-section {
+  background-color: transparent;
+}
+
+body.dark-mode .emp-set-cell {
+  background-color: #2a2a2a;
+  border-color: #444;
+}
+
+body.dark-mode .emp-edit-save-controls {
+  background-color: #1a1a1a;
+  border-color: #444;
+}
+
+body.dark-mode .emp-edit-save-controls .editAndSave {
+  background-color: #333;
+  color: #aaa;
+  border-color: #555;
+}
+
+body.dark-mode .emp-edit-save-controls .editAndSave.active {
+  background-color: #69140e;
+  color: #fff;
+}
+
+body.dark-mode .emp-name-cell {
+  color: #ddd;
+}
+
+body.dark-mode .emp-name-tooltip {
+  background-color: #333;
+  color: #ddd;
+  border-color: #555;
+}
+
+body.dark-mode .emp-retrain-row {
+  background-color: #2a2a2a;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .container {
+    padding: 12px 16px;
+  }
+
+  .emp-table-section {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .emp-page-tab {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .emp-global-filter-bar {
+    gap: 6px;
+  }
+
+  .emp-name-tooltip {
+    left: 0;
+    top: 100%;
+    transform: none;
+  }
+
+  .emp-table {
+    font-size: 12px;
+  }
+
+  .emp-table th,
+  .emp-table td {
+    padding: 6px 8px;
+  }
+}

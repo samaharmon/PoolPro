@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoolPro Home</title>
+  <link rel="stylesheet" href="Main/home.css">
+</head>
+<body class="home-body">
+  <header class="home-header">
+    <img src="Images/Logos/logo.png" alt="PoolPro logo" class="home-logo" />
+    <h1 class="home-title">PoolPro</h1>
+  </header>
+
+  <main class="home-main">
+    <hr class="home-divider">
+<body>
+
+    <nav class="home-menu">
+      <button class="home-menu-item" data-target="chem">
+        <span>Log Pool Chemistry</span>
+      </button>
+      <button class="home-menu-item" data-target="training">
+        <span>Sign Up for Training</span>
+      </button>
+      <button class="home-menu-item" data-target="supervisor">
+        <span>Supervisor Tools</span>
+      </button>
+    </nav>
+  </main>
+  
+
+  
+  <!-- Login modal -->
+  <div id="homeLoginModal" class="modal">
+    <div class="modal-content home-login-modal">
+      <button class="close" id="homeLoginClose">&times;</button>
+      <h2>Sign in</h2>
+
+      <!-- Lifeguard / Supervisor role toggle -->
+      <div class="home-role-toggle" id="roleToggle">
+        <button class="theme-toggle-option active" data-role="lifeguard">Lifeguard</button>
+        <button class="theme-toggle-option" data-role="supervisor">Supervisor</button>
+      </div>
+
+      <form id="homeLoginForm">
+        <div class="form-group">
+          <label id="homeUsernameLabel" for="homeUsernameInput">Employee ID (3-Digits)</label>
+          <input type="text" id="homeUsernameInput" autocomplete="off">
+        </div>
+        <div class="form-group">
+          <label id="homePasswordLabel" for="homePasswordInput">Last Name</label>
+          <input type="text" id="homePasswordInput" autocomplete="off">
+        </div>
+
+        <p class="form-message" id="homeLoginMessage"></p>
+
+        <button type="submit" class="submit-btn" id="homeLoginSubmit">Continue</button>
+      </form>
+    </div>
+  </div>
+
+  <footer class="footer">ChemLog v3.0</footer>
+
+  <script type="module" src="firebase.js"></script>
+  <script type="module" src="Main/home.js"></script>
+</body>
+</html>

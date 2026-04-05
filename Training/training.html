@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pool Pro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Training‑page specific styling that matches the main ChemLog theme -->
+  <link rel="stylesheet" href="training.css" />
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ChemLog">
+  <meta name="theme-color" content="69140e">
+  <meta name="msapplication-navbutton-color" content="#69140e">
+  <meta name="msapplication-TileColor" content="#69140e">
+
+  <link rel="icon" href="../Images/Logos/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../Images/Logos/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../Images/Logos/favicon-16x16.png" />
+  <link rel="icon" type="image/svg+xml" href="../Images/Logos/favicon.svg" />
+
+</head>
+
+
+
+
+<body>
+    <header class="app-header">
+    <div class="training-header-left">
+        <h1 class="app-title">PoolPro</h1>
+        <p id="CCA">Capital City Aquatics & Upstate Pool Management</p>
+        <div class="menu-container">
+        <button class="menu-btn" onclick="toggleMenu(this)">
+            <span>≡</span>
+            <span>Menu</span>
+        </button>
+        <div class="dropdown-menu" id="dropdownMenu">
+            <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
+            <a href="training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+            <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
+            <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
+            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Compliance</a>
+            <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+            <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+            <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
+        </div>
+        </div>
+    <img id="logo" src="../Images/Logos/logo.png" alt="Pool Pro logo" />
+    </div>
+    </header>
+
+  <main class="training-main">
+    <h2 class="page-content-title" id="mainPageTitle" style="margin: 20px 50px 0;">Training Signup</h2>
+    <!-- Lifeguard signup form -->
+    <section class="card training-card">
+        <h2>Scheduled Trainings</h2>
+        <p>
+          These are the sessions your supervisors have created. Choose a monthly
+          in‑service training that works for your schedule.
+        </p>
+
+        <div class="training-filter-bar" id="publicTrainingFilterBar">
+          <span class="filter-by-label">Filter By:</span>
+          <select id="publicTrainingTypeFilter" class="training-filter-select">
+            <option value="all">Training Type</option>
+            <option value="HR Orientation">HR Orientation</option>
+            <option value="On-Site Orientation">On-Site Orientation</option>
+            <option value="ARC Certification">ARC Certification</option>
+            <option value="ARC Recertification">ARC Recertification</option>
+            <option value="In-Service">In-Service</option>
+          </select>
+          <select id="publicTrainingCityFilter" class="training-filter-select">
+            <option value="all">City</option>
+            <option value="Charleston">Charleston</option>
+            <option value="Charlotte">Charlotte</option>
+            <option value="Columbia">Columbia</option>
+            <option value="Greenville">Greenville</option>
+          </select>
+        </div>
+
+        <div id="publicScheduledTablesContainer"></div>
+        </div>
+
+    <br>
+    <br>
+
+    <h3>Training Signup Form</h3>
+      <form id="trainingSignupForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="guardEmployeeId">Employee ID (3-Digits)</label>
+            <input type="text" id="guardEmployeeId" name="guardEmployeeId" maxlength="10" placeholder="Enter employee ID (3-Digits)" required />
+          </div>
+          <div class="form-group">
+            <label for="guardName">Preferred First Name</label>
+            <input type="text" id="guardName" name="guardName" required />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <!-- Home pool dropdown (uses same pool list as ChemLog form) -->
+          <div class="form-group">
+            <label for="guardPool">Home Pool</label>
+            <select id="guardPool" required>
+              <option value="">Select your home pool</option>
+              <!-- Options are injected from script.js -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="trainingMonth">Training Type</label>
+            <select id="trainingMonth" name="trainingMonth" required>
+              <option value="">Select training type</option>
+              <option value="HR Orientation">HR Orientation</option>
+              <option value="On-Site Orientation">On-Site Orientation</option>
+              <option value="ARC Certification">ARC Certification</option>
+              <option value="ARC Recertification">ARC Recertification</option>
+              <option value="In-Service">In-Service</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="trainingSession">Training Date &amp; Location</label>
+            <select id="trainingSession" name="trainingSession" required>
+              <option value="">Select a training type first</option>
+              <!-- Options populated by training.js based on supervisor config -->
+            </select>
+            <small class="help-text">
+              Sessions are set by your supervisor. Make sure you pick the correct pool/area.
+            </small>
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn">Submit Signup</button>
+        <p class="form-message" id="signupMessage"></p>
+      </form>
+    </section>
+
+    <!-- Supervisor configuration panel, styled like Settings → Schedule Trainings -->
+    <div class="hidden" id="trainingAdminPanel">
+    <section class="card training-card">
+      <h3 class="training-admin-section-label">Scheduling Form</h3>
+      <p class="card-subtitle">
+        Create, edit, and track the in‑service training sessions that appear in the signup form.
+      </p>
+
+      <div class="settings-section" id="scheduleTrainingsSection">
+
+        <!-- 2-column layout -->
+        <div class="form-row admin-form-cols">
+          <!-- Left column: Market, Training Type, Start Time, End Time -->
+          <div class="admin-form-col">
+            <div class="form-group">
+              <label for="trainingMarketSelect">Market</label>
+              <select id="trainingMarketSelect">
+                <option value="">Select market</option>
+                <option value="Charleston">Charleston</option>
+                <option value="Charlotte">Charlotte</option>
+                <option value="Columbia">Columbia</option>
+                <option value="Greenville">Greenville</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="trainingTypeInput">Training Type</label>
+              <select id="trainingTypeInput">
+                <option value="">Select type</option>
+                <option value="HR Orientation">HR Orientation</option>
+                <option value="On-Site Orientation">On-Site Orientation</option>
+                <option value="ARC Certification">ARC Certification</option>
+                <option value="ARC Recertification">ARC Recertification</option>
+                <option value="In-Service">In-Service</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="trainingStartTimeSelect">Start Time</label>
+              <select id="trainingStartTimeSelect">
+                <option value="">Select start time</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="trainingEndTimeSelect">End Time</label>
+              <select id="trainingEndTimeSelect">
+                <option value="">Select end time</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Right column: Date, Pool, Address, Capacity -->
+          <div class="admin-form-col">
+            <div class="form-group">
+              <label for="trainingDateInput">Date</label>
+              <input type="date" id="trainingDateInput" />
+            </div>
+            <div class="form-group">
+              <label for="trainingPoolSelect">Pool</label>
+              <select id="trainingPoolSelect">
+                <option value="">Select pool</option>
+                <!-- options populated by script.js -->
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="trainingAddressInput">Address</label>
+              <input
+                type="text"
+                id="trainingAddressInput"
+                placeholder="Street, city, state"
+              />
+            </div>
+            <div class="form-group">
+              <label for="trainingCapacityInput">Capacity</label>
+              <input
+                type="text"
+                id="trainingCapacityInput"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                placeholder="e.g. 20"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes (full width) -->
+        <div class="form-group full-width">
+          <label for="trainingNotesInput">Notes</label>
+          <textarea
+            id="trainingNotesInput"
+            rows="3"
+          ></textarea>
+        </div>
+
+        <input type="hidden" id="trainingSessionId" />
+
+        <button type="button" id="saveTrainingSessionBtn" class="submit-btn">
+          Save Training Session
+        </button>
+
+      </div><!-- end settings-section -->
+    </section><!-- end form card -->
+
+    <section class="card training-card">
+      <h2>Scheduled Sessions</h2>
+
+      <div class="training-filter-bar" id="adminTrainingFilterBar">
+        <span class="filter-by-label">Filter By:</span>
+        <select id="adminTrainingTypeFilter" class="training-filter-select">
+          <option value="all">Training Type</option>
+          <option value="HR Orientation">HR Orientation</option>
+          <option value="On-Site Orientation">On-Site Orientation</option>
+          <option value="ARC Certification">ARC Certification</option>
+          <option value="ARC Recertification">ARC Recertification</option>
+          <option value="In-Service">In-Service</option>
+        </select>
+        <select id="adminTrainingCityFilter" class="training-filter-select">
+          <option value="all">City</option>
+          <option value="Charleston">Charleston</option>
+          <option value="Charlotte">Charlotte</option>
+          <option value="Columbia">Columbia</option>
+          <option value="Greenville">Greenville</option>
+        </select>
+      </div>
+
+      <div id="adminScheduledTablesContainer"></div>
+
+      <p class="form-message" id="adminMessage"></p>
+    </section><!-- end sessions card -->
+    </div><!-- end trainingAdminPanel -->
+  </main>
+
+<div class="footer">
+  <em>2026 | ChemLog v3.0</em>
+</div>
+
+  <!-- Supervisor login modal (training-specific) -->
+  <div class="modal" id="trainingLoginModal">
+    <div class="modal-content training-modal-content">
+      <span class="close" id="closeTrainingLoginModal">&times;</span>
+      <h2>Supervisor Login</h2>
+      <form id="trainingLoginForm">
+        <div class="login-input">
+          <label for="trainingUsername">Email</label>
+          <input type="email" id="trainingUsername" required />
+        </div>
+        <div class="login-input">
+          <label for="trainingPassword">Password</label>
+          <input type="password" id="trainingPassword" required />
+        </div>
+        <button type="submit" class="submit-btn">Login</button>
+        <p class="form-message" id="trainingLoginMessage"></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- Attendance / Roster Modal -->
+<div id="attendanceModal" class="modal attendance-modal" style="display:none;">
+  <div class="modal-content large">
+    <div class="modal-header">
+      <h2>Attendance</h2>
+      <button type="button" class="attendance-close-btn" id="attendanceModalClose">&times;</button>
+    </div>
+
+    <div class="attendance-modal-body">
+      <div class="attendance-modal-actions">
+        <button type="button" id="attendanceSubmitBtn" class="submit-btn attendance-submit-btn">
+          Submit &amp; Download Attendance Excel
+        </button>
+      </div>
+
+      <div class="attendance-table-wrapper">
+        <table class="attendance-table">
+          <thead>
+            <tr>
+              <th>Preferred First Name</th>
+              <th>Last Name</th>
+              <th>Home Pool</th>
+              <th>Phone Number</th>
+              <th>Attendance</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="attendanceTableBody">
+            <!-- rows injected by training.js -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="attendance-add-row">
+        <h3>Add participant</h3>
+        <div class="attendance-add-grid">
+          <input id="attendanceAddFirstName" type="text" placeholder="Preferred First Name">
+          <input id="attendanceAddEmployeeId" type="text" placeholder="Employee ID (3-Digits)">
+          <button type="button" id="attendanceAddBtn" class="submit-btn">Add</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <!-- Dark overlay behind the Settings modal -->
+    <div class="modal-overlay" id="settingsOverlay"></div>
+
+    <div id="settingsModal">
+        <div class="modal-content settings-modal-content">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <span class="close" onclick="closeSettings()">&times;</span>
+            </div>
+            <div class="settings-section">
+                <h3>Website Setup</h3>
+                <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
+            </div>
+            <div class="settings-section">
+                <h3>Market</h3>
+                <p class="section-subtitle">
+                    Select which markets' pools are visible on the supervisor dashboard.
+                </p>
+                <div id="marketSection" class="sanitation-section overlay-disabled">
+                <div class="market-options">
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Columbia"
+                        >
+                        Columbia
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Greenville"
+                        >
+                        Greenville
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Charlotte"
+                        >
+                        Charlotte
+                    </label>
+                    <label class="market-option">
+                        <input
+                            type="checkbox"
+                            class="market-filter-checkbox"
+                            name="marketFilter"
+                            value="Charleston"
+                        >
+                        Charleston
+                    </label>
+                </div>
+                </div>
+                <div class="toggle-btn">
+                    <div class="sanitation-controls">
+                        <button type="button" class="editAndSave active" id="marketEditBtn">Edit</button>
+                        <button type="button" class="editAndSave" id="marketSaveBtn" disabled>Save</button>
+                    </div>
+                </div>
+                </div>
+            <!-- ===== Employees section ===== -->
+            <section class="settings-section settings-group" id="employeeSettings">
+            <h3>Employees</h3>
+            <p class="section-subtitle">
+                Add employee information by uploading a master staffing file, or add in employees individually.
+            </p>
+
+            <div class="settings-row employee-file-row" style="margin-top: 20px;">
+                <input
+                type="file"
+                id="employeeFileInput"
+                accept=".csv,.xlsx,.xls"
+                />
+            </div>
+
+            <div class="settings-row employee-add-row">
+                <div class="settings-field">
+                <label for="employeeIdInput">Employee ID</label>
+                <input type="text" id="employeeIdInput" maxlength="10" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeFirstNameInput">First name</label>
+                <input type="text" id="employeeFirstNameInput" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeLastNameInput">Last name</label>
+                <input type="text" id="employeeLastNameInput" />
+                </div>
+
+                <div class="settings-field">
+                <label for="employeeHomePoolInput">Home Pool</label>
+                <select id="employeeHomePoolInput">
+                  <option value="">Select pool</option>
+                </select>
+                </div>
+
+                <div class="settings-field">
+                <label for="employeePhoneInput">Phone number</label>
+                <input type="tel" id="employeePhoneInput" />
+                </div>
+            </div>
+
+            <div class="employee-add-btn-row">
+                <button
+                    type="button"
+                    class="submit-btn button-shadow employee-action-btn"
+                    id="employeeAddBtn"
+                >
+                    Add
+                </button>
+            </div>
+
+            <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
+              <span class="filter-by-label">Filter By:</span>
+              <select id="employeeMarketFilter" class="training-filter-select">
+                <option value="all">Market</option>
+                <option value="Charleston">Charleston</option>
+                <option value="Charlotte">Charlotte</option>
+                <option value="Columbia">Columbia</option>
+                <option value="Greenville">Greenville</option>
+              </select>
+              <select id="employeePoolFilter" class="training-filter-select">
+                <option value="all">Home Pool</option>
+              </select>
+            </div>
+
+            <div id="employeeTableSection" class="sanitation-section overlay-disabled">
+            <table class="employee-table">
+                <thead>
+                <tr>
+                    <th>Employee ID</th>
+                    <th>First name</th>
+                    <th>Last name</th>
+                    <th>Home Pool</th>
+                    <th>Phone</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody id="employeesTableBody"></tbody>
+            </table>
+            </div>
+            </section>
+            <div class="settings-section">
+                <div id="sanitationMethodsSection">
+                    <h3>Sanitation Methods</h3>
+                    <p class="section-subtitle">
+                        Sanitation methods are managed per market. Only markets selected below are shown.
+                    </p>
+                    <div class="sanitation-section overlay-disabled">
+                    <div id="sanitationTablesContainer">
+                        <!-- Tables are injected by script.js -->
+                    </div>
+                    </div>
+                    <div class="toggle-btn">
+                    <div id="sanitationControls" class="sanitation-controls">
+                        <button type="button" class="editAndSave active" id="sanitationEditBtn">Edit</button>
+                        <button type="button" class="editAndSave" id="sanitationSaveBtn" disabled>Save</button>
+                    </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>Data Storage</h3>
+                    <button id="clearAllData" class="submit-btn">Clear All Chemistry Log Data</button>
+                    <br>
+                    <button id="exportCsvBtn" class="submit-btn">Export Data to CSV</button>
+                </div>
+                <div class="settings-section">
+                    <h3>Security</h3>
+                    <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
+                    <div class="settings-row" style="margin-top: 10px;">
+                        <div class="settings-field">
+                            <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+                            <select id="securityTimeoutSelect">
+                                <option value="never">Never</option>
+                                <option value="15">15 minutes</option>
+                                <option value="30">30 minutes</option>
+                                <option value="60">60 minutes</option>
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <label style="display:flex;align-items:center;gap:8px;margin-top:24px;">
+                                <input type="checkbox" id="securityRequirePassword" checked>
+                                Require password confirmation before destructive actions
+                            </label>
+                        </div>
+                    </div>
+                    <button type="button" id="securitySaveBtn" class="submit-btn" style="margin-top: 10px;">Save</button>
+                </div>
+                <!-- Site Appearance Section -->
+                    <div class="settings-section">
+                    <h3>Site Appearance</h3>
+                    <br>
+                    <label class="theme-toggle">
+                        <div class="theme-switch">
+                            <input type="checkbox" id="darkModeToggle" />
+                            <div class="theme-switch-track">
+                                <span class="theme-switch-text theme-light-text">Light</span>
+                                <span class="theme-switch-text theme-dark-text">Dark</span>
+                                <div class="theme-switch-thumb"></div>
+                            </div>
+                        </div>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div> 
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="training.js" type="module"></script>
+  <script src="../script.js" type="module"></script>
+</body>
+</html>

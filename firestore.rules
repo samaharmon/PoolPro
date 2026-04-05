@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Chemistry submissions
+    match /poolSubmissions/{docId} {
+      allow read, write: if true;
+    }
+
+    // Legacy
+    match /formSubmissions/{docId} {
+      allow read, write: if true;
+    }
+
+    // CSV export (optional)
+    match /chemistryLogs/{docId} {
+      allow read, write: if true;
+    }
+
+    // Pool definitions/rules
+    match /pools/{poolId} {
+      allow read, write: if true;
+    }
+
+    // App settings (includes settings/trainingSchedule, settings/employeePerformance, settings/setQuestionTypes)
+    match /settings/{docId} {
+      allow read, write: if true;
+    }
+
+    // Training signups
+    match /trainingSignups/{signupId} {
+      allow read, write: if true;
+    }
+
+    // Lifeguard employees who can log in via home screen
+    match /employees/{employeeId} {
+      allow read, write: if true;
+    }
+
+    // Auditing form submissions
+    match /testingResults/{resultId} {
+      allow read, write: if true;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
