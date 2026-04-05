@@ -1178,12 +1178,13 @@ function setupSecuritySettingsUI() {
   let saveBtn = document.getElementById('securitySaveBtn');
   if (!timeoutSelect || !requirePassCb || !saveBtn) return;
 
-  const securitySection = document.getElementById('securitySection') || timeoutSelect.closest('.settings-section');
-  if (!securitySection) return;
-  securitySection.id = 'securitySection';
-  securitySection.classList.add('sanitation-section', 'security-section');
-  const passLabel = requirePassCb.closest('label');
-  if (passLabel) passLabel.classList.add('security-require-row');
+  // Apply the overlay only to the content wrapper (not the whole section with title/buttons)
+  const contentWrap = document.querySelector('.security-content-wrap');
+  if (!contentWrap) return;
+  contentWrap.classList.add('sanitation-section', 'security-section');
+
+  const securitySection = saveBtn.closest('.settings-section') || timeoutSelect.closest('.settings-section');
+  if (securitySection) securitySection.id = 'securitySection';
 
   if (!editBtn) {
     const controlsWrap = document.createElement('div');
@@ -1235,7 +1236,7 @@ function setupSecuritySettingsUI() {
   requirePassCb.checked = securitySettings.requirePasswordConfirm !== false;
 
   const setEditable = (editable) => {
-    securitySection.classList.toggle('overlay-disabled', !editable);
+    contentWrap.classList.toggle('overlay-disabled', !editable);
     timeoutSelect.disabled = !editable;
     requirePassCb.disabled = !editable;
     editBtn.classList.toggle('active', editable);
@@ -1601,15 +1602,11 @@ async function loadSanitationMethods() {
     sanitationData = {};
   }
 
-  // Start in read-only mode (overlay active)
-  const section = container.closest('.sanitation-section');
-  if (section) section.classList.add('overlay-disabled');
-
-  renderSanitationTables(container, false);
-  setupSanitationControls(container);
+  renderSanitationTables(container, null); // null = all markets read-only
 }
 
-function renderSanitationTables(container, editable) {
+// editableMarket: market name currently in edit mode, or null for all read-only
+function renderSanitationTables(container, editableMarket) {
   container.innerHTML = '';
   const groups = groupPoolsByMarket(poolsCache);
   if (!groups.length) {
@@ -1618,13 +1615,20 @@ function renderSanitationTables(container, editable) {
   }
 
   groups.forEach(({ market, pools: mPools }) => {
-    const wrapper = document.createElement('div');
-    wrapper.style.marginBottom = '20px';
+    const isEditable = (editableMarket === market);
+
+    const block = document.createElement('div');
+    block.className = 'sanitation-market-block';
+    block.dataset.market = market;
 
     const heading = document.createElement('h4');
     heading.textContent = market;
-    heading.style.marginBottom = '6px';
-    wrapper.appendChild(heading);
+    block.appendChild(heading);
+
+    // Table wrapper — the overlay covers only this element
+    const tableWrap = document.createElement('div');
+    tableWrap.className = 'sanitation-market-table-wrap sanitation-section';
+    if (!isEditable) tableWrap.classList.add('overlay-disabled');
 
     const table = document.createElement('table');
     table.className = 'sanitation-table';
@@ -1639,7 +1643,7 @@ function renderSanitationTables(container, editable) {
       bleachCb.type = 'checkbox';
       bleachCb.className = 'market-filter-checkbox';
       bleachCb.checked = (saved === 'bleach');
-      bleachCb.disabled = !editable;
+      bleachCb.disabled = !isEditable;
       bleachCb.dataset.poolId = pool.id;
       bleachCb.dataset.method = 'bleach';
 
@@ -1647,18 +1651,18 @@ function renderSanitationTables(container, editable) {
       granularCb.type = 'checkbox';
       granularCb.className = 'market-filter-checkbox';
       granularCb.checked = (saved === 'granular');
-      granularCb.disabled = !editable;
+      granularCb.disabled = !isEditable;
       granularCb.dataset.poolId = pool.id;
       granularCb.dataset.method = 'granular';
 
-      if (editable) {
+      if (isEditable) {
         bleachCb.addEventListener('change', () => {
-          if (bleachCb.checked) { granularCb.checked = false; }
-          else { bleachCb.checked = true; } // prevent both unchecked
+          if (bleachCb.checked) granularCb.checked = false;
+          else bleachCb.checked = true;
         });
         granularCb.addEventListener('change', () => {
-          if (granularCb.checked) { bleachCb.checked = false; }
-          else { granularCb.checked = true; }
+          if (granularCb.checked) bleachCb.checked = false;
+          else granularCb.checked = true;
         });
       }
 
@@ -1678,54 +1682,61 @@ function renderSanitationTables(container, editable) {
     });
 
     table.appendChild(tbody);
-    wrapper.appendChild(table);
-    container.appendChild(wrapper);
-  });
-}
+    tableWrap.appendChild(table);
+    block.appendChild(tableWrap);
 
-function setupSanitationControls(container) {
-  const editBtn = document.getElementById('sanitationEditBtn');
-  const saveBtn = document.getElementById('sanitationSaveBtn');
-  if (!editBtn || !saveBtn) return;
-  if (editBtn.dataset.listenersAttached) return; // prevent duplicate listeners
-  editBtn.dataset.listenersAttached = 'true';
+    // Per-market Edit/Save controls
+    const controlsWrap = document.createElement('div');
+    controlsWrap.className = 'toggle-btn sanitation-market-controls';
+    const controls = document.createElement('div');
+    controls.className = 'sanitation-controls';
+    const thumb = document.createElement('div');
+    thumb.className = 'sanitation-controls-thumb';
+    thumb.style.transform = isEditable ? 'translateX(0%)' : 'translateX(100%)';
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = isEditable ? 'editAndSave active' : 'editAndSave';
+    editBtn.textContent = 'Edit';
+    editBtn.disabled = isEditable;
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = isEditable ? 'editAndSave' : 'editAndSave active';
+    saveBtn.textContent = 'Save';
+    saveBtn.disabled = !isEditable;
 
-  const thumb = editBtn.closest('#sanitationControls')?.querySelector('.sanitation-controls-thumb');
+    controls.appendChild(thumb);
+    controls.appendChild(editBtn);
+    controls.appendChild(saveBtn);
+    controlsWrap.appendChild(controls);
+    block.appendChild(controlsWrap);
 
-  editBtn.addEventListener('click', () => {
-    const section = container.closest('.sanitation-section');
-    if (section) section.classList.remove('overlay-disabled');
-    // Edit is now the active mode — highlight Edit (left), dim Save
-    editBtn.classList.add('active');
-    saveBtn.classList.remove('active');
-    editBtn.disabled = true;
-    saveBtn.disabled = false;
-    if (thumb) thumb.style.transform = 'translateX(0%)';
-    renderSanitationTables(container, true);
-  });
-
-  saveBtn.addEventListener('click', async () => {
-    const newData = {};
-    container.querySelectorAll('input[type="checkbox"][data-pool-id]:checked').forEach(cb => {
-      newData[cb.dataset.poolId] = cb.dataset.method;
+    editBtn.addEventListener('click', () => {
+      renderSanitationTables(container, market);
     });
-    sanitationData = newData;
-    try {
-      await setDoc(doc(db, 'settings', 'sanitation'), { pools: newData }, { merge: true });
-    } catch (err) {
-      console.error('[ChemLog] Error saving sanitation methods:', err);
-    }
-    const section = container.closest('.sanitation-section');
-    if (section) section.classList.add('overlay-disabled');
-    // Saved state — highlight Save (right), dim Edit
-    saveBtn.classList.add('active');
-    editBtn.classList.remove('active');
-    saveBtn.disabled = true;
-    editBtn.disabled = false;
-    if (thumb) thumb.style.transform = 'translateX(100%)';
-    renderSanitationTables(container, false);
+
+    saveBtn.addEventListener('click', async () => {
+      // Update sanitationData for pools in this market only
+      tableWrap.querySelectorAll('input[type="checkbox"][data-pool-id]').forEach(cb => {
+        if (cb.checked) sanitationData[cb.dataset.poolId] = cb.dataset.method;
+      });
+      // Ensure every pool in this market has a value
+      mPools.forEach(pool => {
+        if (!sanitationData[pool.id]) sanitationData[pool.id] = 'bleach';
+      });
+      try {
+        await setDoc(doc(db, 'settings', 'sanitation'), { pools: sanitationData }, { merge: true });
+      } catch (err) {
+        console.error('[ChemLog] Error saving sanitation methods:', err);
+      }
+      renderSanitationTables(container, null);
+    });
+
+    container.appendChild(block);
   });
 }
+
+// Legacy stub — no longer needed but kept to avoid reference errors
+function setupSanitationControls() {}
 
 // ============================================================
 // ============================================================

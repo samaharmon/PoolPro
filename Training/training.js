@@ -89,6 +89,10 @@ function normalizeSession(raw) {
     date: raw.date || '',
     startTime: raw.startTime || raw.time || '',  // backwards compat with old `time` field
     endTime: raw.endTime || '',
+    multiDay: !!raw.multiDay,
+    startDate: raw.startDate || raw.date || '',
+    endDate: raw.endDate || '',
+    dayTimes: (raw.dayTimes && typeof raw.dayTimes === 'object') ? raw.dayTimes : {},
     pool: raw.pool || '',
     address: raw.address || '',
     capacity: Number.isFinite(capacity) && capacity > 0 ? capacity : 0,
@@ -313,23 +317,57 @@ function updateSessionSelectForType(typeKey, el) {
 function handleSaveSession(el) {
   const trainingType = el.trainingTypeInput?.value || '';
   const market = el.marketSelect?.value || '';
-  const date = el.dateInput?.value.trim();
-  const startTime = el.startTimeSelect?.value || '';
-  const endTime = el.endTimeSelect?.value || '';
-  const pool = el.poolSelect?.value.trim();
-  const address = el.addressInput?.value.trim();
-  const capacityRaw = el.capacityInput?.value.trim();
-  const notes = el.notesInput?.value.trim();
+  const isMultiDay = el.multiDayCheckbox?.checked || false;
+  const pool = el.poolSelect?.value?.trim() || '';
+  const address = el.addressInput?.value?.trim() || '';
+  const capacityRaw = el.capacityInput?.value?.trim() || '';
+  const notes = el.notesInput?.value?.trim() || '';
   const messageEl = el.adminMessage;
 
   if (!messageEl) return;
-
   messageEl.textContent = '';
   messageEl.classList.remove('success', 'error');
 
-  if (!date || !startTime || !pool || !capacityRaw) {
-    messageEl.textContent =
-      'Please enter a date, start time, location, and capacity for the training session.';
+  let date, startTime, endTime, startDate, endDate, dayTimes;
+
+  if (isMultiDay) {
+    startDate = el.startDateInput?.value?.trim() || '';
+    endDate = el.endDateInput?.value?.trim() || '';
+    date = startDate;
+    startTime = '';
+    endTime = '';
+    // Save the current day's times before reading
+    const curDay = el.startDaySelect?.value;
+    if (curDay) {
+      window._currentDayTimes = window._currentDayTimes || {};
+      window._currentDayTimes[curDay] = {
+        startTime: el.startTimeSelect?.value || '',
+        endTime: el.endTimeSelect?.value || ''
+      };
+    }
+    dayTimes = { ...(window._currentDayTimes || {}) };
+    if (!startDate || !endDate) {
+      messageEl.textContent = 'Please enter a start and end date for the multi-day session.';
+      messageEl.classList.add('error');
+      return;
+    }
+  } else {
+    date = el.dateInput?.value?.trim() || '';
+    startDate = date;
+    endDate = '';
+    startTime = el.startTimeSelect?.value || '';
+    endTime = el.endTimeSelect?.value || '';
+    dayTimes = {};
+    if (!date || !startTime || !pool || !capacityRaw) {
+      messageEl.textContent =
+        'Please enter a date, start time, location, and capacity for the training session.';
+      messageEl.classList.add('error');
+      return;
+    }
+  }
+
+  if (!pool || !capacityRaw) {
+    messageEl.textContent = 'Please enter a pool location and capacity.';
     messageEl.classList.add('error');
     return;
   }
@@ -353,9 +391,7 @@ function handleSaveSession(el) {
   }
 
   if (targetSession) {
-    const taken = Array.isArray(targetSession.attendees) ?
-      targetSession.attendees.length
-      : 0;
+    const taken = Array.isArray(targetSession.attendees) ? targetSession.attendees.length : 0;
     if (capacity < taken) {
       messageEl.textContent =
         `Capacity (${capacity}) cannot be less than current sign‑ups (${taken}).`;
@@ -368,6 +404,10 @@ function handleSaveSession(el) {
     targetSession.date = date;
     targetSession.startTime = startTime;
     targetSession.endTime = endTime;
+    targetSession.multiDay = isMultiDay;
+    targetSession.startDate = startDate;
+    targetSession.endDate = endDate;
+    targetSession.dayTimes = dayTimes;
     targetSession.pool = pool;
     targetSession.address = address;
     targetSession.capacity = capacity;
@@ -380,6 +420,10 @@ function handleSaveSession(el) {
       date,
       startTime,
       endTime,
+      multiDay: isMultiDay,
+      startDate,
+      endDate,
+      dayTimes,
       pool,
       address,
       capacity,
@@ -414,6 +458,14 @@ function handleSaveSession(el) {
   if (el.capacityInput) el.capacityInput.value = '';
   if (el.notesInput) el.notesInput.value = '';
   if (el.sessionIdInput) el.sessionIdInput.value = '';
+  // Reset multi-day fields
+  if (el.multiDayCheckbox) el.multiDayCheckbox.checked = false;
+  if (el.startDateInput) el.startDateInput.value = '';
+  if (el.endDateInput) el.endDateInput.value = '';
+  if (el.startDaySelect) el.startDaySelect.value = '';
+  if (el.endDaySelect) el.endDaySelect.value = '';
+  window._currentDayTimes = {};
+  setMultiDayUI(el, false);
   updateCapacityInfo(null, el);
 }
 
@@ -424,29 +476,43 @@ function handleEditSessionClick(sessionId, el) {
   if (el.sessionIdInput) el.sessionIdInput.value = session.id;
   if (el.marketSelect) el.marketSelect.value = session.market || '';
   if (el.trainingTypeInput) el.trainingTypeInput.value = session.trainingType || '';
-  if (el.dateInput) el.dateInput.value = session.date || '';
 
-  if (el.startTimeSelect) {
+  const isMultiDay = !!session.multiDay;
+  if (el.multiDayCheckbox) el.multiDayCheckbox.checked = isMultiDay;
+  setMultiDayUI(el, isMultiDay);
+
+  if (isMultiDay) {
+    if (el.startDateInput) el.startDateInput.value = session.startDate || session.date || '';
+    if (el.endDateInput) el.endDateInput.value = session.endDate || '';
+    window._currentDayTimes = session.dayTimes ? { ...session.dayTimes } : {};
+    updateDaySelects(el);
+    // Load Day 1 times into the time selects
+    const day1Times = window._currentDayTimes['1'] || {};
+    if (el.startDaySelect) el.startDaySelect.value = '1';
+    if (el.endDaySelect) el.endDaySelect.value = '1';
     buildTimeOptions(el.startTimeSelect, 'Select start time');
-    el.startTimeSelect.value = session.startTime || '';
-    if (session.startTime && el.startTimeSelect.value !== session.startTime) {
-      const opt = document.createElement('option');
-      opt.value = session.startTime;
-      opt.textContent = session.startTime;
-      el.startTimeSelect.appendChild(opt);
-      el.startTimeSelect.value = session.startTime;
-    }
-  }
-
-  if (el.endTimeSelect) {
+    if (day1Times.startTime) el.startTimeSelect.value = day1Times.startTime;
     buildTimeOptions(el.endTimeSelect, 'Select end time');
-    el.endTimeSelect.value = session.endTime || '';
-    if (session.endTime && el.endTimeSelect.value !== session.endTime) {
-      const opt = document.createElement('option');
-      opt.value = session.endTime;
-      opt.textContent = session.endTime;
-      el.endTimeSelect.appendChild(opt);
-      el.endTimeSelect.value = session.endTime;
+    if (day1Times.endTime) el.endTimeSelect.value = day1Times.endTime;
+  } else {
+    if (el.dateInput) el.dateInput.value = session.date || '';
+    if (el.startTimeSelect) {
+      buildTimeOptions(el.startTimeSelect, 'Select start time');
+      el.startTimeSelect.value = session.startTime || '';
+      if (session.startTime && el.startTimeSelect.value !== session.startTime) {
+        const opt = document.createElement('option');
+        opt.value = session.startTime; opt.textContent = session.startTime;
+        el.startTimeSelect.appendChild(opt); el.startTimeSelect.value = session.startTime;
+      }
+    }
+    if (el.endTimeSelect) {
+      buildTimeOptions(el.endTimeSelect, 'Select end time');
+      el.endTimeSelect.value = session.endTime || '';
+      if (session.endTime && el.endTimeSelect.value !== session.endTime) {
+        const opt = document.createElement('option');
+        opt.value = session.endTime; opt.textContent = session.endTime;
+        el.endTimeSelect.appendChild(opt); el.endTimeSelect.value = session.endTime;
+      }
     }
   }
 
@@ -454,22 +520,17 @@ function handleEditSessionClick(sessionId, el) {
     el.poolSelect.value = session.pool || '';
     if (session.pool && el.poolSelect.value !== session.pool) {
       const opt = document.createElement('option');
-      opt.value = session.pool;
-      opt.textContent = session.pool;
-      el.poolSelect.appendChild(opt);
-      el.poolSelect.value = session.pool;
+      opt.value = session.pool; opt.textContent = session.pool;
+      el.poolSelect.appendChild(opt); el.poolSelect.value = session.pool;
     }
   }
 
   if (el.addressInput) el.addressInput.value = session.address || '';
-  if (el.capacityInput) {
-    el.capacityInput.value =
-      session.capacity != null ? String(session.capacity) : '';
-  }
+  if (el.capacityInput) el.capacityInput.value = session.capacity != null ? String(session.capacity) : '';
   if (el.notesInput) el.notesInput.value = session.notes || '';
 
   updateCapacityInfo(session, el);
-  if (el.dateInput) el.dateInput.focus();
+  if (el.dateInput && !isMultiDay) el.dateInput.focus();
 }
 
 function handleDeleteSessionClick(sessionId, el) {
@@ -502,12 +563,24 @@ function handleDeleteSessionClick(sessionId, el) {
     if (el.addressInput) el.addressInput.value = '';
     if (el.capacityInput) el.capacityInput.value = '';
     if (el.notesInput) el.notesInput.value = '';
+    if (el.multiDayCheckbox) el.multiDayCheckbox.checked = false;
+    if (el.startDateInput) el.startDateInput.value = '';
+    if (el.endDateInput) el.endDateInput.value = '';
+    window._currentDayTimes = {};
+    setMultiDayUI(el, false);
     updateCapacityInfo(null, el);
   }
 
   if (el.trainingMonthSelect && el.trainingMonthSelect.value) {
     updateSessionSelectForType(el.trainingMonthSelect.value, el);
   }
+}
+
+function getDayDate(startDate, dayNum) {
+  if (!startDate) return '';
+  const d = new Date(startDate + 'T12:00:00');
+  d.setDate(d.getDate() + dayNum - 1);
+  return d.toISOString().split('T')[0];
 }
 
 function buildScheduleTableSection(sessions, isAdmin) {
@@ -564,10 +637,22 @@ function buildScheduleTableSection(sessions, isAdmin) {
       typeCell.textContent = session.trainingType || '';
       row.appendChild(typeCell);
 
-      // Col 2: Date & Time (14px, single block)
+      // Col 2: Date & Time
       const dateTimeCell = document.createElement('td');
-      const timeRange = formatTimeRange(session.startTime, session.endTime);
-      dateTimeCell.innerHTML = formatDateNice(session.date) + (timeRange ? `<br>${timeRange}` : '');
+      if (session.multiDay && session.dayTimes && Object.keys(session.dayTimes).length > 0) {
+        const dayNums = Object.keys(session.dayTimes).sort((a, b) => Number(a) - Number(b));
+        const parts = dayNums.map((dayNum, idx) => {
+          const dt = session.dayTimes[dayNum];
+          const dayDate = getDayDate(session.startDate || session.date, Number(dayNum));
+          const timeRange = formatTimeRange(dt.startTime, dt.endTime);
+          const sep = idx > 0 ? ' class="multi-day-day-sep"' : '';
+          return `<div${sep} class="multi-day-row"><strong>Day ${dayNum}:</strong> ${formatDateNice(dayDate)}${timeRange ? ` / ${timeRange}` : ''}</div>`;
+        });
+        dateTimeCell.innerHTML = parts.join('');
+      } else {
+        const timeRange = formatTimeRange(session.startTime, session.endTime);
+        dateTimeCell.innerHTML = formatDateNice(session.date) + (timeRange ? `<br>${timeRange}` : '');
+      }
       row.appendChild(dateTimeCell);
 
       // Col 3: Location (14px, no smaller sub-text)
@@ -678,6 +763,64 @@ function renderPublicTables(el) {
   container.appendChild(buildScheduleTableSection(sorted, false));
 }
 
+// Multi-day UI helpers
+function setMultiDayUI(el, isMultiDay) {
+  const singleDate = el.dateInput;
+  const rangeGroup = el.dateRangeGroup;
+  const startDay = el.startDaySelect;
+  const endDay = el.endDaySelect;
+  if (singleDate) singleDate.style.display = isMultiDay ? 'none' : '';
+  if (rangeGroup) rangeGroup.style.display = isMultiDay ? 'flex' : 'none';
+  if (startDay) startDay.style.display = isMultiDay ? '' : 'none';
+  if (endDay) endDay.style.display = isMultiDay ? '' : 'none';
+}
+
+function updateDaySelects(el) {
+  const startDate = el.startDateInput?.value;
+  const endDate = el.endDateInput?.value;
+  const startDay = el.startDaySelect;
+  const endDay = el.endDaySelect;
+  if (!startDay || !endDay) return;
+
+  let numDays = 0;
+  if (startDate && endDate) {
+    const s = new Date(startDate + 'T12:00:00');
+    const e = new Date(endDate + 'T12:00:00');
+    if (!isNaN(s) && !isNaN(e) && e >= s) {
+      numDays = Math.min(Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1, 5);
+    }
+  }
+
+  [startDay, endDay].forEach(sel => {
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Day #</option>';
+    for (let i = 1; i <= numDays; i++) {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = `Day ${i}`;
+      sel.appendChild(opt);
+    }
+    if (prev && Number(prev) <= numDays) sel.value = prev;
+  });
+}
+
+function loadDayTimes(el, dayNum) {
+  const times = (window._currentDayTimes || {})[dayNum] || {};
+  buildTimeOptions(el.startTimeSelect, 'Select start time');
+  buildTimeOptions(el.endTimeSelect, 'Select end time');
+  if (times.startTime) el.startTimeSelect.value = times.startTime;
+  if (times.endTime) el.endTimeSelect.value = times.endTime;
+}
+
+function saveDayTimes(el, dayNum) {
+  if (!dayNum) return;
+  window._currentDayTimes = window._currentDayTimes || {};
+  window._currentDayTimes[dayNum] = {
+    startTime: el.startTimeSelect?.value || '',
+    endTime: el.endTimeSelect?.value || ''
+  };
+}
+
 function setupAdmin(el) {
   if (!el.scheduleSection || !el.saveSessionBtn) return;
 
@@ -699,6 +842,53 @@ function setupAdmin(el) {
 
   buildTimeOptions(el.startTimeSelect, 'Select start time');
   buildTimeOptions(el.endTimeSelect, 'Select end time');
+  window._currentDayTimes = {};
+
+  // Multi-day checkbox toggle
+  if (el.multiDayCheckbox) {
+    el.multiDayCheckbox.addEventListener('change', () => {
+      const isMultiDay = el.multiDayCheckbox.checked;
+      setMultiDayUI(el, isMultiDay);
+      window._currentDayTimes = {};
+      if (!isMultiDay) {
+        if (el.startTimeSelect) el.startTimeSelect.value = '';
+        if (el.endTimeSelect) el.endTimeSelect.value = '';
+        if (el.startDaySelect) el.startDaySelect.value = '';
+        if (el.endDaySelect) el.endDaySelect.value = '';
+      }
+    });
+  }
+
+  // Date range inputs update day options
+  if (el.startDateInput) {
+    el.startDateInput.addEventListener('change', () => updateDaySelects(el));
+  }
+  if (el.endDateInput) {
+    el.endDateInput.addEventListener('change', () => updateDaySelects(el));
+  }
+
+  // Day selector sync: when either changes, sync both and load that day's times
+  function onDayChange(changedSel, otherSel) {
+    const prev = otherSel._prevDay;
+    if (prev) saveDayTimes(el, prev);
+    const day = changedSel.value;
+    otherSel.value = day;
+    changedSel._prevDay = day;
+    otherSel._prevDay = day;
+    if (day) {
+      loadDayTimes(el, day);
+    } else {
+      if (el.startTimeSelect) el.startTimeSelect.value = '';
+      if (el.endTimeSelect) el.endTimeSelect.value = '';
+    }
+  }
+
+  if (el.startDaySelect) {
+    el.startDaySelect.addEventListener('change', () => onDayChange(el.startDaySelect, el.endDaySelect));
+  }
+  if (el.endDaySelect) {
+    el.endDaySelect.addEventListener('change', () => onDayChange(el.endDaySelect, el.startDaySelect));
+  }
 
   el.saveSessionBtn.addEventListener('click', () => {
     handleSaveSession(el);
@@ -1219,6 +1409,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     marketSelect: document.getElementById('trainingMarketSelect'),
     trainingTypeInput: document.getElementById('trainingTypeInput'),
     dateInput: document.getElementById('trainingDateInput'),
+    multiDayCheckbox: document.getElementById('multiDayCheckbox'),
+    dateRangeGroup: document.getElementById('trainingDateRangeGroup'),
+    startDateInput: document.getElementById('trainingStartDateInput'),
+    endDateInput: document.getElementById('trainingEndDateInput'),
+    startDaySelect: document.getElementById('trainingStartDaySelect'),
+    endDaySelect: document.getElementById('trainingEndDaySelect'),
     startTimeSelect: document.getElementById('trainingStartTimeSelect'),
     endTimeSelect: document.getElementById('trainingEndTimeSelect'),
     poolSelect: document.getElementById('trainingPoolSelect'),

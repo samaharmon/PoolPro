@@ -41,12 +41,12 @@
                         <div class="dropdown-menu" id="dropdownMenu">
                             <a href="chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
                             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+                            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Daily Duties</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
                             <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
                             <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
-                            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Daily Duties</a>
                             <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
                         </div>
                     </div>
@@ -286,12 +286,12 @@
                         <div class="dropdown-menu" id="dropdownMenu">
                             <a href="chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
                             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+                            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Daily Duties</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
                             <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
                             <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
-                            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Daily Duties</a>
                             <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
                         </div>
                     </div>
@@ -477,17 +477,8 @@
                     <p class="section-subtitle">
                         Sanitation methods are managed per market. Only markets selected below are shown.
                     </p>
-                    <div class="sanitation-section overlay-disabled">
                     <div id="sanitationTablesContainer">
-                        <!-- Tables are injected by script.js -->
-                    </div>
-                    </div>
-                    <div class="toggle-btn">
-                    <div id="sanitationControls" class="sanitation-controls">
-                        <div class="sanitation-controls-thumb" style="transform:translateX(100%)"></div>
-                        <button type="button" class="editAndSave" id="sanitationEditBtn">Edit</button>
-                        <button type="button" class="editAndSave active" id="sanitationSaveBtn" disabled>Save</button>
-                    </div>
+                        <!-- Per-market tables with overlays injected by script.js -->
                     </div>
                 </div>
                 <div class="settings-section">
@@ -499,24 +490,28 @@
                 <div class="settings-section">
                     <h3>Security</h3>
                     <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
-                    <div style="margin-top: 10px;">
-                        <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
-                        <div style="margin-top: 4px;">
-                            <select id="securityTimeoutSelect">
-                                <option value="never">Never</option>
-                                <option value="15">15 minutes</option>
-                                <option value="30">30 minutes</option>
-                                <option value="60">60 minutes</option>
-                            </select>
+                    <div class="security-content-wrap">
+                        <div style="margin-top: 10px;">
+                            <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+                            <div style="margin-top: 4px;">
+                                <select id="securityTimeoutSelect">
+                                    <option value="never">Never</option>
+                                    <option value="15">15 minutes</option>
+                                    <option value="30">30 minutes</option>
+                                    <option value="60">60 minutes</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <label style="display:flex;align-items:center;gap:8px;">
+                                <input type="checkbox" id="securityRequirePassword" checked>
+                                Require password confirmation before destructive actions
+                            </label>
                         </div>
                     </div>
-                    <div style="margin-top: 14px;">
-                        <label style="display:flex;align-items:center;gap:8px;">
-                            <input type="checkbox" id="securityRequirePassword" checked>
-                            Require password confirmation before destructive actions
-                        </label>
+                    <div class="security-controls-row">
+                        <button type="button" id="securitySaveBtn" class="editAndSave" style="margin-top: 4px;">Save</button>
                     </div>
-                    <button type="button" id="securitySaveBtn" class="editAndSave" style="margin-top: 14px;">Save</button>
                 </div>
                 <!-- Site Appearance Section -->
                     <div class="settings-section">

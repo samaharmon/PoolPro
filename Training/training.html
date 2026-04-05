@@ -38,12 +38,12 @@
         <div class="dropdown-menu" id="dropdownMenu">
             <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
             <a href="training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Daily Duties</a>
             <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
             <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
             <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
             <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
             <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
-            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Daily Duties</a>
             <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
         </div>
         </div>
@@ -151,18 +151,8 @@
 
         <!-- 2-column layout -->
         <div class="form-row admin-form-cols">
-          <!-- Left column: Market, Training Type, Start Time, End Time -->
+          <!-- Left column: Training Type, Market, Pool, Address -->
           <div class="admin-form-col">
-            <div class="form-group">
-              <label for="trainingMarketSelect">Market</label>
-              <select id="trainingMarketSelect">
-                <option value="">Select market</option>
-                <option value="Charleston">Charleston</option>
-                <option value="Charlotte">Charlotte</option>
-                <option value="Columbia">Columbia</option>
-                <option value="Greenville">Greenville</option>
-              </select>
-            </div>
             <div class="form-group">
               <label for="trainingTypeInput">Training Type</label>
               <select id="trainingTypeInput">
@@ -175,24 +165,14 @@
               </select>
             </div>
             <div class="form-group">
-              <label for="trainingStartTimeSelect">Start Time</label>
-              <select id="trainingStartTimeSelect">
-                <option value="">Select start time</option>
+              <label for="trainingMarketSelect">Market</label>
+              <select id="trainingMarketSelect">
+                <option value="">Select market</option>
+                <option value="Charleston">Charleston</option>
+                <option value="Charlotte">Charlotte</option>
+                <option value="Columbia">Columbia</option>
+                <option value="Greenville">Greenville</option>
               </select>
-            </div>
-            <div class="form-group">
-              <label for="trainingEndTimeSelect">End Time</label>
-              <select id="trainingEndTimeSelect">
-                <option value="">Select end time</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Right column: Date, Pool, Address, Capacity -->
-          <div class="admin-form-col">
-            <div class="form-group">
-              <label for="trainingDateInput">Date</label>
-              <input type="date" id="trainingDateInput" />
             </div>
             <div class="form-group">
               <label for="trainingPoolSelect">Pool</label>
@@ -203,11 +183,50 @@
             </div>
             <div class="form-group">
               <label for="trainingAddressInput">Address</label>
-              <input
-                type="text"
-                id="trainingAddressInput"
-                placeholder="Street, city, state"
-              />
+              <input type="text" id="trainingAddressInput" placeholder="Street, city, state" />
+            </div>
+          </div>
+
+          <!-- Right column: Date, Start Time, End Time, Capacity -->
+          <div class="admin-form-col">
+            <div class="form-group">
+              <div class="multi-day-label-row">
+                <label for="trainingDateInput" style="margin-bottom:0;">Date</label>
+                <label style="display:flex;align-items:center;gap:6px;font-weight:normal;font-size:13px;margin-bottom:0;">
+                  <input type="checkbox" id="multiDayCheckbox" class="market-filter-checkbox" style="margin-right:4px;" />
+                  Multiple Days
+                </label>
+              </div>
+              <!-- Single day -->
+              <input type="date" id="trainingDateInput" />
+              <!-- Multi-day range (hidden unless checkbox checked) -->
+              <div id="trainingDateRangeGroup" class="multi-day-date-range" style="display:none; margin-top:4px;">
+                <input type="date" id="trainingStartDateInput" />
+                <span>to</span>
+                <input type="date" id="trainingEndDateInput" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="trainingStartTimeSelect">Start Time</label>
+              <div class="time-with-day-wrap">
+                <select id="trainingStartDaySelect" class="day-select" style="display:none;">
+                  <option value="">Day #</option>
+                </select>
+                <select id="trainingStartTimeSelect">
+                  <option value="">Select start time</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="trainingEndTimeSelect">End Time</label>
+              <div class="time-with-day-wrap">
+                <select id="trainingEndDaySelect" class="day-select" style="display:none;">
+                  <option value="">Day #</option>
+                </select>
+                <select id="trainingEndTimeSelect">
+                  <option value="">Select end time</option>
+                </select>
+              </div>
             </div>
             <div class="form-group">
               <label for="trainingCapacityInput">Capacity</label>
@@ -493,16 +512,8 @@
                     <p class="section-subtitle">
                         Sanitation methods are managed per market. Only markets selected below are shown.
                     </p>
-                    <div class="sanitation-section overlay-disabled">
                     <div id="sanitationTablesContainer">
-                        <!-- Tables are injected by script.js -->
-                    </div>
-                    </div>
-                    <div class="toggle-btn">
-                    <div id="sanitationControls" class="sanitation-controls">
-                        <button type="button" class="editAndSave active" id="sanitationEditBtn">Edit</button>
-                        <button type="button" class="editAndSave" id="sanitationSaveBtn" disabled>Save</button>
-                    </div>
+                        <!-- Per-market tables with overlays injected by script.js -->
                     </div>
                 </div>
                 <div class="settings-section">
@@ -514,24 +525,28 @@
                 <div class="settings-section">
                     <h3>Security</h3>
                     <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
-                    <div class="settings-row" style="margin-top: 10px;">
-                        <div class="settings-field">
+                    <div class="security-content-wrap">
+                        <div style="margin-top: 10px;">
                             <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
-                            <select id="securityTimeoutSelect">
-                                <option value="never">Never</option>
-                                <option value="15">15 minutes</option>
-                                <option value="30">30 minutes</option>
-                                <option value="60">60 minutes</option>
-                            </select>
+                            <div style="margin-top: 4px;">
+                                <select id="securityTimeoutSelect">
+                                    <option value="never">Never</option>
+                                    <option value="15">15 minutes</option>
+                                    <option value="30">30 minutes</option>
+                                    <option value="60">60 minutes</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="settings-field">
-                            <label style="display:flex;align-items:center;gap:8px;margin-top:24px;">
+                        <div style="margin-top: 20px;">
+                            <label style="display:flex;align-items:center;gap:8px;">
                                 <input type="checkbox" id="securityRequirePassword" checked>
                                 Require password confirmation before destructive actions
                             </label>
                         </div>
                     </div>
-                    <button type="button" id="securitySaveBtn" class="submit-btn" style="margin-top: 10px;">Save</button>
+                    <div class="security-controls-row">
+                        <button type="button" id="securitySaveBtn" class="editAndSave" style="margin-top: 4px;">Save</button>
+                    </div>
                 </div>
                 <!-- Site Appearance Section -->
                     <div class="settings-section">
