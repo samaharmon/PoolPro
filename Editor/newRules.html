@@ -146,10 +146,12 @@
                         </div>
                     </div> <!-- .metadata-content -->
 
-                    <div class="form-row" style="gap: 10px; margin-top: 10px; justify-content: flex-start;">
-                        <button type="button" class="editAndSave" id="editMetadataBtn">Edit</button>
-                        <button type="button" class="editAndSave" id="saveMetadataBtn" disabled>Save</button>
-                        <button type="button" id="deletePoolBtn" class="editAndSave danger-button">Delete Pool</button>
+                    <div class="form-row" style="gap: 10px; margin-top: 10px; justify-content: flex-start; align-items: center;">
+                        <div class="rule-buttons metadata-rule-buttons">
+                            <button type="button" class="pool-edit-btn editAndSave" id="editMetadataBtn" style="display:none;">Edit</button>
+                            <button type="button" class="pool-save-btn editAndSave" id="saveMetadataBtn" style="display:none;" disabled>Save</button>
+                        </div>
+                        <button type="button" id="deletePoolBtn" class="editAndSave">Delete Pool</button>
                     </div>
                 </div>
                 <div id="ruleEditorSection" class="hidden">

@@ -13,18 +13,30 @@ document.addEventListener('DOMContentLoaded', () => {
 function populatePools() {
   const sel = document.getElementById('dutiesPool');
   if (!sel) return;
-  // script.js may expose poolsCache on window after module load
+  // Skip if script.js already populated with groups
+  if (sel.querySelectorAll('optgroup').length > 0) return;
   const pools = window._poolsForDuties || [];
   if (!pools.length) {
-    // Try again if not yet ready
     setTimeout(populatePools, 600);
     return;
   }
+  // Group by market (same logic as script.js populatePoolSelects)
+  const map = {};
   pools.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.name || p.id;
-    opt.textContent = p.name || p.id;
-    sel.appendChild(opt);
+    const market = (p.markets && p.markets[0]) || 'Other';
+    if (!map[market]) map[market] = [];
+    map[market].push(p);
+  });
+  Object.keys(map).sort().forEach(market => {
+    const group = document.createElement('optgroup');
+    group.label = market;
+    map[market].sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.name || p.id;
+      opt.textContent = p.name || p.id;
+      group.appendChild(opt);
+    });
+    sel.appendChild(group);
   });
 }
 
@@ -68,7 +80,7 @@ window.submitDutiesForm = async function() {
   const msgEl = document.getElementById('dutiesMessage');
 
   if (!pool) { if (msgEl) msgEl.textContent = 'Please select a pool.'; return; }
-  if (!guardId) { if (msgEl) msgEl.textContent = 'Please enter your Employee ID.'; return; }
+  if (!guardId || !guardId.includes('@')) { if (msgEl) msgEl.textContent = 'Please enter a valid email address.'; return; }
 
   const photoFiles = [1, 2, 3].map(n => document.getElementById(`photoInput${n}`)?.files[0]).filter(Boolean);
   if (!photoFiles.length) { if (msgEl) msgEl.textContent = 'Please upload at least one photo.'; return; }

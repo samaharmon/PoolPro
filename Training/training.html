@@ -90,8 +90,8 @@
       <form id="trainingSignupForm">
         <div class="form-row">
           <div class="form-group">
-            <label for="guardEmployeeId">Employee ID (3-Digits)</label>
-            <input type="text" id="guardEmployeeId" name="guardEmployeeId" maxlength="10" placeholder="Enter employee ID (3-Digits)" required />
+            <label for="guardEmployeeId">Email</label>
+            <input type="email" id="guardEmployeeId" name="guardEmployeeId" placeholder="Enter your email" required />
           </div>
           <div class="form-group">
             <label for="guardName">Preferred First Name</label>
@@ -349,7 +349,7 @@
         <h3>Add participant</h3>
         <div class="attendance-add-grid">
           <input id="attendanceAddFirstName" type="text" placeholder="Preferred First Name">
-          <input id="attendanceAddEmployeeId" type="text" placeholder="Employee ID (3-Digits)">
+          <input id="attendanceAddEmployeeId" type="email" placeholder="Email">
           <button type="button" id="attendanceAddBtn" class="submit-btn">Add</button>
         </div>
       </div>
@@ -439,8 +439,8 @@
 
             <div class="settings-row employee-add-row">
                 <div class="settings-field">
-                <label for="employeeIdInput">Employee ID</label>
-                <input type="text" id="employeeIdInput" maxlength="10" />
+                <label for="employeeIdInput">Email</label>
+                <input type="email" id="employeeIdInput" />
                 </div>
 
                 <div class="settings-field">
@@ -494,7 +494,7 @@
             <table class="employee-table">
                 <thead>
                 <tr>
-                    <th>Employee ID</th>
+                    <th>Email</th>
                     <th>First name</th>
                     <th>Last name</th>
                     <th>Home Pool</th>

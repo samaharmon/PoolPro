@@ -477,6 +477,26 @@ function populatePoolSelects(pools) {
     if (current) trainingPoolSelect.value = current;
   }
 
+  // Duties page pool select — grouped by market, value = pool.name
+  const dutiesPool = document.getElementById('dutiesPool');
+  if (dutiesPool) {
+    const current = dutiesPool.value;
+    while (dutiesPool.options.length > 1) dutiesPool.remove(1);
+    Array.from(dutiesPool.querySelectorAll('optgroup')).forEach(g => g.remove());
+    groups.forEach(({ market, pools: mPools }) => {
+      const group = document.createElement('optgroup');
+      group.label = market;
+      mPools.forEach(pool => {
+        const opt = document.createElement('option');
+        opt.value = pool.name || pool.id;
+        opt.textContent = pool.name || pool.id;
+        group.appendChild(opt);
+      });
+      dutiesPool.appendChild(group);
+    });
+    if (current) dutiesPool.value = current;
+  }
+
   // Refresh employee pool filter options when pools update
   populateEmployeePoolFilter(employeeMarketFilter);
 }
@@ -575,9 +595,12 @@ function updatePoolSectionTitles(pool) {
 // ============================================================
 
 function getLoggedInEmployeeName() {
-  const empId = sessionStorage.getItem('chemlogEmployeeId');
+  const empId = sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId');
   if (empId && employeesData.length) {
-    const emp = employeesData.find(e => String(e.id) === String(empId));
+    const emp = employeesData.find(e =>
+      String(e.email || '').toLowerCase() === String(empId).toLowerCase() ||
+      String(e.id || '') === String(empId)
+    );
     if (emp) return { firstName: emp.firstName || '', lastName: emp.lastName || '' };
   }
   // Fallback: supervisor name from localStorage if set
@@ -625,7 +648,7 @@ function setupChemForm() {
       timestamp: Timestamp.now(),
       firstName,
       lastName,
-      employeeId: sessionStorage.getItem('chemlogEmployeeId') || '',
+      employeeId: sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId') || '',
       poolLocation: poolName,
       mainPoolPH: document.getElementById('mainPoolPH')?.value || '',
       mainPoolCl: document.getElementById('mainPoolCl')?.value || '',
@@ -1316,7 +1339,7 @@ function renderEmployeesTable() {
   pageEmployees.forEach(({ emp, index: sourceIndex }) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${emp.id || ''}</td>
+      <td>${emp.email || emp.id || ''}</td>
       <td>${emp.firstName || ''}</td>
       <td>${emp.lastName || ''}</td>
       <td>${emp.homePool || ''}</td>
@@ -1336,7 +1359,7 @@ function renderEmployeesTable() {
     editBtn.style.cssText = 'padding:3px 10px;font-size:0.82rem;width:70px;';
     editBtn.addEventListener('click', () => {
       editingEmployeeIdx = sourceIndex;
-      document.getElementById('employeeIdInput').value = emp.id || '';
+      document.getElementById('employeeIdInput').value = emp.email || emp.id || '';
       document.getElementById('employeeFirstNameInput').value = emp.firstName || '';
       document.getElementById('employeeLastNameInput').value = emp.lastName || '';
       const homePoolSel = document.getElementById('employeeHomePoolInput');
@@ -1359,7 +1382,7 @@ function renderEmployeesTable() {
     removeBtn.className = 'submit-btn';
     removeBtn.style.cssText = 'padding:3px 10px;font-size:0.82rem;width:70px;';
     removeBtn.addEventListener('click', async () => {
-      if (!confirm(`Remove ${emp.firstName || ''} ${emp.lastName || ''} (ID: ${emp.id})?`)) return;
+      if (!confirm(`Remove ${emp.firstName || ''} ${emp.lastName || ''} (${emp.email || emp.id || ''})?`)) return;
       const idxToRemove = sourceIndex;
       if (idxToRemove < 0 || idxToRemove >= employeesData.length) return;
       employeesData.splice(idxToRemove, 1);
@@ -1428,18 +1451,18 @@ function setupEmployeeManagement() {
   const addBtn = document.getElementById('employeeAddBtn');
   if (addBtn) {
     addBtn.addEventListener('click', async () => {
-      const id = document.getElementById('employeeIdInput')?.value.trim();
+      const email = (document.getElementById('employeeIdInput')?.value.trim() || '').toLowerCase();
       const firstName = document.getElementById('employeeFirstNameInput')?.value.trim() || '';
       const lastName = document.getElementById('employeeLastNameInput')?.value.trim();
       const homePool = document.getElementById('employeeHomePoolInput')?.value || '';
       const phone = normalizePhoneDigits(document.getElementById('employeePhoneInput')?.value);
-      if (!id || !lastName) { alert('Employee ID and Last Name are required.'); return; }
+      if (!email || !email.includes('@') || !lastName) { alert('Email and Last Name are required.'); return; }
       const wasEditing = editingEmployeeIdx >= 0;
       if (wasEditing) {
-        employeesData[editingEmployeeIdx] = { id, firstName, lastName, homePool, phone };
+        employeesData[editingEmployeeIdx] = { email, id: email, firstName, lastName, homePool, phone };
         editingEmployeeIdx = -1;
       } else {
-        employeesData.push({ id, firstName, lastName, homePool, phone });
+        employeesData.push({ email, id: email, firstName, lastName, homePool, phone });
       }
       addBtn.textContent = 'Add';
       await saveEmployees();
@@ -1999,11 +2022,16 @@ window.syncTrainingSessionsToFirestore = async function (sessions) {
   }
 };
 
-// Expose employee lookup so training.js can resolve phone numbers by employee ID
-window.getEmployeeByID = function (id) {
-  if (!id) return null;
-  return employeesData.find(e => String(e.id) === String(id)) || null;
+// Expose employee lookup so training.js can resolve phone numbers by employee ID or email
+window.getEmployeeByID = function (idOrEmail) {
+  if (!idOrEmail) return null;
+  const val = String(idOrEmail).toLowerCase();
+  return employeesData.find(e =>
+    String(e.email || '').toLowerCase() === val ||
+    String(e.id || '').toLowerCase() === val
+  ) || null;
 };
+window.getEmployeeByEmail = window.getEmployeeByID;
 
 window.addTrainingSignupToSchedule = async function ({ sessionId, firstName, lastName, homePool, email }) {
   if (!sessionId) return;

@@ -930,12 +930,13 @@ function syncBlockIntoState(block) {
 }
  
 function wireMetadataButtons() {
-  // Match button IDs from NewRules.html
   const editBtn = document.getElementById('editMetadataBtn');
   const saveBtn = document.getElementById('saveMetadataBtn');
+  const ruleButtons = document.querySelector('.metadata-rule-buttons');
 
-  if (!editBtn || !saveBtn) return;
+  if (!editBtn || !saveBtn || !ruleButtons) return;
 
+  // Wire underlying buttons (hidden)
   editBtn.addEventListener('click', () => {
     setMetadataEnabled(true);
     editBtn.disabled = true;
@@ -950,6 +951,58 @@ function wireMetadataButtons() {
       saveBtn.disabled = true;
     }
   });
+
+  // Skip if already converted to toggle
+  if (ruleButtons.querySelector('.theme-switch')) return;
+
+  // Build theme-switch style toggle matching rule block headers
+  const label = document.createElement('label');
+  label.className = 'theme-toggle rule-edit-save-toggle';
+
+  const switchDiv = document.createElement('div');
+  switchDiv.className = 'theme-switch';
+
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'edit-save-toggle-input';
+  cb.checked = !!saveBtn.disabled; // checked = saved/read-only, unchecked = editing
+
+  const track = document.createElement('div');
+  track.className = 'theme-switch-track';
+
+  const editSpan = document.createElement('span');
+  editSpan.className = 'theme-switch-text theme-light-text';
+  editSpan.textContent = 'Edit';
+
+  const saveSpan = document.createElement('span');
+  saveSpan.className = 'theme-switch-text theme-dark-text';
+  saveSpan.textContent = 'Save';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'theme-switch-thumb';
+
+  track.append(editSpan, saveSpan, thumb);
+  switchDiv.append(cb, track);
+  label.append(switchDiv);
+  ruleButtons.appendChild(label);
+
+  cb.addEventListener('change', () => {
+    if (!cb.checked) {
+      // Switch to Edit mode
+      editBtn.click();
+    } else {
+      // Switch to Save mode
+      saveBtn.click();
+      // If save failed, revert toggle
+      if (!saveBtn.disabled) cb.checked = false;
+    }
+  });
+
+  // Keep toggle in sync with external button state changes
+  const observer = new MutationObserver(() => {
+    cb.checked = saveBtn.disabled; // checked = saved mode; unchecked = edit mode
+  });
+  observer.observe(saveBtn, { attributes: true, attributeFilter: ['disabled'] });
 }
 
 // Rename concern level options (values stay the same)

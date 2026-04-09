@@ -537,19 +537,9 @@ body.dark-mode .pool-rule-block {
     background-color: transparent;
 }
 
-.table-row.concern-minor .ruleResponse {
-    background-color: #fff3cd;
-    color: #856404;
-}
-
 .table-row.concern-minor select.concernLevel {
     background-color: #c89a00 !important;
     color: #fff !important;
-}
-
-.table-row.concern-major .ruleResponse {
-    background-color: #ffebee;
-    color: #c62828;
 }
 
 .table-row.concern-major select.concernLevel {
@@ -781,18 +771,21 @@ body.dark-mode .pool-rule-block {
   display: none !important;
 }
 
-/* Edit/Save theme-switch toggle sizing for rule blocks */
-.rule-buttons .theme-switch-track {
+/* Edit/Save theme-switch toggle sizing for rule blocks and metadata */
+.rule-buttons .theme-switch-track,
+.metadata-rule-buttons .theme-switch-track {
   width: 110px;
   height: 34px;
 }
 
-.rule-buttons .theme-switch-text {
+.rule-buttons .theme-switch-text,
+.metadata-rule-buttons .theme-switch-text {
   line-height: 34px;
   font-size: 14px;
 }
 
-.rule-buttons .theme-switch-thumb {
+.rule-buttons .theme-switch-thumb,
+.metadata-rule-buttons .theme-switch-thumb {
   height: 34px;
 }
 

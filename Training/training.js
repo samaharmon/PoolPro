@@ -336,7 +336,7 @@ function handleSaveSession(el) {
     date = startDate;
     startTime = '';
     endTime = '';
-    // Save the current day's times before reading
+    // Save the current day's times before reading final state
     const curDay = el.startDaySelect?.value;
     if (curDay) {
       window._currentDayTimes = window._currentDayTimes || {};
@@ -348,6 +348,13 @@ function handleSaveSession(el) {
     dayTimes = { ...(window._currentDayTimes || {}) };
     if (!startDate || !endDate) {
       messageEl.textContent = 'Please enter a start and end date for the multi-day session.';
+      messageEl.classList.add('error');
+      return;
+    }
+    // Require at least 2 days with both start AND end times
+    const completeDays = Object.values(dayTimes).filter(d => d.startTime && d.endTime).length;
+    if (completeDays < 2) {
+      messageEl.textContent = 'Please enter start and end times for at least 2 days.';
       messageEl.classList.add('error');
       return;
     }
@@ -776,31 +783,20 @@ function setMultiDayUI(el, isMultiDay) {
 }
 
 function updateDaySelects(el) {
-  const startDate = el.startDateInput?.value;
-  const endDate = el.endDateInput?.value;
   const startDay = el.startDaySelect;
   const endDay = el.endDaySelect;
   if (!startDay || !endDay) return;
 
-  let numDays = 0;
-  if (startDate && endDate) {
-    const s = new Date(startDate + 'T12:00:00');
-    const e = new Date(endDate + 'T12:00:00');
-    if (!isNaN(s) && !isNaN(e) && e >= s) {
-      numDays = Math.min(Math.round((e - s) / (1000 * 60 * 60 * 24)) + 1, 5);
-    }
-  }
-
   [startDay, endDay].forEach(sel => {
     const prev = sel.value;
-    sel.innerHTML = '<option value="">Day #</option>';
-    for (let i = 1; i <= numDays; i++) {
+    sel.innerHTML = '<option value="">Day</option>';
+    for (let i = 1; i <= 5; i++) {
       const opt = document.createElement('option');
       opt.value = String(i);
-      opt.textContent = `Day ${i}`;
+      opt.textContent = String(i);
       sel.appendChild(opt);
     }
-    if (prev && Number(prev) <= numDays) sel.value = prev;
+    if (prev && Number(prev) <= 5) sel.value = prev;
   });
 }
 
@@ -850,21 +846,15 @@ function setupAdmin(el) {
       const isMultiDay = el.multiDayCheckbox.checked;
       setMultiDayUI(el, isMultiDay);
       window._currentDayTimes = {};
-      if (!isMultiDay) {
+      if (isMultiDay) {
+        updateDaySelects(el);
+      } else {
         if (el.startTimeSelect) el.startTimeSelect.value = '';
         if (el.endTimeSelect) el.endTimeSelect.value = '';
         if (el.startDaySelect) el.startDaySelect.value = '';
         if (el.endDaySelect) el.endDaySelect.value = '';
       }
     });
-  }
-
-  // Date range inputs update day options
-  if (el.startDateInput) {
-    el.startDateInput.addEventListener('change', () => updateDaySelects(el));
-  }
-  if (el.endDateInput) {
-    el.endDateInput.addEventListener('change', () => updateDaySelects(el));
   }
 
   // Day selector sync: when either changes, sync both and load that day's times
@@ -979,7 +969,7 @@ function openRosterModal(sessionId) {
       editBtn.addEventListener('click', () => {
         editingAttendeeIdx = idx;
         document.getElementById('attendanceAddFirstName').value = a.firstName || a.name || '';
-        document.getElementById('attendanceAddEmployeeId').value = a.employeeId || '';
+        document.getElementById('attendanceAddEmployeeId').value = a.email || a.employeeId || '';
       });
 
       const deleteBtn = document.createElement('button');
@@ -1010,13 +1000,13 @@ function openRosterModal(sessionId) {
     newAddBtn.addEventListener('click', () => {
       if (!Array.isArray(session.attendees)) session.attendees = [];
       const firstName = document.getElementById('attendanceAddFirstName')?.value.trim() || '';
-      const employeeIdVal = document.getElementById('attendanceAddEmployeeId')?.value.trim() || '';
-      if (!firstName && !employeeIdVal) return;
+      const emailVal = (document.getElementById('attendanceAddEmployeeId')?.value.trim() || '').toLowerCase();
+      if (!firstName && !emailVal) return;
 
       const base = editingAttendeeIdx >= 0 ? session.attendees[editingAttendeeIdx] : {};
 
-      // Look up employee data
-      const empRec = window.getEmployeeByID ? window.getEmployeeByID(employeeIdVal) : null;
+      // Look up employee data by email
+      const empRec = window.getEmployeeByEmail ? window.getEmployeeByEmail(emailVal) : null;
       const lastName = empRec?.lastName || base.lastName || '';
       const homePool = empRec?.homePool || base.homePool || '';
       const phone = empRec?.phone || base.phone || '';
@@ -1024,7 +1014,8 @@ function openRosterModal(sessionId) {
       const entry = {
         id: base.id || ('att_' + Math.random().toString(36).slice(2, 9)),
         firstName, lastName, homePool, phone,
-        employeeId: employeeIdVal || base.employeeId || '',
+        email: emailVal || base.email || '',
+        employeeId: emailVal || base.employeeId || '',
         attended: base.attended || false,
         signupTimestamp: base.signupTimestamp || new Date().toISOString()
       };
@@ -1039,7 +1030,7 @@ function openRosterModal(sessionId) {
       saveSessions();
       renderRosterRows();
       ['attendanceAddFirstName', 'attendanceAddEmployeeId']
-        .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+        .forEach(fid => { const fEl = document.getElementById(fid); if (fEl) fEl.value = ''; });
     });
   }
 
@@ -1095,14 +1086,14 @@ function setupSignup(el) {
     msgEl.textContent = '';
     msgEl.classList.remove('success', 'error');
 
-    const employeeId = el.guardEmployeeIdInput?.value.trim();
+    const employeeId = (el.guardEmployeeIdInput?.value.trim() || '').toLowerCase();
     const preferredName = el.guardNameInput?.value.trim();
     const name = preferredName;
     const homePool = el.guardPoolInput?.value.trim();
     const trainingTypeKey = el.trainingMonthSelect.value;
     const sessionId = el.trainingSessionSelect.value;
 
-    if (!employeeId || !name || !homePool || !trainingTypeKey || !sessionId) {
+    if (!employeeId || !employeeId.includes('@') || !name || !homePool || !trainingTypeKey || !sessionId) {
       msgEl.textContent =
         'Please fill out all fields and choose a training session.';
       msgEl.classList.add('error');

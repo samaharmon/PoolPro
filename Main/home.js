@@ -66,14 +66,17 @@ function setRole(role) {
   }
 
   
+  const passwordGroup = document.getElementById('homePasswordGroup');
   if (role === 'lifeguard') {
-    usernameLabel.textContent = 'Employee ID (3-Digits)';
-    passwordLabel.textContent = 'Last Name';
-    passwordInput.type = 'text';
+    usernameLabel.textContent = 'Email';
+    usernameInput.type = 'email';
+    if (passwordGroup) passwordGroup.style.display = 'none';
   } else {
     usernameLabel.textContent = 'Email';
+    usernameInput.type = 'email';
     passwordLabel.textContent = 'Password';
     passwordInput.type = 'password';
+    if (passwordGroup) passwordGroup.style.display = '';
   }
 
   if (messageEl) {
@@ -106,38 +109,50 @@ function closeModal() {
   pendingTarget = null;
 }
 
-async function authenticateLifeguard(empIdRaw, lastNameRaw) {
-  const trimmedId = (empIdRaw || '').trim();
-  const trimmedLastName = (lastNameRaw || '').trim().toLowerCase();
+const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
 
-  if (!trimmedId) throw new Error('Please enter your Employee ID.');
-  if (!trimmedLastName) throw new Error('Please enter your Last Name.');
+async function authenticateLifeguard(emailRaw) {
+  const trimmedEmail = (emailRaw || '').trim().toLowerCase();
+  if (!trimmedEmail || !trimmedEmail.includes('@')) {
+    throw new Error('Please enter a valid email address.');
+  }
 
   const employees = Array.isArray(employeesCache) ? employeesCache : [];
   const match = employees.find(
-    (emp) =>
-      (emp.id || '').toString().trim().toLowerCase() === trimmedId.toLowerCase() &&
-      (emp.lastName || '').toString().trim().toLowerCase() === trimmedLastName
+    (emp) => (emp.email || emp.id || '').toString().trim().toLowerCase() === trimmedEmail
   );
-
   if (!match) {
-    throw new Error('Incorrect Employee ID or Last Name.');
+    throw new Error('Email not found. Please contact your supervisor.');
   }
 
-  sessionStorage.setItem('chemlogRole', 'lifeguard');
-  sessionStorage.setItem('chemlogEmployeeId', trimmedId);
-
+  // Check 10-day re-auth window
   try {
-    localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
-    localStorage.removeItem('loginToken');
-    localStorage.removeItem('ChemLogSupervisor');
-    localStorage.removeItem('trainingSupervisorLoggedIn');
-    localStorage.removeItem('training_supervisor_logged_in_v1');
-  } catch (err) {
-    console.warn('Could not persist lifeguard role to localStorage', err);
-  }
+    const lastAuth = localStorage.getItem('chemlogLastEmailAuth');
+    const lastEmail = localStorage.getItem('chemlogEmailAuthUser');
+    if (lastAuth && lastEmail === trimmedEmail && (Date.now() - parseInt(lastAuth)) < TEN_DAYS_MS) {
+      // Within window — proceed without email link
+      sessionStorage.setItem('chemlogRole', 'lifeguard');
+      sessionStorage.setItem('chemlogEmployeeEmail', trimmedEmail);
+      localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
+      localStorage.removeItem('loginToken');
+      localStorage.removeItem('ChemLogSupervisor');
+      localStorage.removeItem('trainingSupervisorLoggedIn');
+      localStorage.removeItem('training_supervisor_logged_in_v1');
+      return match;
+    }
+  } catch (_) {}
 
-  return match;
+  // Send Firebase email sign-in link
+  const { sendSignInLinkToEmail } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+  const actionCodeSettings = {
+    url: window.location.origin + window.location.pathname,
+    handleCodeInApp: true,
+  };
+  localStorage.setItem('chemlogEmailForSignIn', trimmedEmail);
+  localStorage.setItem('chemlogEmailLinkTarget', pendingTarget || 'chem');
+  await sendSignInLinkToEmail(auth, trimmedEmail, actionCodeSettings);
+
+  throw new Error('__EMAIL_LINK_SENT__');
 }
 
 function markSupervisorLoggedIn(email) {
@@ -175,7 +190,7 @@ async function handleSubmit(event) {
 
   try {
     if (currentRole === 'lifeguard') {
-      await authenticateLifeguard(usernameInput.value, passwordInput.value);
+      await authenticateLifeguard(usernameInput.value);
     } else {
       await authenticateSupervisor(usernameInput.value, passwordInput.value);
     }
@@ -184,12 +199,54 @@ async function handleSubmit(event) {
     closeModal();
     window.location.href = path;
   } catch (err) {
+    if (err.message === '__EMAIL_LINK_SENT__') {
+      messageEl.textContent = 'A sign-in link has been sent to your email. Please check your inbox and click the link to continue.';
+      messageEl.classList.remove('error');
+      return;
+    }
     console.error('Home login failed:', err);
     const code = err.code || '';
     const friendly = code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential'
       ? 'Incorrect email or password.' : (err.message || 'Login failed. Please try again.');
     messageEl.textContent = friendly;
     messageEl.classList.add('error');
+  }
+}
+
+async function handleEmailLinkCallback() {
+  try {
+    const { isSignInWithEmailLink, signInWithEmailLink } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
+    if (!isSignInWithEmailLink(auth, window.location.href)) return false;
+
+    let email = '';
+    try { email = localStorage.getItem('chemlogEmailForSignIn') || ''; } catch (_) {}
+    if (!email) {
+      email = window.prompt('Please re-enter your email to complete sign-in:') || '';
+    }
+    if (!email) return false;
+
+    await signInWithEmailLink(auth, email, window.location.href);
+
+    try {
+      localStorage.setItem('chemlogLastEmailAuth', Date.now().toString());
+      localStorage.setItem('chemlogEmailAuthUser', email.toLowerCase());
+      localStorage.removeItem('chemlogEmailForSignIn');
+    } catch (_) {}
+
+    sessionStorage.setItem('chemlogRole', 'lifeguard');
+    sessionStorage.setItem('chemlogEmployeeEmail', email.toLowerCase());
+    localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
+
+    let target = 'chem';
+    try { target = localStorage.getItem('chemlogEmailLinkTarget') || 'chem'; localStorage.removeItem('chemlogEmailLinkTarget'); } catch (_) {}
+
+    // Strip the email link params from the URL then navigate
+    window.history.replaceState({}, document.title, window.location.pathname);
+    window.location.href = DESTINATIONS[target] || DESTINATIONS.chem;
+    return true;
+  } catch (err) {
+    console.error('Email link sign-in error:', err);
+    return false;
   }
 }
 
@@ -202,6 +259,7 @@ async function loadEmployees() {
       const raw = Array.isArray(data.employees) ? data.employees : [];
       employeesCache = raw.map((e) => ({
         id: (e.id ?? '').toString().trim(),
+        email: (e.email ?? e.id ?? '').toString().trim().toLowerCase(),
         firstName: (e.firstName ?? '').toString().trim(),
         lastName: (e.lastName ?? '').toString().trim(),
       }));
@@ -229,7 +287,10 @@ function wireRoleToggle() {
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  const handledLink = await handleEmailLinkCallback();
+  if (handledLink) return;
+
   mountUnifiedFooter();
   loadEmployees();
   wireMenu();

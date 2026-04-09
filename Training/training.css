@@ -714,6 +714,7 @@ button:active,
   top: calc(100% + 4px);
   left: 0;
   min-width: 180px;
+  max-width: 215px;
   background-color: #333;
   border: 1px solid #ddd;
   box-shadow: 0 4px 8px rgba(0,0,0,0.3);
@@ -769,11 +770,11 @@ button:active,
   border-right: 3px solid white;
 }
 
-.dropdown-item.supervisor-only:nth-child(3) {
+.dropdown-item.supervisor-only:nth-child(4) {
   border-top: 3px solid white;
 }
 
-.dropdown-item.supervisor-only:nth-child(7) {
+.dropdown-item.supervisor-only:nth-child(8) {
   border-bottom: 3px solid white;
 }
 
