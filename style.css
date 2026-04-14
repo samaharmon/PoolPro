@@ -2647,13 +2647,21 @@ textarea,
   margin-top: 4px;
 }
 
-/* Employee table — styled to match .sanitation-table */
+/* Employee table — fixed layout prevents column reflow on edit */
 .employee-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   margin-top: 16px;
   background-color: white;
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.employee-table th,
+.employee-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .employee-table th,
@@ -2935,12 +2943,13 @@ textarea,
    Concern Level Highlights
    ========================= */
 
-.concern-minor {
+/* Only color dashboard table cells — not rule-editor rows or response areas */
+td.concern-minor {
   background-color: #c89a00 !important;
   color: #fff !important;
 }
 
-.concern-major {
+td.concern-major {
   background-color: #8b0000 !important;
   color: #fff !important;
 }

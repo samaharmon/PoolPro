@@ -53,10 +53,10 @@ window.addEventListener('load', () => {
   document.body.classList.add('page-loaded');
 });
 
-// Floating header: add/remove .scrolled class on scroll
+// Floating header: add/remove .scrolled class on scroll (works for .header and .app-header)
 (function () {
   function updateScrolledHeader() {
-    const header = document.querySelector('.header');
+    const header = document.querySelector('.header, .app-header');
     if (!header) return;
     header.classList.toggle('scrolled', window.scrollY > 60);
   }

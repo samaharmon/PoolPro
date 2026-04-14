@@ -141,22 +141,37 @@ function getDestinationPath() {
 function populatePoolOptions() {
   if (!createPoolInput) return;
   const currentValue = createPoolInput.value;
-  const values = new Set(
-    [
-      ...homePoolOptions,
-      ...employeesCache.map((employee) => employee.homePool).filter(Boolean),
-    ].map((value) => String(value || '').trim()).filter(Boolean)
-  );
-
   createPoolInput.innerHTML = '<option value="">Select facility</option>';
-  Array.from(values)
-    .sort((a, b) => a.localeCompare(b))
-    .forEach((poolName) => {
-      const option = document.createElement('option');
-      option.value = poolName;
-      option.textContent = poolName;
-      createPoolInput.appendChild(option);
+
+  // Group pools by market (same as pool chemistry log)
+  const marketMap = {};
+  homePoolOptions.forEach(pool => {
+    const market = pool.markets?.[0] || 'Other';
+    if (!marketMap[market]) marketMap[market] = [];
+    marketMap[market].push(pool.name);
+  });
+
+  // Also include homePool values from employees that aren't already listed
+  const listedNames = new Set(homePoolOptions.map(p => p.name));
+  const extraNames = employeesCache.map(e => e.homePool).filter(n => n && !listedNames.has(n));
+  if (extraNames.length) {
+    if (!marketMap['Other']) marketMap['Other'] = [];
+    extraNames.forEach(n => marketMap['Other'].push(n));
+  }
+
+  const markets = Object.keys(marketMap).sort();
+  markets.forEach(market => {
+    const group = document.createElement('optgroup');
+    group.label = market;
+    marketMap[market].sort().forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      group.appendChild(opt);
     });
+    createPoolInput.appendChild(group);
+  });
+
   if (currentValue) createPoolInput.value = currentValue;
 }
 
@@ -272,8 +287,14 @@ async function loadPools() {
   try {
     const snap = await getDocs(collection(db, 'pools'));
     homePoolOptions = snap.docs
-      .map((docSnap) => (docSnap.data()?.name || docSnap.id || '').toString().trim())
-      .filter(Boolean);
+      .map((docSnap) => {
+        const data = docSnap.data() || {};
+        return {
+          name: (data.name || docSnap.id || '').toString().trim(),
+          markets: Array.isArray(data.markets) ? data.markets : [],
+        };
+      })
+      .filter(p => p.name);
     populatePoolOptions();
   } catch (err) {
     console.error('Failed to load pools:', err);

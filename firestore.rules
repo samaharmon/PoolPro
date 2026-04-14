@@ -47,6 +47,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Daily Cleanliness Report (Job Form) submissions
+    match /dutySubmissions/{docId} {
+      allow read, write: if true;
+    }
+
     // Deny everything else
     match /{document=**} {
       allow read, write: if false;

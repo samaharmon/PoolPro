@@ -496,21 +496,11 @@ body.dark-mode .pool-rule-block {
     background-color: #303030;      /* darker block background */
 }
 
-/* View-only state — matches SET Performance table overlay opacity */
+/* View-only state */
 .pool-rule-block.disabled-block {
     opacity: 1;
     filter: none;
     position: relative;
-}
-
-.pool-rule-block.disabled-block::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.18);
-    opacity: 0.35;
-    pointer-events: none;
-    z-index: 2;
 }
 
 /* Editing state pops out */
@@ -547,13 +537,7 @@ body.dark-mode .pool-rule-block {
     color: #fff !important;
 }
 
-/* Greyed-out state for saved rule blocks: affect only the rule tables */
-.pool-rule-block.disabled-block .rules-table,
-.pool-rule-block.disabled-block .rules-table .ruleResponse,
-.pool-rule-block.disabled-block .rules-table select {
-    opacity: 0.35;
-}
-
+/* Greyed-out state for saved rule blocks */
 .pool-rule-block.disabled-block .rules-table .ruleResponse,
 .pool-rule-block.disabled-block .rules-table select {
     background-color: #2b2b2b;
@@ -609,16 +593,6 @@ body.dark-mode .pool-rule-block {
   opacity: 0.5;
   pointer-events: none;
   transition: opacity 0.15s;
-  position: relative;
-}
-
-.rules-table.overlay-disabled::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.48);
-  pointer-events: auto;
-  z-index: 3;
 }
 
 /* Full grey-out overlay for the Pool Metadata section when locked */

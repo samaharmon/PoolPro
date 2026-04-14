@@ -1424,11 +1424,10 @@ function applyConcernToRow(select) {
 
   const responseArea = row.querySelector(RULE_RESPONSE_SELECTOR);
 
-  // remove previous concern classes
+  // remove previous concern classes (row keeps class for CSS parent selectors; response area is not colored)
   ['concern-none', 'concern-minor', 'concern-major'].forEach((cls) => {
     row.classList.remove(cls);
     select.classList.remove(cls);
-    if (responseArea) responseArea.classList.remove(cls);
   });
 
   const level = select.value || 'none';
@@ -1439,7 +1438,6 @@ function applyConcernToRow(select) {
 
   row.classList.add(cls);
   select.classList.add(cls);
-  if (responseArea) responseArea.classList.add(cls);
 
   if (level === 'major' || level === 'red') {
     select.style.backgroundColor = '#8b0000';
