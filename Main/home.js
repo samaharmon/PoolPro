@@ -1,9 +1,16 @@
 // home.js – landing page login logic
-import { db, auth, doc, getDoc, setDoc, getDocs, collection } from '../firebase.js';
+import { db, auth, doc, getDoc, setDoc, getDocs, collection, onAuthStateChanged } from '../firebase.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signOut
+  signOut,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  RecaptchaVerifier,
+  linkWithPhoneNumber,
+  reauthenticateWithPhoneNumber
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 
 const DESTINATIONS = {
@@ -13,6 +20,10 @@ const DESTINATIONS = {
 };
 
 const ROLE_STORAGE_KEY = 'chemlogRole';
+const DEVICE_ID_KEY = 'poolproDeviceId';
+const VERIFY_CONTEXT_KEY = 'poolproPendingLifeguardVerification';
+const VERIFY_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
+const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 
 let pendingTarget = null;
 let currentRole = 'lifeguard';
@@ -20,18 +31,28 @@ let currentView = 'login';
 let employeesCache = [];
 let employeeDocSnapshot = [];
 let homePoolOptions = [];
+let pendingVerification = null;
+let phoneRecaptchaVerifier = null;
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
 const modalTitle = document.getElementById('homeModalTitle');
 const form = document.getElementById('homeLoginForm');
 const createAccountForm = document.getElementById('homeCreateAccountForm');
+const verifyForm = document.getElementById('homeVerifyForm');
 const usernameInput = document.getElementById('homeUsernameInput');
 const passwordInput = document.getElementById('homePasswordInput');
 const usernameLabel = document.getElementById('homeUsernameLabel');
 const passwordLabel = document.getElementById('homePasswordLabel');
 const messageEl = document.getElementById('homeLoginMessage');
 const createMessageEl = document.getElementById('homeCreateAccountMessage');
+const verifyMessageEl = document.getElementById('homeVerifyMessage');
+const verifySubtitleEl = document.getElementById('homeVerifySubtitle');
+const verifyCodeGroup = document.getElementById('homeVerifyCodeGroup');
+const verifyCodeInput = document.getElementById('homeVerifyCodeInput');
+const verifyEmailBtn = document.getElementById('homeVerifyEmailBtn');
+const verifySmsBtn = document.getElementById('homeVerifySmsBtn');
+const verifyBackBtn = document.getElementById('homeVerifyBackBtn');
 const roleToggle = document.getElementById('roleToggle');
 const showCreateAccountBtn = document.getElementById('homeShowCreateAccountBtn');
 const backToLoginBtn = document.getElementById('homeBackToLoginBtn');
@@ -43,7 +64,6 @@ const createPhoneInput = document.getElementById('homeCreatePhoneInput');
 const createPoolInput = document.getElementById('homeCreatePoolInput');
 const createPasswordInput = document.getElementById('homeCreatePasswordInput');
 const createConfirmPasswordInput = document.getElementById('homeCreateConfirmPasswordInput');
-const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -82,8 +102,24 @@ function normalizePhoneDigits(raw) {
   return (raw || '').replace(/\D/g, '');
 }
 
-function buildLifeguardAuthEmail(username) {
-  return `${username}@lifeguard.poolpro.local`;
+function normalizePhoneE164(raw) {
+  const digits = normalizePhoneDigits(raw);
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  return '';
+}
+
+function maskEmail(email) {
+  const [local, domain] = String(email || '').split('@');
+  if (!local || !domain) return email || '';
+  const visible = local.length <= 2 ? local[0] || '*' : `${local[0]}${'*'.repeat(Math.max(1, local.length - 2))}${local.slice(-1)}`;
+  return `${visible}@${domain}`;
+}
+
+function maskPhone(phone) {
+  const digits = normalizePhoneDigits(phone);
+  if (digits.length < 4) return phone || '';
+  return `(***) ***-${digits.slice(-4)}`;
 }
 
 function normalizeEmployeeRecord(rawEmployee) {
@@ -103,6 +139,81 @@ function normalizeEmployeeRecord(rawEmployee) {
   };
 }
 
+function getAuthEmail(account) {
+  return (account?.authEmail || account?.employeeEmail || '').toString().trim().toLowerCase();
+}
+
+function buildEmployeeFromAccount(account) {
+  return normalizeEmployeeRecord({
+    email: account?.employeeEmail || account?.authEmail || '',
+    id: account?.employeeEmail || account?.authEmail || '',
+    username: account?.username || '',
+    firstName: account?.firstName || '',
+    lastName: account?.lastName || '',
+    homePool: account?.homePool || '',
+    phone: account?.phone || '',
+  });
+}
+
+function getOrCreateDeviceId() {
+  try {
+    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+    if (!deviceId) {
+      deviceId = `device_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+      localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    }
+    return deviceId;
+  } catch (_) {
+    return 'device_fallback';
+  }
+}
+
+function getVerificationStorageKey(username) {
+  return `poolproAuthVerified:${normalizeUsername(username)}:${getOrCreateDeviceId()}`;
+}
+
+function shouldRequireStepUp(username, force = false) {
+  if (force) return true;
+  try {
+    const lastVerified = Number(localStorage.getItem(getVerificationStorageKey(username)) || '0');
+    if (!lastVerified) return true;
+    return (Date.now() - lastVerified) >= VERIFY_WINDOW_MS;
+  } catch (_) {
+    return true;
+  }
+}
+
+function markVerificationComplete(username) {
+  try {
+    localStorage.setItem(getVerificationStorageKey(username), Date.now().toString());
+  } catch (_) { /* ignore */ }
+}
+
+function savePendingVerificationContext(context) {
+  try {
+    localStorage.setItem(VERIFY_CONTEXT_KEY, JSON.stringify(context));
+  } catch (_) { /* ignore */ }
+}
+
+function loadPendingVerificationContext() {
+  try {
+    const raw = localStorage.getItem(VERIFY_CONTEXT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function clearPendingVerificationContext() {
+  try {
+    localStorage.removeItem(VERIFY_CONTEXT_KEY);
+  } catch (_) { /* ignore */ }
+}
+
+function hasPendingEmailVerification() {
+  return !!loadPendingVerificationContext();
+}
+
 function setMessage(el, text, isError = false) {
   if (!el) return;
   el.textContent = text || '';
@@ -112,11 +223,27 @@ function setMessage(el, text, isError = false) {
 function clearMessages() {
   setMessage(messageEl, '');
   setMessage(createMessageEl, '');
+  setMessage(verifyMessageEl, '');
+}
+
+function resetVerificationState() {
+  pendingVerification = null;
+  if (verifyForm) verifyForm.reset();
+  verifyCodeGroup?.classList.add('hidden');
+  if (verifySubtitleEl) verifySubtitleEl.textContent = '';
+  if (phoneRecaptchaVerifier) {
+    try { phoneRecaptchaVerifier.clear(); } catch (_) { /* ignore */ }
+    phoneRecaptchaVerifier = null;
+  }
+  const recaptchaContainer = document.getElementById('homeRecaptchaContainer');
+  if (recaptchaContainer) recaptchaContainer.innerHTML = '';
 }
 
 function resetForms() {
   form?.reset();
   createAccountForm?.reset();
+  verifyForm?.reset();
+  resetVerificationState();
   clearMessages();
 }
 
@@ -124,14 +251,19 @@ function setModalView(view) {
   currentView = view;
   form?.classList.toggle('hidden', view !== 'login');
   createAccountForm?.classList.toggle('hidden', view !== 'create');
+  verifyForm?.classList.toggle('hidden', view !== 'verify');
+
   if (modalTitle) {
-    modalTitle.textContent = view === 'create' ? 'Create Account' : 'Sign in';
+    modalTitle.textContent = view === 'create'
+      ? 'Create Account'
+      : view === 'verify'
+        ? 'Verify Identity'
+        : 'Sign in';
   }
-  if (view === 'create') {
-    createUsernameInput?.focus();
-  } else {
-    usernameInput?.focus();
-  }
+
+  if (view === 'create') createUsernameInput?.focus();
+  if (view === 'verify') verifyEmailBtn?.focus();
+  if (view === 'login') usernameInput?.focus();
 }
 
 function getDestinationPath() {
@@ -143,31 +275,28 @@ function populatePoolOptions() {
   const currentValue = createPoolInput.value;
   createPoolInput.innerHTML = '<option value="">Select facility</option>';
 
-  // Group pools by market (same as pool chemistry log)
   const marketMap = {};
-  homePoolOptions.forEach(pool => {
+  homePoolOptions.forEach((pool) => {
     const market = pool.markets?.[0] || 'Other';
     if (!marketMap[market]) marketMap[market] = [];
     marketMap[market].push(pool.name);
   });
 
-  // Also include homePool values from employees that aren't already listed
-  const listedNames = new Set(homePoolOptions.map(p => p.name));
-  const extraNames = employeesCache.map(e => e.homePool).filter(n => n && !listedNames.has(n));
+  const listedNames = new Set(homePoolOptions.map((pool) => pool.name));
+  const extraNames = employeesCache.map((employee) => employee.homePool).filter((name) => name && !listedNames.has(name));
   if (extraNames.length) {
-    if (!marketMap['Other']) marketMap['Other'] = [];
-    extraNames.forEach(n => marketMap['Other'].push(n));
+    if (!marketMap.Other) marketMap.Other = [];
+    extraNames.forEach((name) => marketMap.Other.push(name));
   }
 
-  const markets = Object.keys(marketMap).sort();
-  markets.forEach(market => {
+  Object.keys(marketMap).sort().forEach((market) => {
     const group = document.createElement('optgroup');
     group.label = market;
-    marketMap[market].sort().forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      group.appendChild(opt);
+    marketMap[market].sort().forEach((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      group.appendChild(option);
     });
     createPoolInput.appendChild(group);
   });
@@ -224,7 +353,7 @@ function setRole(role) {
     passwordInput.type = 'password';
     passwordInput.autocomplete = 'current-password';
     showCreateAccountBtn?.classList.add('hidden');
-    if (currentView === 'create') setModalView('login');
+    if (currentView !== 'login') setModalView('login');
   }
 
   clearMessages();
@@ -247,21 +376,14 @@ function closeModal() {
     modal.style.display = 'none';
   }, 200);
   pendingTarget = null;
+  resetVerificationState();
 }
 
 function validatePassword(password) {
-  if (!password || password.length < 8) {
-    return 'Password must be at least 8 characters long.';
-  }
-  if (!/[0-9]/.test(password)) {
-    return 'Password must include at least 1 number.';
-  }
-  if (!/[!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]/.test(password)) {
-    return 'Password must include at least 1 special character.';
-  }
-  if (!ALLOWED_PASSWORD_CHARS.test(password)) {
-    return 'Password can only include letters, numbers, and standard special characters.';
-  }
+  if (!password || password.length < 8) return 'Password must be at least 8 characters long.';
+  if (!/[0-9]/.test(password)) return 'Password must include at least 1 number.';
+  if (!/[!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]/.test(password)) return 'Password must include at least 1 special character.';
+  if (!ALLOWED_PASSWORD_CHARS.test(password)) return 'Password can only include letters, numbers, and standard special characters.';
   return '';
 }
 
@@ -294,7 +416,7 @@ async function loadPools() {
           markets: Array.isArray(data.markets) ? data.markets : [],
         };
       })
-      .filter(p => p.name);
+      .filter((pool) => pool.name);
     populatePoolOptions();
   } catch (err) {
     console.error('Failed to load pools:', err);
@@ -303,15 +425,84 @@ async function loadPools() {
 
 async function getLifeguardAccount(usernameRaw) {
   const username = normalizeUsername(usernameRaw);
-  if (!username) {
-    throw new Error('Please enter your username.');
-  }
+  if (!username) throw new Error('Please enter your username.');
   const accountRef = doc(db, 'lifeguardAccounts', username);
   const accountSnap = await getDoc(accountRef);
-  if (!accountSnap.exists()) {
-    throw new Error('Username not found. Create an account or contact your supervisor.');
-  }
+  if (!accountSnap.exists()) throw new Error('Username not found. Create an account or contact your supervisor.');
   return { username, ...accountSnap.data() };
+}
+
+async function waitForAuthUser() {
+  if (auth.currentUser) return auth.currentUser;
+  return new Promise((resolve) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
+}
+
+async function upsertEmployeeRecord(employee) {
+  const normalizedEmployee = normalizeEmployeeRecord(employee);
+  const employees = Array.isArray(employeeDocSnapshot) ? [...employeeDocSnapshot] : [];
+  const existingIndex = employees.findIndex((entry) => {
+    const normalizedEntry = normalizeEmployeeRecord(entry);
+    return normalizedEntry.email && normalizedEmployee.email && normalizedEntry.email === normalizedEmployee.email;
+  });
+
+  const nextRecord = {
+    ...(existingIndex >= 0 ? employees[existingIndex] : {}),
+    ...normalizedEmployee,
+  };
+
+  if (existingIndex >= 0) employees[existingIndex] = nextRecord;
+  else employees.push(nextRecord);
+
+  employeeDocSnapshot = employees;
+  employeesCache = employees.map(normalizeEmployeeRecord);
+  await setDoc(doc(db, 'settings', 'employees'), { employees }, { merge: true });
+}
+
+async function finalizeLifeguardAccess({ username, account, target, method }) {
+  markVerificationComplete(username);
+  clearPendingVerificationContext();
+
+  try {
+    await setDoc(doc(db, 'lifeguardAccounts', username), {
+      lastVerifiedAt: new Date().toISOString(),
+      lastVerificationMethod: method || '',
+      phoneLinked: method === 'sms' ? true : !!account.phoneLinked,
+    }, { merge: true });
+  } catch (err) {
+    console.warn('Could not update verification metadata:', err);
+  }
+
+  persistLifeguardSession(buildEmployeeFromAccount(account), username);
+  await signOut(auth).catch(() => {});
+  resetVerificationState();
+  closeModal();
+  window.location.href = target || getDestinationPath();
+}
+
+function openVerificationView({ username, account, target, force = false, origin = 'login' }) {
+  pendingVerification = {
+    username: normalizeUsername(username),
+    account,
+    target: target || getDestinationPath(),
+    origin,
+    confirmationResult: null,
+    force,
+  };
+
+  const phoneNumber = normalizePhoneE164(account.phone);
+  if (verifySubtitleEl) {
+    verifySubtitleEl.textContent = `Choose how to verify this ${force ? 'new' : ''} device for ${account.firstName || 'your'} account. Email will go to ${maskEmail(account.employeeEmail)}.${phoneNumber ? ` Text messages will go to ${maskPhone(phoneNumber)}.` : ''}`;
+  }
+  verifySmsBtn?.toggleAttribute('disabled', !phoneNumber);
+  verifyCodeGroup?.classList.add('hidden');
+  verifyCodeInput && (verifyCodeInput.value = '');
+  setMessage(verifyMessageEl, 'Verification is required on new devices and every 10 days.');
+  setModalView('verify');
 }
 
 function markSupervisorLoggedIn(email) {
@@ -319,7 +510,7 @@ function markSupervisorLoggedIn(email) {
     localStorage.setItem('trainingSupervisorLoggedIn', 'true');
     localStorage.setItem('training_supervisor_logged_in_v1', 'true');
     localStorage.setItem('ChemLogSupervisor', 'true');
-    const expires = Date.now() + 10 * 24 * 60 * 60 * 1000;
+    const expires = Date.now() + VERIFY_WINDOW_MS;
     localStorage.setItem('loginToken', JSON.stringify({ username: email || 'supervisor', expires }));
     localStorage.setItem(ROLE_STORAGE_KEY, 'supervisor');
   } catch (err) {
@@ -343,56 +534,110 @@ async function authenticateSupervisor(email, password) {
 async function authenticateLifeguard(usernameRaw, passwordRaw) {
   const username = normalizeUsername(usernameRaw);
   const password = passwordRaw || '';
-  if (!username || !password) {
-    throw new Error('Please enter your username and password.');
+  if (!username || !password) throw new Error('Please enter your username and password.');
+
+  const account = await getLifeguardAccount(username);
+  const authEmail = getAuthEmail(account);
+  if (!authEmail) throw new Error('This account is missing an email address. Please contact your supervisor.');
+
+  await signInWithEmailAndPassword(auth, authEmail, password);
+
+  if (shouldRequireStepUp(username)) {
+    openVerificationView({ username, account, target: getDestinationPath(), origin: 'login' });
+    return { requiresVerification: true };
   }
 
-  await signInWithEmailAndPassword(auth, buildLifeguardAuthEmail(username), password);
-  try {
-    const account = await getLifeguardAccount(username);
-    const employee =
-      employeesCache.find((entry) => entry.email === String(account.employeeEmail || '').toLowerCase()) ||
-      normalizeEmployeeRecord({
-        email: account.employeeEmail,
-        id: account.employeeEmail,
-        username,
-        firstName: account.firstName,
-        lastName: account.lastName,
-        homePool: account.homePool,
-        phone: account.phone,
-      });
-    persistLifeguardSession(employee, username);
-  } finally {
-    await signOut(auth).catch(() => {});
-  }
+  await finalizeLifeguardAccess({
+    username,
+    account,
+    target: getDestinationPath(),
+    method: 'recent',
+  });
+  return { requiresVerification: false };
 }
 
-async function upsertEmployeeRecord(employee) {
-  const normalizedEmployee = normalizeEmployeeRecord(employee);
-  const employees = Array.isArray(employeeDocSnapshot) ? [...employeeDocSnapshot] : [];
-  const existingIndex = employees.findIndex((entry) => {
-    const normalizedEntry = normalizeEmployeeRecord(entry);
-    return (
-      normalizedEntry.email &&
-      normalizedEmployee.email &&
-      normalizedEntry.email === normalizedEmployee.email
-    );
-  });
+async function ensurePhoneVerifier() {
+  const user = auth.currentUser || await waitForAuthUser();
+  if (!user) throw new Error('Please sign in again before requesting a text message.');
 
-  const nextRecord = {
-    ...(existingIndex >= 0 ? employees[existingIndex] : {}),
-    ...normalizedEmployee,
-  };
-
-  if (existingIndex >= 0) {
-    employees[existingIndex] = nextRecord;
-  } else {
-    employees.push(nextRecord);
+  if (phoneRecaptchaVerifier) {
+    try { phoneRecaptchaVerifier.clear(); } catch (_) { /* ignore */ }
+    phoneRecaptchaVerifier = null;
   }
 
-  employeeDocSnapshot = employees;
-  employeesCache = employees.map(normalizeEmployeeRecord);
-  await setDoc(doc(db, 'settings', 'employees'), { employees }, { merge: true });
+  const container = document.getElementById('homeRecaptchaContainer');
+  if (!container) throw new Error('Phone verification is not available right now.');
+  container.innerHTML = '';
+
+  phoneRecaptchaVerifier = new RecaptchaVerifier(auth, container, {
+    size: 'invisible',
+  });
+  await phoneRecaptchaVerifier.render();
+  return phoneRecaptchaVerifier;
+}
+
+async function sendEmailVerificationLink() {
+  if (!pendingVerification) throw new Error('No verification session is active.');
+  const email = pendingVerification.account.employeeEmail || getAuthEmail(pendingVerification.account);
+  if (!email) throw new Error('This account does not have an email address on file.');
+
+  savePendingVerificationContext({
+    username: pendingVerification.username,
+    email,
+    target: pendingVerification.target,
+  });
+
+  await sendSignInLinkToEmail(auth, email, {
+    url: `${window.location.origin}${window.location.pathname}`,
+    handleCodeInApp: true,
+  });
+
+  setMessage(verifyMessageEl, `Verification link sent to ${maskEmail(email)}. Open it on this device to finish signing in.`);
+}
+
+async function sendSmsVerificationCode() {
+  if (!pendingVerification) throw new Error('No verification session is active.');
+  const phoneNumber = normalizePhoneE164(pendingVerification.account.phone);
+  if (!phoneNumber) throw new Error('Add a valid phone number before using text-message verification.');
+
+  const user = auth.currentUser || await waitForAuthUser();
+  if (!user) throw new Error('Please sign in again before requesting a text message.');
+
+  const verifier = await ensurePhoneVerifier();
+  const hasPhoneProvider = user.providerData.some((provider) => provider.providerId === 'phone');
+  pendingVerification.confirmationResult = hasPhoneProvider
+    ? await reauthenticateWithPhoneNumber(user, phoneNumber, verifier)
+    : await linkWithPhoneNumber(user, phoneNumber, verifier);
+
+  verifyCodeGroup?.classList.remove('hidden');
+  verifyCodeInput?.focus();
+  setMessage(verifyMessageEl, `Verification code sent to ${maskPhone(phoneNumber)}.`);
+}
+
+async function submitSmsVerificationCode(event) {
+  event.preventDefault();
+  if (!pendingVerification?.confirmationResult) {
+    setMessage(verifyMessageEl, 'Request a text message first.', true);
+    return;
+  }
+
+  const code = (verifyCodeInput?.value || '').trim();
+  if (!code) {
+    setMessage(verifyMessageEl, 'Enter the text message code to continue.', true);
+    return;
+  }
+
+  await pendingVerification.confirmationResult.confirm(code);
+  const account = {
+    ...pendingVerification.account,
+    phoneLinked: true,
+  };
+  await finalizeLifeguardAccess({
+    username: pendingVerification.username,
+    account,
+    target: pendingVerification.target,
+    method: 'sms',
+  });
 }
 
 async function handleSubmit(event) {
@@ -401,14 +646,14 @@ async function handleSubmit(event) {
 
   try {
     if (currentRole === 'lifeguard') {
-      await authenticateLifeguard(usernameInput.value, passwordInput.value);
-    } else {
-      await authenticateSupervisor(usernameInput.value, passwordInput.value);
+      const result = await authenticateLifeguard(usernameInput.value, passwordInput.value);
+      if (result?.requiresVerification) return;
+      return;
     }
 
-    const path = getDestinationPath();
+    await authenticateSupervisor(usernameInput.value, passwordInput.value);
     closeModal();
-    window.location.href = path;
+    window.location.href = getDestinationPath();
   } catch (err) {
     console.error('Home login failed:', err);
     const code = err.code || '';
@@ -432,50 +677,32 @@ async function handleCreateAccountSubmit(event) {
   const password = createPasswordInput?.value || '';
   const confirmPassword = createConfirmPasswordInput?.value || '';
 
-  if (!username) {
-    setMessage(createMessageEl, 'Please choose a username.', true);
-    return;
-  }
-  if (username.length < 4) {
-    setMessage(createMessageEl, 'Usernames must be at least 4 characters long.', true);
-    return;
-  }
+  if (!username) return setMessage(createMessageEl, 'Please choose a username.', true);
+  if (username.length < 4) return setMessage(createMessageEl, 'Usernames must be at least 4 characters long.', true);
   if (!firstName || !lastName || !email || !homePool || !password || !confirmPassword) {
-    setMessage(createMessageEl, 'Please complete every field in the account form.', true);
-    return;
+    return setMessage(createMessageEl, 'Please complete every field in the account form.', true);
   }
-  if (!email.includes('@')) {
-    setMessage(createMessageEl, 'Please enter a valid email address.', true);
-    return;
-  }
-  if (password !== confirmPassword) {
-    setMessage(createMessageEl, 'Passwords do not match.', true);
-    return;
-  }
+  if (!email.includes('@')) return setMessage(createMessageEl, 'Please enter a valid email address.', true);
+  if (!phone) return setMessage(createMessageEl, 'Please enter a phone number so text verification is available.', true);
+  if (password !== confirmPassword) return setMessage(createMessageEl, 'Passwords do not match.', true);
+
   const passwordValidationMessage = validatePassword(password);
-  if (passwordValidationMessage) {
-    setMessage(createMessageEl, passwordValidationMessage, true);
-    return;
-  }
+  if (passwordValidationMessage) return setMessage(createMessageEl, passwordValidationMessage, true);
 
   const accountRef = doc(db, 'lifeguardAccounts', username);
   const existingAccount = await getDoc(accountRef);
-  if (existingAccount.exists()) {
-    setMessage(createMessageEl, 'That username is already taken. Please choose another one.', true);
-    return;
-  }
+  if (existingAccount.exists()) return setMessage(createMessageEl, 'That username is already taken. Please choose another one.', true);
 
   const duplicateEmail = employeesCache.find((employee) => {
     const normalizedEmployee = normalizeEmployeeRecord(employee);
     return normalizedEmployee.email === email && normalizedEmployee.username && normalizedEmployee.username !== username;
   });
   if (duplicateEmail) {
-    setMessage(createMessageEl, 'That email is already linked to another username. Please contact your supervisor.', true);
-    return;
+    return setMessage(createMessageEl, 'That email is already linked to another username. Please contact your supervisor.', true);
   }
 
   try {
-    await createUserWithEmailAndPassword(auth, buildLifeguardAuthEmail(username), password);
+    await createUserWithEmailAndPassword(auth, email, password);
 
     const employeeRecord = {
       email,
@@ -487,44 +714,83 @@ async function handleCreateAccountSubmit(event) {
       homePool,
     };
 
+    const accountData = {
+      username,
+      authEmail: email,
+      employeeEmail: email,
+      firstName,
+      lastName,
+      phone,
+      homePool,
+      phoneLinked: false,
+      createdAt: new Date().toISOString(),
+    };
+
     await Promise.all([
-      setDoc(accountRef, {
-        username,
-        authEmail: buildLifeguardAuthEmail(username),
-        employeeEmail: email,
-        firstName,
-        lastName,
-        phone,
-        homePool,
-        createdAt: new Date().toISOString(),
-      }),
+      setDoc(accountRef, accountData),
       upsertEmployeeRecord(employeeRecord),
     ]);
 
-    persistLifeguardSession(employeeRecord, username);
-    await signOut(auth).catch(() => {});
-    closeModal();
-    window.location.href = getDestinationPath();
+    openVerificationView({
+      username,
+      account: accountData,
+      target: getDestinationPath(),
+      force: true,
+      origin: 'create',
+    });
+    setMessage(verifyMessageEl, 'Choose email or text-message verification to finish creating your account.');
   } catch (err) {
     await signOut(auth).catch(() => {});
     console.error('Create account failed:', err);
     const code = err.code || '';
     const friendly = code === 'auth/email-already-in-use'
-      ? 'That username is already in use.'
-      : code === 'auth/weak-password'
-        ? 'Please choose a stronger password.'
+      ? 'That email address is already attached to a Firebase account.'
+      : code === 'auth/operation-not-allowed'
+        ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
         : code === 'permission-denied'
           ? 'Firebase permissions blocked the account save. Publish the updated Firestore rules, then try again.'
-        : (err.message || 'Unable to create your account right now.');
+          : (err.message || 'Unable to create your account right now.');
     setMessage(createMessageEl, friendly, true);
+  }
+}
+
+async function handleEmailLinkCallback() {
+  if (!isSignInWithEmailLink(auth, window.location.href)) return false;
+
+  const context = loadPendingVerificationContext();
+  if (!context?.username || !context?.email) {
+    console.error('Missing pending verification context for email-link authentication.');
+    return false;
+  }
+
+  const user = auth.currentUser || await waitForAuthUser();
+  if (!user) {
+    setMessage(messageEl, 'Please open the email link on the same device you used to sign in.', true);
+    return false;
+  }
+
+  try {
+    const credential = EmailAuthProvider.credentialWithLink(context.email, window.location.href);
+    await reauthenticateWithCredential(user, credential);
+    const account = await getLifeguardAccount(context.username);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    await finalizeLifeguardAccess({
+      username: context.username,
+      account,
+      target: context.target,
+      method: 'email',
+    });
+    return true;
+  } catch (err) {
+    console.error('Email link verification failed:', err);
+    setMessage(messageEl, err.message || 'Email verification failed. Please try again.', true);
+    return false;
   }
 }
 
 function wireMenu() {
   document.querySelectorAll('.home-menu-item').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      openModal(btn.dataset.target);
-    });
+    btn.addEventListener('click', () => openModal(btn.dataset.target));
   });
 }
 
@@ -539,6 +805,9 @@ function wireRoleToggle() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
+  const handledLink = await handleEmailLinkCallback();
+  if (handledLink) return;
+
   await Promise.all([loadEmployees(), loadPools()]);
   populatePoolOptions();
   wireMenu();
@@ -546,19 +815,62 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   form?.addEventListener('submit', handleSubmit);
   createAccountForm?.addEventListener('submit', handleCreateAccountSubmit);
-  closeBtn?.addEventListener('click', closeModal);
+  verifyForm?.addEventListener('submit', submitSmsVerificationCode);
+  closeBtn?.addEventListener('click', async () => {
+    if (auth.currentUser && currentRole === 'lifeguard' && !hasPendingEmailVerification()) {
+      await signOut(auth).catch(() => {});
+    }
+    closeModal();
+  });
   showCreateAccountBtn?.addEventListener('click', () => setModalView('create'));
-  backToLoginBtn?.addEventListener('click', () => setModalView('login'));
-  modal?.addEventListener('click', (event) => {
-    if (event.target === modal) closeModal();
+  backToLoginBtn?.addEventListener('click', async () => {
+    if (!hasPendingEmailVerification()) {
+      await signOut(auth).catch(() => {});
+    }
+    resetVerificationState();
+    setModalView('login');
+  });
+  verifyBackBtn?.addEventListener('click', async () => {
+    if (!hasPendingEmailVerification()) {
+      await signOut(auth).catch(() => {});
+    }
+    resetVerificationState();
+    setModalView('login');
+  });
+  verifyEmailBtn?.addEventListener('click', async () => {
+    try {
+      await sendEmailVerificationLink();
+    } catch (err) {
+      const code = err.code || '';
+      const friendly = code === 'auth/operation-not-allowed'
+        ? 'Enable Email Link sign-in in Firebase Authentication to use email verification.'
+        : (err.message || 'Unable to send the verification email.');
+      setMessage(verifyMessageEl, friendly, true);
+    }
+  });
+  verifySmsBtn?.addEventListener('click', async () => {
+    try {
+      await sendSmsVerificationCode();
+    } catch (err) {
+      const code = err.code || '';
+      const friendly = code === 'auth/operation-not-allowed'
+        ? 'Enable Phone sign-in in Firebase Authentication to use text-message verification.'
+        : (err.message || 'Unable to send the text message.');
+      setMessage(verifyMessageEl, friendly, true);
+    }
+  });
+  modal?.addEventListener('click', async (event) => {
+    if (event.target !== modal) return;
+    if (auth.currentUser && currentRole === 'lifeguard' && !hasPendingEmailVerification()) {
+      await signOut(auth).catch(() => {});
+    }
+    closeModal();
   });
 
   let initialRole = 'lifeguard';
   try {
     const stored = localStorage.getItem(ROLE_STORAGE_KEY);
-    if (stored === 'supervisor' || stored === 'lifeguard') {
-      initialRole = stored;
-    }
+    if (stored === 'supervisor' || stored === 'lifeguard') initialRole = stored;
   } catch (err) {
     console.warn('Could not read stored role; defaulting to lifeguard', err);
   }

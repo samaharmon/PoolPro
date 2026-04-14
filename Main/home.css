@@ -201,6 +201,28 @@ body {
   margin-top: 12px;
 }
 
+.home-verify-copy {
+  color: #d8d8d8;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.home-verify-methods {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.home-verify-methods .submit-btn {
+  margin-top: 0;
+}
+
+.home-recaptcha {
+  min-height: 2px;
+  margin-top: 10px;
+}
+
 .home-create-link-btn {
   margin-top: -2px;
   margin-bottom: 6px;
