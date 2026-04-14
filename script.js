@@ -53,6 +53,16 @@ window.addEventListener('load', () => {
   document.body.classList.add('page-loaded');
 });
 
+// Floating header: add/remove .scrolled class on scroll
+(function () {
+  function updateScrolledHeader() {
+    const header = document.querySelector('.header');
+    if (!header) return;
+    header.classList.toggle('scrolled', window.scrollY > 60);
+  }
+  window.addEventListener('scroll', updateScrolledHeader, { passive: true });
+})();
+
 // Apply dark mode immediately (before DOMContentLoaded) to prevent flash
 if (localStorage.getItem('chemlogDarkMode') === 'true') {
   document.body.classList.add('dark-mode');
@@ -151,7 +161,7 @@ window.logout = async function () {
   } catch (_) { /* ignore */ }
   const _parts = window.location.pathname.split('/').filter(Boolean);
   _parts.pop();
-  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main'];
+  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing'];
   const _last = _parts[_parts.length - 1] || '';
   window.location.href = (_subDirs.includes(_last) ? '../' : '') + 'index.html';
 };
@@ -535,7 +545,7 @@ window.setupDropdownVisibility = function () {
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const lastDir = parts.length > 1 ? parts[parts.length - 2] : '';
-  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'Chem', 'Training', 'Editor', 'Main'];
+  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Employees', 'Testing'];
   return subDirs.includes(lastDir) ? '../' : '';
 }
 

@@ -12,8 +12,14 @@ body {
   min-height: 100vh;
   background-clip: content-box;
   font-family: 'Franklin Gothic Medium', 'Franklin Gothic Medium Cond', Arial, sans-serif;
-    opacity: 0;
-    transition: opacity 0.4s ease;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+body > .container {
+  flex: 1;
 }
 
 
@@ -65,10 +71,18 @@ body.dark-mode .page-content-title {
     background-color: #69140e;
     color: white;
     padding: 20px;
-    position: relative;
+    position: sticky;
+    top: 0;
+    z-index: 500;
     box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3);
-    min-height: 120px; /* Extended height to accommodate button */
+    min-height: 120px;
     border-bottom: 2px solid #fff;
+    transition: min-height 0.3s ease, padding 0.3s ease;
+}
+
+.header.scrolled {
+    min-height: 60px;
+    padding: 10px 20px;
 }
 
 .header-content {
@@ -90,6 +104,12 @@ body.dark-mode .page-content-title {
     object-fit: contain;
     z-index: 10;
     pointer-events: none;
+    transition: height 0.3s ease, top 0.3s ease !important;
+}
+
+.header.scrolled #logo {
+    top: 6px !important;
+    height: 48px !important;
 }
 
 .header-left {
@@ -401,8 +421,8 @@ input[type="password"] {
   border-radius: 0;
   background-color: #c8c8c8;
   color: #333;
-  padding: 6px 8px;
-  font-size: 14px;
+  padding: 6px 8px !important;
+  font-size: 14px !important;
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
 }
 
@@ -500,14 +520,14 @@ button:active,
     background-color: #521008;
 }
 
-/* Footer */
+/* Footer — sits at page bottom when content is short, pushed down by flex when long */
 .footer {
     background-color: #666;
     color: white;
     width: 100%;
     min-height: 100px;
     border-top: 2px solid #fff;
-    margin-top: 30px;
+    margin-top: auto;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2465,6 +2485,47 @@ textarea,
   cursor: default;
 }
 
+/* Per-market sanitation Edit/Save toggle — matches #sanitationControls style */
+.sanitation-controls {
+  position: relative;
+  display: inline-flex;
+  border: 1px solid #69140e;
+  overflow: hidden;
+  background-color: #333;
+  height: 40px;
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.35);
+}
+
+.sanitation-controls .editAndSave {
+  flex: 1;
+  min-width: 60px;
+  padding: 6px 16px;
+  border: none;
+  background: transparent;
+  color: #aaa;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+}
+
+.sanitation-controls .editAndSave.active {
+  color: #fff;
+  opacity: 1;
+}
+
+.sanitation-controls .editAndSave:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.sanitation-controls .editAndSave.active:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
 /* Sliding thumb (background pill) */
 .sanitation-controls-thumb {
   position: absolute;
@@ -2749,21 +2810,13 @@ textarea,
   cursor: not-allowed;
 }
 
-/* Actions column always accessible — rendered above the section overlay */
-#employeeTableSection.overlay-disabled .actions-cell,
-#employeeTableSection.overlay-disabled .employee-table th:last-child {
-  position: relative;
-  z-index: 8;
-  pointer-events: auto;
+/* Employee table overlay: visual dim only — pointer-events: none so Action buttons stay clickable */
+#employeeTableSection.overlay-disabled::before {
+  pointer-events: none;
 }
 
 #employeeTableSection.overlay-disabled {
   pointer-events: auto;
-}
-
-/* Overlay starts below header row (~45px); Actions column kept above via z-index */
-#employeeTableSection.overlay-disabled::before {
-  inset: 45px 0 0 0;
 }
 
 #employeeTableSection {

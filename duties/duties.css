@@ -1,26 +1,141 @@
-/* duties.css — Daily Duties Job Form Submission */
+/* duties.css — Daily Pool Cleanliness Report */
 
-.duties-photo-box {
-  margin-bottom: 30px;
-  padding-bottom: 24px;
+/* ============================================================
+   Sections
+   ============================================================ */
+
+.duties-section {
+  margin-bottom: 36px;
+  padding-bottom: 28px;
   border-bottom: 1px solid #ddd;
 }
 
-.duties-photo-box:last-child {
+.duties-section:last-of-type {
   border-bottom: none;
 }
 
-.duties-photo-label h3 {
-  font-size: 18px;
+.duties-section-title {
+  font-size: 22px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
   color: #69140e;
-  margin-bottom: 4px;
+  font-weight: bold;
+  margin-bottom: 16px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #69140e;
+}
+
+/* Pool row */
+.duties-pool-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 480px;
+}
+
+.duties-pool-row select {
+  width: 100%;
+}
+
+.duties-submitter-info {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #888;
+}
+
+/* ============================================================
+   Manager-only section
+   ============================================================ */
+
+.duties-manager-section {
+  background-color: #fff5f5;
+  border: 2px solid #69140e;
+  border-radius: 0;
+  padding: 20px 24px;
+  margin-top: 36px;
+}
+
+.duties-manager-title {
+  color: #69140e;
+  border-color: #69140e;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.duties-manager-badge {
+  display: inline-block;
+  background-color: #69140e;
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  font-style: normal;
+  padding: 2px 8px;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+/* ============================================================
+   Photo groups
+   ============================================================ */
+
+.duties-photo-group {
+  margin-bottom: 28px;
+}
+
+.duties-photo-group-title {
+  font-size: 17px;
+  color: #333;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.duties-req-badge {
+  font-size: 11px;
+  background: #69140e;
+  color: #fff;
+  padding: 2px 7px;
+  font-style: normal;
+  font-weight: bold;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  letter-spacing: 0.03em;
+}
+
+.duties-opt-badge {
+  font-size: 11px;
+  background: #888;
+  color: #fff;
+  padding: 2px 7px;
+  font-style: normal;
+  font-weight: bold;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+/* ============================================================
+   Multi-upload row
+   ============================================================ */
+
+.duties-multi-upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.duties-photo-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .duties-upload-area {
-  margin-top: 12px;
-  width: 100%;
-  max-width: 400px;
-  min-height: 180px;
+  width: 120px;
+  height: 120px;
   border: 2px dashed #aaa;
   background-color: #c8c8c8;
   display: flex;
@@ -41,14 +156,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   color: #555;
-  font-size: 14px;
+  font-size: 12px;
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  text-align: center;
+  pointer-events: none;
 }
 
 .duties-upload-icon {
-  font-size: 36px;
+  font-size: 28px;
 }
 
 .duties-preview {
@@ -56,26 +173,119 @@
   height: 100%;
   object-fit: cover;
   display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.duties-add-photo-btn {
+  background: transparent;
+  border: 1px dashed #69140e;
+  color: #69140e;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.duties-add-photo-btn:hover {
+  background-color: #fdf0f0;
 }
 
 .duties-clear-btn {
-  margin-top: 8px;
   background-color: #444;
   color: #fff;
   border: none;
-  padding: 6px 14px;
-  font-size: 13px;
+  padding: 4px 10px;
+  font-size: 12px;
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
   cursor: pointer;
-  border-radius: 0;
 }
 
 .duties-clear-btn:hover {
   background-color: #222;
 }
 
-body.dark-mode .duties-photo-box {
+/* ============================================================
+   Note / text areas
+   ============================================================ */
+
+.duties-note-group {
+  margin-top: 12px;
+  max-width: 520px;
+}
+
+.duties-note-group label {
+  font-size: 14px;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.duties-note-group textarea,
+.duties-note-group input[type="number"] {
+  width: 100%;
+  background: #c8c8c8;
+  border: none;
+  border-bottom: 2px solid #69140e;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.duties-note-group input[type="number"] {
+  resize: none;
+  max-width: 180px;
+  width: 100%;
+}
+
+/* ============================================================
+   CYA fields
+   ============================================================ */
+
+.duties-cya-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 360px;
+}
+
+.duties-cya-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.duties-cya-row label {
+  flex: 1;
+  font-size: 14px;
+  color: #444;
+  margin-bottom: 0;
+}
+
+.duties-cya-row input {
+  width: 120px;
+  background: #c8c8c8;
+  border: none;
+  border-bottom: 2px solid #69140e;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+/* ============================================================
+   Dark mode
+   ============================================================ */
+
+body.dark-mode .duties-section {
   border-color: #444;
+}
+
+body.dark-mode .duties-section-title {
+  color: #ff8080;
+  border-color: #ff8080;
 }
 
 body.dark-mode .duties-upload-area {
@@ -90,4 +300,26 @@ body.dark-mode .duties-upload-area:hover {
 
 body.dark-mode .duties-upload-placeholder {
   color: #bbb;
+}
+
+body.dark-mode .duties-manager-section {
+  background-color: #2a1010;
+  border-color: #ff8080;
+}
+
+body.dark-mode .duties-note-group textarea,
+body.dark-mode .duties-note-group input[type="number"],
+body.dark-mode .duties-cya-row input {
+  background: #3a3a3a;
+  color: #fff;
+  border-color: #ff8080;
+}
+
+body.dark-mode .duties-add-photo-btn {
+  color: #ff8080;
+  border-color: #ff8080;
+}
+
+body.dark-mode .duties-add-photo-btn:hover {
+  background-color: #2a1010;
 }

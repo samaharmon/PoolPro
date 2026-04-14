@@ -55,84 +55,103 @@
     <h2 class="page-content-title">Daily Duties</h2>
 
     <div class="form-container">
-      <div class="section">
-        <h2>Job Form Submission</h2>
-        <p>Submit photos of completed duties at your pool. Select your pool and upload photos for each required task.</p>
 
-        <div class="form-row" style="margin-top: 20px;">
-          <div class="form-group">
-            <label for="dutiesPool">Pool Location</label>
-            <select id="dutiesPool" required>
-              <option value="">Select your pool</option>
-            </select>
+      <!-- Section 1: Pool Location -->
+      <div class="duties-section">
+        <h2 class="duties-section-title">Daily Pool Cleanliness Report</h2>
+        <div class="duties-pool-row">
+          <label for="dutiesPool">Pool Location</label>
+          <select id="dutiesPool" required>
+            <option value="">What facility are you creating a submission for?</option>
+          </select>
+        </div>
+        <p class="duties-submitter-info" id="dutiesSubmitterInfo"></p>
+      </div>
+
+      <!-- Section 2: Facility Photos -->
+      <div class="duties-section">
+        <h2 class="duties-section-title">Facility Photos</h2>
+
+        <!-- Deck -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">Deck <span class="duties-req-badge">2 required</span></h3>
+          <div class="duties-multi-upload" id="deckUpload" data-category="deck" data-min="2" data-max="10"></div>
+          <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('deckUpload')">+ Add Photo</button>
+        </div>
+
+        <!-- Pool -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">Pool <span class="duties-req-badge">2 required</span></h3>
+          <div class="duties-multi-upload" id="poolUpload" data-category="pool" data-min="2" data-max="10"></div>
+          <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('poolUpload')">+ Add Photo</button>
+        </div>
+
+        <!-- Skimmers -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">Skimmers <span class="duties-req-badge">2 required</span></h3>
+          <div class="duties-multi-upload" id="skimmersUpload" data-category="skimmers" data-min="2" data-max="10"></div>
+          <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('skimmersUpload')">+ Add Photo</button>
+        </div>
+
+        <!-- Damaged Equipment -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">Damaged Equipment <span class="duties-opt-badge">optional</span></h3>
+          <div class="duties-multi-upload" id="damagedUpload" data-category="damaged" data-min="0" data-max="10"></div>
+          <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('damagedUpload')">+ Add Photo</button>
+          <div class="duties-note-group">
+            <label for="damagedNotes">Notes on damaged equipment</label>
+            <textarea id="damagedNotes" rows="3" placeholder="Describe any damaged equipment…"></textarea>
           </div>
-          <div class="form-group">
-            <label for="dutiesGuardId">Email</label>
-            <input type="email" id="dutiesGuardId" placeholder="Enter your email" required />
+        </div>
+
+        <!-- Other Notes -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">Other Notes</h3>
+          <div class="duties-note-group">
+            <label for="dutiesOtherNotes">Questions, concerns, or comments</label>
+            <textarea id="dutiesOtherNotes" rows="4" placeholder="Any other notes about your shift…"></textarea>
           </div>
         </div>
       </div>
 
-      <div class="section">
-        <h2>Photo Submissions</h2>
+      <!-- Section 3: Manager Only -->
+      <div class="duties-section duties-manager-section" id="dutiesManagerSection">
+        <h2 class="duties-section-title duties-manager-title">Other Information <span class="duties-manager-badge">Collected by Pool Managers ONLY</span></h2>
 
-        <!-- Photo Box 1: Pool Deck -->
-        <div class="duties-photo-box">
-          <div class="duties-photo-label">
-            <h3>Pool Deck Inspection</h3>
-            <p>Upload a photo showing the pool deck is clean and free of hazards.</p>
+        <!-- Bleach Barrels -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">Bleach Barrels <span class="duties-opt-badge">optional photo</span></h3>
+          <div class="duties-multi-upload" id="bleachUpload" data-category="bleach" data-min="0" data-max="10"></div>
+          <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('bleachUpload')">+ Add Photo</button>
+          <div class="duties-note-group">
+            <label for="bleachVolume">Bleach volume remaining (%)</label>
+            <input type="number" id="bleachVolume" min="0" max="100" placeholder="0–100" />
           </div>
-          <div class="duties-upload-area" id="uploadArea1" onclick="document.getElementById('photoInput1').click()">
-            <div class="duties-upload-placeholder" id="placeholder1">
-              <span class="duties-upload-icon">&#128247;</span>
-              <span>Tap to upload photo</span>
-            </div>
-            <img class="duties-preview" id="preview1" src="" alt="Preview" style="display:none;" />
-            <input type="file" id="photoInput1" accept="image/*" capture="environment" style="display:none;" />
-          </div>
-          <button type="button" class="duties-clear-btn" id="clearBtn1" style="display:none;" onclick="clearPhoto(1)">Remove Photo</button>
         </div>
 
-        <!-- Photo Box 2: Equipment Check -->
-        <div class="duties-photo-box">
-          <div class="duties-photo-label">
-            <h3>Equipment &amp; Safety Gear</h3>
-            <p>Upload a photo showing rescue equipment is present and in good condition.</p>
+        <!-- Muriatic Acid -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">Muriatic Acid</h3>
+          <div class="duties-note-group">
+            <label for="muriaticAcid">Volume remaining (gallons)</label>
+            <input type="number" id="muriaticAcid" min="0" placeholder="e.g. 4" />
           </div>
-          <div class="duties-upload-area" id="uploadArea2" onclick="document.getElementById('photoInput2').click()">
-            <div class="duties-upload-placeholder" id="placeholder2">
-              <span class="duties-upload-icon">&#128247;</span>
-              <span>Tap to upload photo</span>
-            </div>
-            <img class="duties-preview" id="preview2" src="" alt="Preview" style="display:none;" />
-            <input type="file" id="photoInput2" accept="image/*" capture="environment" style="display:none;" />
-          </div>
-          <button type="button" class="duties-clear-btn" id="clearBtn2" style="display:none;" onclick="clearPhoto(2)">Remove Photo</button>
         </div>
 
-        <!-- Photo Box 3: Additional (optional) -->
-        <div class="duties-photo-box">
-          <div class="duties-photo-label">
-            <h3>Additional Photo (Optional)</h3>
-            <p>Upload any additional photo related to your shift duties.</p>
+        <!-- Shock / Granular -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">Shock / Granular</h3>
+          <div class="duties-note-group">
+            <label for="shockGranular">Amount remaining (%)</label>
+            <input type="number" id="shockGranular" min="0" max="100" placeholder="0–100" />
           </div>
-          <div class="duties-upload-area" id="uploadArea3" onclick="document.getElementById('photoInput3').click()">
-            <div class="duties-upload-placeholder" id="placeholder3">
-              <span class="duties-upload-icon">&#128247;</span>
-              <span>Tap to upload photo</span>
-            </div>
-            <img class="duties-preview" id="preview3" src="" alt="Preview" style="display:none;" />
-            <input type="file" id="photoInput3" accept="image/*" capture="environment" style="display:none;" />
-          </div>
-          <button type="button" class="duties-clear-btn" id="clearBtn3" style="display:none;" onclick="clearPhoto(3)">Remove Photo</button>
         </div>
-      </div>
 
-      <div class="section">
-        <h2>Notes</h2>
-        <div class="form-group full-width">
-          <label for="dutiesNotes">Any additional notes or observations?</label>
-          <textarea id="dutiesNotes" rows="4" style="width:100%; background:#c8c8c8; border:none; border-bottom:2px solid #69140e; padding:8px; font-family:inherit; font-size:14px; resize:vertical;"></textarea>
+        <!-- CYA per pool -->
+        <div class="duties-photo-group">
+          <h3 class="duties-photo-group-title">CYA Levels</h3>
+          <p style="color:#999;font-size:13px;margin-bottom:10px;">Enter CYA reading for each pool at this facility (max 100).</p>
+          <div id="cyaPoolFields" class="duties-cya-fields"></div>
         </div>
       </div>
 
