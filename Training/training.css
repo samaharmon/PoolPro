@@ -1485,6 +1485,12 @@ body.dark-mode .training-filter-select {
   background: rgba(0, 0, 0, 0.55);
   align-items: center;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+#trainingLoginModal.modal.visible {
+  opacity: 1;
 }
 
 /* Modal content panel */
@@ -1493,6 +1499,14 @@ body.dark-mode .training-filter-select {
   background: #ffffff;
   padding: 18px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#trainingLoginModal.visible .training-modal-content {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 /* Keep training schedule table headers white (text) */

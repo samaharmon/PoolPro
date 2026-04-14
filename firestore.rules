@@ -37,6 +37,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Lifeguard login accounts created from the home screen
+    match /lifeguardAccounts/{username} {
+      allow read, write: if true;
+    }
+
     // Auditing form submissions
     match /testingResults/{resultId} {
       allow read, write: if true;

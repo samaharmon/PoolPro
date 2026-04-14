@@ -710,6 +710,12 @@ button:active,
     height: 100vh;
     background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
     z-index: 998; /* Below modal but above other content */
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+
+.modal-overlay.visible {
+    opacity: 1;
 }
 
 #settingsModal h3 {

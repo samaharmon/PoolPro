@@ -43,6 +43,7 @@ if (menuSupervisor) {
     const modal = document.getElementById('trainingLoginModal');
     if (modal) {
       modal.style.display = 'flex';
+      requestAnimationFrame(() => modal.classList.add('visible'));
     } else {
       // Fallback: if no modal, just show the supervisor section
       showSupervisorView();
@@ -1284,6 +1285,7 @@ function setupLogin(el) {
 
   function openModal() {
     modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('visible'));
     if (messageEl) {
       messageEl.textContent = '';
       messageEl.classList.remove('success', 'error');
@@ -1291,7 +1293,10 @@ function setupLogin(el) {
   }
 
   function closeModal() {
-    modal.style.display = 'none';
+    modal.classList.remove('visible');
+    setTimeout(() => {
+      modal.style.display = 'none';
+    }, 200);
   }
 
   // Always start each visit in the lifeguard view; do NOT auto-restore login
@@ -1485,7 +1490,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       showSupervisorView();
     } else {
       const loginModal = document.getElementById('trainingLoginModal');
-      if (loginModal) loginModal.style.display = 'flex';
+      if (loginModal) {
+        loginModal.style.display = 'flex';
+        requestAnimationFrame(() => loginModal.classList.add('visible'));
+      }
     }
   } else {
     showLifeguardView();

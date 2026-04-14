@@ -100,6 +100,14 @@ body {
   max-width: 420px;
   position: relative;
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.modal.visible .modal-content.home-login-modal {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .modal-content h2 {
@@ -191,6 +199,25 @@ body {
   gap: 10px;
   flex-wrap: wrap;
   margin-top: 12px;
+}
+
+.home-create-link-btn {
+  margin-top: -2px;
+  margin-bottom: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #f0c9b6;
+  font-size: 13px;
+  font-family: "Franklin Gothic Medium", Arial, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.home-create-link-btn:hover {
+  color: #ffffff;
+  opacity: 0.9;
 }
 
 .secondary-btn {

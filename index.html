@@ -32,7 +32,7 @@
   <div id="homeLoginModal" class="modal">
     <div class="modal-content home-login-modal">
       <button class="close" id="homeLoginClose">&times;</button>
-      <h2>Sign in</h2>
+      <h2 id="homeModalTitle">Sign in</h2>
 
       <!-- Lifeguard / Supervisor role toggle -->
       <div class="home-role-toggle" id="roleToggle">
@@ -50,11 +50,12 @@
           <input type="password" id="homePasswordInput" autocomplete="current-password">
         </div>
 
+        <button type="button" class="home-create-link-btn" id="homeShowCreateAccountBtn">Create Account</button>
+
         <p class="form-message" id="homeLoginMessage"></p>
 
         <div class="home-form-actions">
           <button type="submit" class="submit-btn" id="homeLoginSubmit">Continue</button>
-          <button type="button" class="submit-btn secondary-btn" id="homeShowCreateAccountBtn">Create Account</button>
         </div>
       </form>
 
@@ -99,7 +100,7 @@
         <p class="form-message" id="homeCreateAccountMessage"></p>
 
         <div class="home-form-actions">
-          <button type="submit" class="submit-btn" id="homeCreateAccountSubmit">Create Account</button>
+          <button type="submit" class="submit-btn" id="homeCreateAccountSubmit">Save Info</button>
           <button type="button" class="submit-btn secondary-btn" id="homeBackToLoginBtn">Back to Sign In</button>
         </div>
       </form>

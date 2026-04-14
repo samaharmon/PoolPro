@@ -23,6 +23,7 @@ let homePoolOptions = [];
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
+const modalTitle = document.getElementById('homeModalTitle');
 const form = document.getElementById('homeLoginForm');
 const createAccountForm = document.getElementById('homeCreateAccountForm');
 const usernameInput = document.getElementById('homeUsernameInput');
@@ -42,6 +43,7 @@ const createPhoneInput = document.getElementById('homeCreatePhoneInput');
 const createPoolInput = document.getElementById('homeCreatePoolInput');
 const createPasswordInput = document.getElementById('homeCreatePasswordInput');
 const createConfirmPasswordInput = document.getElementById('homeCreateConfirmPasswordInput');
+const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -122,6 +124,9 @@ function setModalView(view) {
   currentView = view;
   form?.classList.toggle('hidden', view !== 'login');
   createAccountForm?.classList.toggle('hidden', view !== 'create');
+  if (modalTitle) {
+    modalTitle.textContent = view === 'create' ? 'Create Account' : 'Sign in';
+  }
   if (view === 'create') {
     createUsernameInput?.focus();
   } else {
@@ -227,6 +232,22 @@ function closeModal() {
     modal.style.display = 'none';
   }, 200);
   pendingTarget = null;
+}
+
+function validatePassword(password) {
+  if (!password || password.length < 8) {
+    return 'Password must be at least 8 characters long.';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Password must include at least 1 number.';
+  }
+  if (!/[!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]/.test(password)) {
+    return 'Password must include at least 1 special character.';
+  }
+  if (!ALLOWED_PASSWORD_CHARS.test(password)) {
+    return 'Password can only include letters, numbers, and standard special characters.';
+  }
+  return '';
 }
 
 async function loadEmployees() {
@@ -410,6 +431,11 @@ async function handleCreateAccountSubmit(event) {
     setMessage(createMessageEl, 'Passwords do not match.', true);
     return;
   }
+  const passwordValidationMessage = validatePassword(password);
+  if (passwordValidationMessage) {
+    setMessage(createMessageEl, passwordValidationMessage, true);
+    return;
+  }
 
   const accountRef = doc(db, 'lifeguardAccounts', username);
   const existingAccount = await getDoc(accountRef);
@@ -459,12 +485,15 @@ async function handleCreateAccountSubmit(event) {
     closeModal();
     window.location.href = getDestinationPath();
   } catch (err) {
+    await signOut(auth).catch(() => {});
     console.error('Create account failed:', err);
     const code = err.code || '';
     const friendly = code === 'auth/email-already-in-use'
       ? 'That username is already in use.'
       : code === 'auth/weak-password'
         ? 'Please choose a stronger password.'
+        : code === 'permission-denied'
+          ? 'Firebase permissions blocked the account save. Publish the updated Firestore rules, then try again.'
         : (err.message || 'Unable to create your account right now.');
     setMessage(createMessageEl, friendly, true);
   }
@@ -499,6 +528,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   closeBtn?.addEventListener('click', closeModal);
   showCreateAccountBtn?.addEventListener('click', () => setModalView('create'));
   backToLoginBtn?.addEventListener('click', () => setModalView('login'));
+  modal?.addEventListener('click', (event) => {
+    if (event.target === modal) closeModal();
+  });
 
   let initialRole = 'lifeguard';
   try {

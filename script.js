@@ -98,7 +98,10 @@ window.openSettings = function () {
   const modal = document.getElementById('settingsModal');
   const overlay = document.getElementById('settingsOverlay');
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
-  if (overlay) overlay.style.display = 'block';
+  if (overlay) {
+    overlay.style.display = 'block';
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+  }
   if (modal) {
     modal.style.display = 'block';
     requestAnimationFrame(() => modal.classList.add('visible'));
@@ -112,7 +115,10 @@ window.closeSettings = function () {
     modal.classList.remove('visible');
     setTimeout(() => { modal.style.display = 'none'; }, 250);
   }
-  if (overlay) overlay.style.display = 'none';
+  if (overlay) {
+    overlay.classList.remove('visible');
+    setTimeout(() => { overlay.style.display = 'none'; }, 250);
+  }
 };
 
 // Close settings modal when clicking the overlay
@@ -244,7 +250,9 @@ window.closeModal = function () {
     }
   }
   modal.classList.remove('visible');
-  modal.style.display = 'none';
+  setTimeout(() => {
+    modal.style.display = 'none';
+  }, 250);
   const supSection = document.getElementById('supervisorNotifySection');
   if (supSection) supSection.style.display = 'none';
 };
@@ -2167,6 +2175,14 @@ function checkDashboardAnchor() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
+  const feedbackModal = document.getElementById('feedbackModal');
+  if (feedbackModal) {
+    feedbackModal.addEventListener('click', (event) => {
+      if (event.target === feedbackModal) {
+        window.closeModal();
+      }
+    });
+  }
   // Firebase Auth state listener — keeps localStorage flags in sync and updates nav
   onAuthStateChanged(auth, (user) => {
     const role = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
