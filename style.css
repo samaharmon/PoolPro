@@ -108,15 +108,33 @@ body.dark-mode .page-content-title {
 }
 
 .header.scrolled #logo {
-    top: 6px !important;
-    height: 48px !important;
+    top: 8px !important;
+    height: 44px !important;
+}
+
+/* Hide title/subtitle when header is floating */
+.header-title-block {
+    overflow: hidden;
+    max-height: 120px;
+    opacity: 1;
+    transition: max-height 0.3s ease, opacity 0.25s ease, margin 0.3s ease;
+}
+
+.header.scrolled .header-title-block {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0 !important;
 }
 
 .header-left {
-    display: flex; /* CHANGED: Use flexbox for horizontal alignment */
-    flex-direction: column; /* CHANGED: Arrange children in a row */
-    align-items: flex-start; /* Vertically aligns items like menu button and title */
-    gap: 15px; /* NEW: Adds space between menu button and title/subtitle */
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+}
+
+.header.scrolled .header-left {
+    gap: 0;
 }
 
 .header-right {
@@ -3267,7 +3285,7 @@ body.dark-mode .dash-respondent-tooltip {
   width: 100%;
 }
 .time-with-day-wrap .day-select {
-  flex: 0 0 38%;
+  flex: 0 0 20%;
   border-right: 1px solid #aaa;
 }
 .time-with-day-wrap select:not(.day-select) {

@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initSubmitterInfo();
   initPhotoGroups();
   setTimeout(populatePools, 800);
-  setTimeout(populateCYAFields, 1200);
+  setTimeout(populateCYAPoolSelector, 900);
 });
 
 // ============================================================
@@ -63,58 +63,69 @@ function populatePools() {
 }
 
 // ============================================================
-// CYA FIELDS — per pool based on pool metadata
+// CYA SECTION — pool selector + dynamic inputs from pool.numPools
 // ============================================================
 
-function populateCYAFields() {
-  const container = document.getElementById('cyaPoolFields');
-  if (!container) return;
-  const selectedPool = document.getElementById('dutiesPool')?.value;
+function populateCYAPoolSelector() {
+  const sel = document.getElementById('cyaPoolSelect');
+  if (!sel) return;
+  if (sel.querySelectorAll('optgroup').length > 0) return;
   const pools = window._poolsForDuties || [];
-
-  // Filter pools to match selected facility (if selected)
-  // For CYA, we show inputs for sub-pools of the selected facility
-  // or just one generic input if no sub-pool info available
-  let poolsToShow = pools;
-  if (selectedPool) {
-    // Find pools matching the selected facility name
-    const exact = pools.filter(p => (p.name || p.id) === selectedPool);
-    if (exact.length) poolsToShow = exact;
-  }
-
-  container.innerHTML = '';
-  if (!poolsToShow.length) {
-    container.innerHTML = '<p style="color:#aaa;font-size:13px;">Select a pool above to see CYA fields.</p>';
+  if (!pools.length) {
+    setTimeout(populateCYAPoolSelector, 600);
     return;
   }
+  const map = {};
+  pools.forEach(p => {
+    const market = (p.markets && p.markets[0]) || 'Other';
+    if (!map[market]) map[market] = [];
+    map[market].push(p);
+  });
+  Object.keys(map).sort().forEach(market => {
+    const group = document.createElement('optgroup');
+    group.label = market;
+    map[market].sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id || p.name;
+      opt.textContent = p.name || p.id;
+      group.appendChild(opt);
+    });
+    sel.appendChild(group);
+  });
 
-  poolsToShow.forEach(pool => {
+  sel.addEventListener('change', () => populateCYAFields(sel.value));
+}
+
+function populateCYAFields(poolId) {
+  const container = document.getElementById('cyaPoolFields');
+  if (!container) return;
+  container.innerHTML = '';
+
+  if (!poolId) return;
+
+  const pools = window._poolsForDuties || [];
+  const pool = pools.find(p => (p.id || p.name) === poolId);
+  if (!pool) return;
+
+  const numPools = Math.max(1, parseInt(pool.numPools || pool.poolCount || 1, 10));
+
+  for (let i = 1; i <= numPools; i++) {
     const wrapper = document.createElement('div');
     wrapper.className = 'duties-cya-row';
     const label = document.createElement('label');
-    label.textContent = pool.name || pool.id;
+    label.textContent = numPools === 1 ? (pool.name || pool.id) : `Pool ${i}`;
     const input = document.createElement('input');
     input.type = 'number';
     input.min = '0';
     input.max = '100';
     input.placeholder = '0–100';
-    input.dataset.poolId = pool.id || pool.name;
+    input.dataset.poolIndex = i;
     input.className = 'cya-input';
     wrapper.appendChild(label);
     wrapper.appendChild(input);
     container.appendChild(wrapper);
-  });
-}
-
-// Update CYA fields when pool selection changes
-document.addEventListener('DOMContentLoaded', () => {
-  const sel = document.getElementById('dutiesPool');
-  if (sel) {
-    sel.addEventListener('change', () => {
-      setTimeout(populateCYAFields, 100);
-    });
   }
-});
+}
 
 // ============================================================
 // MULTI-PHOTO UPLOAD
@@ -305,10 +316,12 @@ window.submitDutiesForm = async function () {
     ]);
 
     // Collect CYA readings
+    const cyaPoolId = document.getElementById('cyaPoolSelect')?.value || '';
     const cyaReadings = {};
     document.querySelectorAll('.cya-input').forEach(input => {
       if (input.value !== '') {
-        cyaReadings[input.dataset.poolId] = parseFloat(input.value);
+        const key = input.dataset.poolIndex ? `${cyaPoolId}_pool${input.dataset.poolIndex}` : (input.dataset.poolId || `pool${input.dataset.poolIndex}`);
+        cyaReadings[key] = parseFloat(input.value);
       }
     });
 

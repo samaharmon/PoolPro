@@ -191,7 +191,7 @@ window.goToEditor = function () {
   // Remove the filename (last element)
   parts.pop();
   // Remove segments that are known subdirectories to find the project root depth
-  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing'];
+  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties'];
   const lastPart = parts[parts.length - 1] || '';
   const stepsUp = subDirs.some(d => d.toLowerCase() === lastPart.toLowerCase()) ? 1 : 0;
   const prefix = stepsUp > 0 ? '../' : '';
@@ -221,7 +221,7 @@ window.goToTrainingSetup = function () {
     sessionStorage.setItem('trainingIntentAdmin', '1');
     const parts = window.location.pathname.split('/').filter(Boolean);
     parts.pop();
-    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main'];
+    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing'];
     const lastPart = parts[parts.length - 1] || '';
     const prefix = subDirs.includes(lastPart) ? '../' : '';
     window.location.href = prefix + 'Training/training.html';

@@ -842,6 +842,10 @@ function setupAdmin(el) {
 
   // Multi-day checkbox toggle
   if (el.multiDayCheckbox) {
+    // Ensure unchecked on page load
+    el.multiDayCheckbox.checked = false;
+    setMultiDayUI(el, false);
+
     el.multiDayCheckbox.addEventListener('change', () => {
       const isMultiDay = el.multiDayCheckbox.checked;
       setMultiDayUI(el, isMultiDay);

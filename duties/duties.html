@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pool Pro — Daily Duties</title>
+  <title>Pool Pro — Cleanliness Report</title>
 
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -23,7 +23,7 @@
   <div class="header">
     <div class="header-content">
       <div class="header-left">
-        <div>
+        <div class="header-title-block">
           <h1>PoolPro</h1>
           <p>Capital City Aquatics &amp; Upstate Pool Management</p>
         </div>
@@ -35,8 +35,8 @@
           <div class="dropdown-menu" id="dropdownMenu">
             <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
-            <a href="duties.html" class="dropdown-item active-page" data-nav="duties">Daily Duties</a>
-            <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Pool Chemistry Dashboard</a>
+            <a href="duties.html" class="dropdown-item active-page" data-nav="duties">Cleanliness Report</a>
+            <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
             <a href="../Training/training.html" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
             <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
             <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
@@ -52,13 +52,14 @@
   </div>
 
   <div class="container">
-    <h2 class="page-content-title">Daily Duties</h2>
+    <h2 class="page-content-title">Cleanliness Report</h2>
 
     <div class="form-container">
 
       <!-- Section 1: Pool Location -->
       <div class="duties-section">
         <h2 class="duties-section-title">Daily Pool Cleanliness Report</h2>
+        <p class="duties-section-desc">Complete this form at the end of each shift to document your facility's daily condition. Select your facility below, then upload the required photos and complete all applicable fields.</p>
         <div class="duties-pool-row">
           <label for="dutiesPool">Pool Location</label>
           <select id="dutiesPool" required>
@@ -71,10 +72,12 @@
       <!-- Section 2: Facility Photos -->
       <div class="duties-section">
         <h2 class="duties-section-title">Facility Photos</h2>
+        <p class="duties-section-desc">Submit photos of the following facility areas. If your facility has multiple pools, some submissions require photos in EACH pool area.</p>
 
         <!-- Deck -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">Deck <span class="duties-req-badge">2 required</span></h3>
+          <p class="duties-group-desc">Submit at least two photos (per pool) of the deck surrounding each pool at your facility.</p>
           <div class="duties-multi-upload" id="deckUpload" data-category="deck" data-min="2" data-max="10"></div>
           <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('deckUpload')">+ Add Photo</button>
         </div>
@@ -82,6 +85,7 @@
         <!-- Pool -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">Pool <span class="duties-req-badge">2 required</span></h3>
+          <p class="duties-group-desc">Submit at least two photos (per pool) of the pool area. If your pool has a deep end, make sure to include a photo of it.</p>
           <div class="duties-multi-upload" id="poolUpload" data-category="pool" data-min="2" data-max="10"></div>
           <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('poolUpload')">+ Add Photo</button>
         </div>
@@ -89,6 +93,7 @@
         <!-- Skimmers -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">Skimmers <span class="duties-req-badge">2 required</span></h3>
+          <p class="duties-group-desc">Submit at least two photos (per pool) of clean skimmer baskets.</p>
           <div class="duties-multi-upload" id="skimmersUpload" data-category="skimmers" data-min="2" data-max="10"></div>
           <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('skimmersUpload')">+ Add Photo</button>
         </div>
@@ -96,6 +101,7 @@
         <!-- Damaged Equipment -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">Damaged Equipment <span class="duties-opt-badge">optional</span></h3>
+          <p class="duties-group-desc">Submit photos of any damaged equipment at your facility (e.g., loose ladder or diving board steps, cracking or crooked diving boards, damaged furniture, loose railings, deteriorating lifeguard tubes or backboard equipment, loose or broken pool tiles, etc.).</p>
           <div class="duties-multi-upload" id="damagedUpload" data-category="damaged" data-min="0" data-max="10"></div>
           <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('damagedUpload')">+ Add Photo</button>
           <div class="duties-note-group">
@@ -107,6 +113,7 @@
         <!-- Other Notes -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">Other Notes</h3>
+          <p class="duties-group-desc">Use this field for any questions, concerns, or additional comments about your shift or facility.</p>
           <div class="duties-note-group">
             <label for="dutiesOtherNotes">Questions, concerns, or comments</label>
             <textarea id="dutiesOtherNotes" rows="4" placeholder="Any other notes about your shift…"></textarea>
@@ -117,10 +124,12 @@
       <!-- Section 3: Manager Only -->
       <div class="duties-section duties-manager-section" id="dutiesManagerSection">
         <h2 class="duties-section-title duties-manager-title">Other Information <span class="duties-manager-badge">Collected by Pool Managers ONLY</span></h2>
+        <p class="duties-section-desc" style="color:#8b2020;">Complete this section only if you are a pool manager. Record current chemical supply levels for your facility.</p>
 
         <!-- Bleach Barrels -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">Bleach Barrels <span class="duties-opt-badge">optional photo</span></h3>
+          <p class="duties-group-desc">Upload a photo of the bleach barrel(s) and record the estimated volume remaining.</p>
           <div class="duties-multi-upload" id="bleachUpload" data-category="bleach" data-min="0" data-max="10"></div>
           <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('bleachUpload')">+ Add Photo</button>
           <div class="duties-note-group">
@@ -132,6 +141,7 @@
         <!-- Muriatic Acid -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">Muriatic Acid</h3>
+          <p class="duties-group-desc">Record the estimated amount of muriatic acid remaining at your facility.</p>
           <div class="duties-note-group">
             <label for="muriaticAcid">Volume remaining (gallons)</label>
             <input type="number" id="muriaticAcid" min="0" placeholder="e.g. 4" />
@@ -141,16 +151,23 @@
         <!-- Shock / Granular -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">Shock / Granular</h3>
+          <p class="duties-group-desc">Record the estimated amount of shock or granular chlorine remaining at your facility.</p>
           <div class="duties-note-group">
             <label for="shockGranular">Amount remaining (%)</label>
             <input type="number" id="shockGranular" min="0" max="100" placeholder="0–100" />
           </div>
         </div>
 
-        <!-- CYA per pool -->
+        <!-- CYA per pool — pool selector + dynamic inputs -->
         <div class="duties-photo-group">
           <h3 class="duties-photo-group-title">CYA Levels</h3>
-          <p style="color:#999;font-size:13px;margin-bottom:10px;">Enter CYA reading for each pool at this facility (max 100).</p>
+          <p class="duties-group-desc">Select a pool location to record CYA readings. Enter a value (0–100) for each pool at the selected facility.</p>
+          <div class="duties-pool-row" style="max-width:480px; margin-bottom:14px;">
+            <label for="cyaPoolSelect">Pool Location</label>
+            <select id="cyaPoolSelect">
+              <option value="">Select a pool location…</option>
+            </select>
+          </div>
           <div id="cyaPoolFields" class="duties-cya-fields"></div>
         </div>
       </div>
