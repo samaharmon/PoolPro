@@ -1,5 +1,10 @@
 // home.js – landing page login logic
-import { db, auth, doc, getDoc } from '../firebase.js';
+import { db, auth, doc, getDoc, setDoc, getDocs, collection } from '../firebase.js';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut
+} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 
 const DESTINATIONS = {
   chem: 'chem/chem.html',
@@ -7,20 +12,36 @@ const DESTINATIONS = {
   supervisor: 'chem/chem.html#supervisorDashboard'
 };
 
+const ROLE_STORAGE_KEY = 'chemlogRole';
+
 let pendingTarget = null;
 let currentRole = 'lifeguard';
+let currentView = 'login';
 let employeesCache = [];
-const ROLE_STORAGE_KEY = 'chemlogRole';
+let employeeDocSnapshot = [];
+let homePoolOptions = [];
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
 const form = document.getElementById('homeLoginForm');
+const createAccountForm = document.getElementById('homeCreateAccountForm');
 const usernameInput = document.getElementById('homeUsernameInput');
 const passwordInput = document.getElementById('homePasswordInput');
 const usernameLabel = document.getElementById('homeUsernameLabel');
 const passwordLabel = document.getElementById('homePasswordLabel');
 const messageEl = document.getElementById('homeLoginMessage');
+const createMessageEl = document.getElementById('homeCreateAccountMessage');
 const roleToggle = document.getElementById('roleToggle');
+const showCreateAccountBtn = document.getElementById('homeShowCreateAccountBtn');
+const backToLoginBtn = document.getElementById('homeBackToLoginBtn');
+const createUsernameInput = document.getElementById('homeCreateUsernameInput');
+const createFirstNameInput = document.getElementById('homeCreateFirstNameInput');
+const createLastNameInput = document.getElementById('homeCreateLastNameInput');
+const createEmailInput = document.getElementById('homeCreateEmailInput');
+const createPhoneInput = document.getElementById('homeCreatePhoneInput');
+const createPoolInput = document.getElementById('homeCreatePoolInput');
+const createPasswordInput = document.getElementById('homeCreatePasswordInput');
+const createConfirmPasswordInput = document.getElementById('homeCreateConfirmPasswordInput');
 
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -46,6 +67,108 @@ function mountUnifiedFooter() {
   });
 }
 
+function normalizeUsername(raw) {
+  return (raw || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9._-]/g, '');
+}
+
+function normalizePhoneDigits(raw) {
+  return (raw || '').replace(/\D/g, '');
+}
+
+function buildLifeguardAuthEmail(username) {
+  return `${username}@lifeguard.poolpro.local`;
+}
+
+function normalizeEmployeeRecord(rawEmployee) {
+  const employee = rawEmployee || {};
+  const legacyId = (employee.id ?? '').toString().trim();
+  const emailSource = employee.email ?? (legacyId.includes('@') ? legacyId : '');
+  const email = emailSource.toString().trim().toLowerCase();
+  return {
+    ...employee,
+    id: email || legacyId,
+    email,
+    username: normalizeUsername(employee.username || ''),
+    firstName: (employee.firstName ?? '').toString().trim(),
+    lastName: (employee.lastName ?? '').toString().trim(),
+    homePool: (employee.homePool ?? '').toString().trim(),
+    phone: normalizePhoneDigits(employee.phone ?? ''),
+  };
+}
+
+function setMessage(el, text, isError = false) {
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('error', !!text && isError);
+}
+
+function clearMessages() {
+  setMessage(messageEl, '');
+  setMessage(createMessageEl, '');
+}
+
+function resetForms() {
+  form?.reset();
+  createAccountForm?.reset();
+  clearMessages();
+}
+
+function setModalView(view) {
+  currentView = view;
+  form?.classList.toggle('hidden', view !== 'login');
+  createAccountForm?.classList.toggle('hidden', view !== 'create');
+  if (view === 'create') {
+    createUsernameInput?.focus();
+  } else {
+    usernameInput?.focus();
+  }
+}
+
+function getDestinationPath() {
+  return pendingTarget ? DESTINATIONS[pendingTarget] : DESTINATIONS.chem;
+}
+
+function populatePoolOptions() {
+  if (!createPoolInput) return;
+  const currentValue = createPoolInput.value;
+  const values = new Set(
+    [
+      ...homePoolOptions,
+      ...employeesCache.map((employee) => employee.homePool).filter(Boolean),
+    ].map((value) => String(value || '').trim()).filter(Boolean)
+  );
+
+  createPoolInput.innerHTML = '<option value="">Select facility</option>';
+  Array.from(values)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((poolName) => {
+      const option = document.createElement('option');
+      option.value = poolName;
+      option.textContent = poolName;
+      createPoolInput.appendChild(option);
+    });
+  if (currentValue) createPoolInput.value = currentValue;
+}
+
+function persistLifeguardSession(employee, username) {
+  const normalizedEmployee = normalizeEmployeeRecord(employee);
+  sessionStorage.setItem('chemlogRole', 'lifeguard');
+  sessionStorage.setItem('chemlogEmployeeEmail', normalizedEmployee.email || '');
+  sessionStorage.setItem('chemlogEmployeeId', normalizedEmployee.email || normalizedEmployee.id || '');
+  sessionStorage.setItem('chemlogEmployeeUsername', normalizeUsername(username || normalizedEmployee.username || ''));
+  localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
+  localStorage.removeItem('loginToken');
+  localStorage.removeItem('ChemLogSupervisor');
+  localStorage.removeItem('trainingSupervisorLoggedIn');
+  localStorage.removeItem('training_supervisor_logged_in_v1');
+  localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
+}
+
 function setRole(role) {
   currentRole = role;
 
@@ -55,7 +178,7 @@ function setRole(role) {
     console.warn('Could not persist selected role on home page:', err);
   }
 
-  const options = roleToggle.querySelectorAll('.theme-toggle-option');
+  const options = roleToggle?.querySelectorAll('.theme-toggle-option') || [];
   options.forEach((opt) => {
     opt.classList.toggle('active', opt.dataset.role === role);
   });
@@ -65,40 +188,37 @@ function setRole(role) {
     thumb.style.transform = role === 'lifeguard' ? 'translateX(0%)' : 'translateX(100%)';
   }
 
-  
-  const passwordGroup = document.getElementById('homePasswordGroup');
   if (role === 'lifeguard') {
-    usernameLabel.textContent = 'Email';
-    usernameInput.type = 'email';
-    if (passwordGroup) passwordGroup.style.display = 'none';
+    usernameLabel.textContent = 'Username';
+    usernameInput.type = 'text';
+    usernameInput.autocomplete = 'username';
+    passwordLabel.textContent = 'Password';
+    passwordInput.type = 'password';
+    passwordInput.autocomplete = 'current-password';
+    showCreateAccountBtn?.classList.remove('hidden');
   } else {
     usernameLabel.textContent = 'Email';
     usernameInput.type = 'email';
+    usernameInput.autocomplete = 'email';
     passwordLabel.textContent = 'Password';
     passwordInput.type = 'password';
-    if (passwordGroup) passwordGroup.style.display = '';
+    passwordInput.autocomplete = 'current-password';
+    showCreateAccountBtn?.classList.add('hidden');
+    if (currentView === 'create') setModalView('login');
   }
 
-  if (messageEl) {
-    messageEl.textContent = '';
-    messageEl.classList.remove('error');
-  }
+  clearMessages();
 }
 
 function openModal(target) {
   pendingTarget = target;
-
-  // Force role based on which button was clicked; hide the toggle entirely
   const isSupervisorEntry = target === 'supervisor';
   setRole(isSupervisorEntry ? 'supervisor' : 'lifeguard');
-  roleToggle.style.display = 'none';
-
+  if (roleToggle) roleToggle.style.display = 'none';
   modal.style.display = 'block';
   requestAnimationFrame(() => modal.classList.add('visible'));
-
-  usernameInput.value = '';
-  passwordInput.value = '';
-  usernameInput.focus();
+  resetForms();
+  setModalView('login');
 }
 
 function closeModal() {
@@ -109,50 +229,47 @@ function closeModal() {
   pendingTarget = null;
 }
 
-const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
-
-async function authenticateLifeguard(emailRaw) {
-  const trimmedEmail = (emailRaw || '').trim().toLowerCase();
-  if (!trimmedEmail || !trimmedEmail.includes('@')) {
-    throw new Error('Please enter a valid email address.');
-  }
-
-  const employees = Array.isArray(employeesCache) ? employeesCache : [];
-  const match = employees.find(
-    (emp) => (emp.email || emp.id || '').toString().trim().toLowerCase() === trimmedEmail
-  );
-  if (!match) {
-    throw new Error('Email not found. Please contact your supervisor.');
-  }
-
-  // Check 10-day re-auth window
+async function loadEmployees() {
   try {
-    const lastAuth = localStorage.getItem('chemlogLastEmailAuth');
-    const lastEmail = localStorage.getItem('chemlogEmailAuthUser');
-    if (lastAuth && lastEmail === trimmedEmail && (Date.now() - parseInt(lastAuth)) < TEN_DAYS_MS) {
-      // Within window — proceed without email link
-      sessionStorage.setItem('chemlogRole', 'lifeguard');
-      sessionStorage.setItem('chemlogEmployeeEmail', trimmedEmail);
-      localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
-      localStorage.removeItem('loginToken');
-      localStorage.removeItem('ChemLogSupervisor');
-      localStorage.removeItem('trainingSupervisorLoggedIn');
-      localStorage.removeItem('training_supervisor_logged_in_v1');
-      return match;
+    const ref = doc(db, 'settings', 'employees');
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      employeeDocSnapshot = [];
+      employeesCache = [];
+      return;
     }
-  } catch (_) {}
+    const data = snap.data();
+    const raw = Array.isArray(data.employees) ? data.employees : [];
+    employeeDocSnapshot = raw;
+    employeesCache = raw.map(normalizeEmployeeRecord);
+  } catch (err) {
+    console.error('Failed to load employees:', err);
+  }
+}
 
-  // Send Firebase email sign-in link
-  const { sendSignInLinkToEmail } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-  const actionCodeSettings = {
-    url: window.location.origin + window.location.pathname,
-    handleCodeInApp: true,
-  };
-  localStorage.setItem('chemlogEmailForSignIn', trimmedEmail);
-  localStorage.setItem('chemlogEmailLinkTarget', pendingTarget || 'chem');
-  await sendSignInLinkToEmail(auth, trimmedEmail, actionCodeSettings);
+async function loadPools() {
+  try {
+    const snap = await getDocs(collection(db, 'pools'));
+    homePoolOptions = snap.docs
+      .map((docSnap) => (docSnap.data()?.name || docSnap.id || '').toString().trim())
+      .filter(Boolean);
+    populatePoolOptions();
+  } catch (err) {
+    console.error('Failed to load pools:', err);
+  }
+}
 
-  throw new Error('__EMAIL_LINK_SENT__');
+async function getLifeguardAccount(usernameRaw) {
+  const username = normalizeUsername(usernameRaw);
+  if (!username) {
+    throw new Error('Please enter your username.');
+  }
+  const accountRef = doc(db, 'lifeguardAccounts', username);
+  const accountSnap = await getDoc(accountRef);
+  if (!accountSnap.exists()) {
+    throw new Error('Username not found. Create an account or contact your supervisor.');
+  }
+  return { username, ...accountSnap.data() };
 }
 
 function markSupervisorLoggedIn(email) {
@@ -171,109 +288,192 @@ function markSupervisorLoggedIn(email) {
 async function authenticateSupervisor(email, password) {
   const e = (email || '').trim();
   const p = password || '';
-
   if (!e || !p) throw new Error('Please enter your email and password.');
 
   if (window.supervisorSignIn) {
     await window.supervisorSignIn(e, p);
   } else {
-    const { signInWithEmailAndPassword: fbSignIn } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-    await fbSignIn(auth, e, p);
+    await signInWithEmailAndPassword(auth, e, p);
     markSupervisorLoggedIn(e);
   }
 }
 
+async function authenticateLifeguard(usernameRaw, passwordRaw) {
+  const username = normalizeUsername(usernameRaw);
+  const password = passwordRaw || '';
+  if (!username || !password) {
+    throw new Error('Please enter your username and password.');
+  }
+
+  await signInWithEmailAndPassword(auth, buildLifeguardAuthEmail(username), password);
+  try {
+    const account = await getLifeguardAccount(username);
+    const employee =
+      employeesCache.find((entry) => entry.email === String(account.employeeEmail || '').toLowerCase()) ||
+      normalizeEmployeeRecord({
+        email: account.employeeEmail,
+        id: account.employeeEmail,
+        username,
+        firstName: account.firstName,
+        lastName: account.lastName,
+        homePool: account.homePool,
+        phone: account.phone,
+      });
+    persistLifeguardSession(employee, username);
+  } finally {
+    await signOut(auth).catch(() => {});
+  }
+}
+
+async function upsertEmployeeRecord(employee) {
+  const normalizedEmployee = normalizeEmployeeRecord(employee);
+  const employees = Array.isArray(employeeDocSnapshot) ? [...employeeDocSnapshot] : [];
+  const existingIndex = employees.findIndex((entry) => {
+    const normalizedEntry = normalizeEmployeeRecord(entry);
+    return (
+      normalizedEntry.email &&
+      normalizedEmployee.email &&
+      normalizedEntry.email === normalizedEmployee.email
+    );
+  });
+
+  const nextRecord = {
+    ...(existingIndex >= 0 ? employees[existingIndex] : {}),
+    ...normalizedEmployee,
+  };
+
+  if (existingIndex >= 0) {
+    employees[existingIndex] = nextRecord;
+  } else {
+    employees.push(nextRecord);
+  }
+
+  employeeDocSnapshot = employees;
+  employeesCache = employees.map(normalizeEmployeeRecord);
+  await setDoc(doc(db, 'settings', 'employees'), { employees }, { merge: true });
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
-  messageEl.textContent = '';
-  messageEl.classList.remove('error');
+  setMessage(messageEl, '');
 
   try {
     if (currentRole === 'lifeguard') {
-      await authenticateLifeguard(usernameInput.value);
+      await authenticateLifeguard(usernameInput.value, passwordInput.value);
     } else {
       await authenticateSupervisor(usernameInput.value, passwordInput.value);
     }
 
-    const path = pendingTarget ? DESTINATIONS[pendingTarget] : DESTINATIONS.chem;
+    const path = getDestinationPath();
     closeModal();
     window.location.href = path;
   } catch (err) {
-    if (err.message === '__EMAIL_LINK_SENT__') {
-      messageEl.textContent = 'A sign-in link has been sent to your email. Please check your inbox and click the link to continue.';
-      messageEl.classList.remove('error');
-      return;
-    }
     console.error('Home login failed:', err);
     const code = err.code || '';
     const friendly = code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential'
-      ? 'Incorrect email or password.' : (err.message || 'Login failed. Please try again.');
-    messageEl.textContent = friendly;
-    messageEl.classList.add('error');
+      ? (currentRole === 'lifeguard' ? 'Incorrect username or password.' : 'Incorrect email or password.')
+      : (err.message || 'Login failed. Please try again.');
+    setMessage(messageEl, friendly, true);
   }
 }
 
-async function handleEmailLinkCallback() {
-  try {
-    const { isSignInWithEmailLink, signInWithEmailLink } = await import('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js');
-    if (!isSignInWithEmailLink(auth, window.location.href)) return false;
+async function handleCreateAccountSubmit(event) {
+  event.preventDefault();
+  setMessage(createMessageEl, '');
 
-    let email = '';
-    try { email = localStorage.getItem('chemlogEmailForSignIn') || ''; } catch (_) {}
-    if (!email) {
-      email = window.prompt('Please re-enter your email to complete sign-in:') || '';
-    }
-    if (!email) return false;
+  const username = normalizeUsername(createUsernameInput?.value);
+  const firstName = createFirstNameInput?.value.trim() || '';
+  const lastName = createLastNameInput?.value.trim() || '';
+  const email = (createEmailInput?.value.trim() || '').toLowerCase();
+  const phone = normalizePhoneDigits(createPhoneInput?.value);
+  const homePool = createPoolInput?.value || '';
+  const password = createPasswordInput?.value || '';
+  const confirmPassword = createConfirmPasswordInput?.value || '';
 
-    await signInWithEmailLink(auth, email, window.location.href);
-
-    try {
-      localStorage.setItem('chemlogLastEmailAuth', Date.now().toString());
-      localStorage.setItem('chemlogEmailAuthUser', email.toLowerCase());
-      localStorage.removeItem('chemlogEmailForSignIn');
-    } catch (_) {}
-
-    sessionStorage.setItem('chemlogRole', 'lifeguard');
-    sessionStorage.setItem('chemlogEmployeeEmail', email.toLowerCase());
-    localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
-
-    let target = 'chem';
-    try { target = localStorage.getItem('chemlogEmailLinkTarget') || 'chem'; localStorage.removeItem('chemlogEmailLinkTarget'); } catch (_) {}
-
-    // Strip the email link params from the URL then navigate
-    window.history.replaceState({}, document.title, window.location.pathname);
-    window.location.href = DESTINATIONS[target] || DESTINATIONS.chem;
-    return true;
-  } catch (err) {
-    console.error('Email link sign-in error:', err);
-    return false;
+  if (!username) {
+    setMessage(createMessageEl, 'Please choose a username.', true);
+    return;
   }
-}
+  if (username.length < 4) {
+    setMessage(createMessageEl, 'Usernames must be at least 4 characters long.', true);
+    return;
+  }
+  if (!firstName || !lastName || !email || !homePool || !password || !confirmPassword) {
+    setMessage(createMessageEl, 'Please complete every field in the account form.', true);
+    return;
+  }
+  if (!email.includes('@')) {
+    setMessage(createMessageEl, 'Please enter a valid email address.', true);
+    return;
+  }
+  if (password !== confirmPassword) {
+    setMessage(createMessageEl, 'Passwords do not match.', true);
+    return;
+  }
 
-async function loadEmployees() {
+  const accountRef = doc(db, 'lifeguardAccounts', username);
+  const existingAccount = await getDoc(accountRef);
+  if (existingAccount.exists()) {
+    setMessage(createMessageEl, 'That username is already taken. Please choose another one.', true);
+    return;
+  }
+
+  const duplicateEmail = employeesCache.find((employee) => {
+    const normalizedEmployee = normalizeEmployeeRecord(employee);
+    return normalizedEmployee.email === email && normalizedEmployee.username && normalizedEmployee.username !== username;
+  });
+  if (duplicateEmail) {
+    setMessage(createMessageEl, 'That email is already linked to another username. Please contact your supervisor.', true);
+    return;
+  }
+
   try {
-    const ref = doc(db, 'settings', 'employees');
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const data = snap.data();
-      const raw = Array.isArray(data.employees) ? data.employees : [];
-      employeesCache = raw.map((e) => ({
-        id: (e.id ?? '').toString().trim(),
-        email: (e.email ?? e.id ?? '').toString().trim().toLowerCase(),
-        firstName: (e.firstName ?? '').toString().trim(),
-        lastName: (e.lastName ?? '').toString().trim(),
-      }));
-    }
+    await createUserWithEmailAndPassword(auth, buildLifeguardAuthEmail(username), password);
+
+    const employeeRecord = {
+      email,
+      id: email,
+      username,
+      firstName,
+      lastName,
+      phone,
+      homePool,
+    };
+
+    await Promise.all([
+      setDoc(accountRef, {
+        username,
+        authEmail: buildLifeguardAuthEmail(username),
+        employeeEmail: email,
+        firstName,
+        lastName,
+        phone,
+        homePool,
+        createdAt: new Date().toISOString(),
+      }),
+      upsertEmployeeRecord(employeeRecord),
+    ]);
+
+    persistLifeguardSession(employeeRecord, username);
+    await signOut(auth).catch(() => {});
+    closeModal();
+    window.location.href = getDestinationPath();
   } catch (err) {
-    console.error('Failed to load employees:', err);
+    console.error('Create account failed:', err);
+    const code = err.code || '';
+    const friendly = code === 'auth/email-already-in-use'
+      ? 'That username is already in use.'
+      : code === 'auth/weak-password'
+        ? 'Please choose a stronger password.'
+        : (err.message || 'Unable to create your account right now.');
+    setMessage(createMessageEl, friendly, true);
   }
 }
 
 function wireMenu() {
   document.querySelectorAll('.home-menu-item').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const target = btn.dataset.target;
-      openModal(target);
+      openModal(btn.dataset.target);
     });
   });
 }
@@ -288,16 +488,17 @@ function wireRoleToggle() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const handledLink = await handleEmailLinkCallback();
-  if (handledLink) return;
-
   mountUnifiedFooter();
-  loadEmployees();
+  await Promise.all([loadEmployees(), loadPools()]);
+  populatePoolOptions();
   wireMenu();
   wireRoleToggle();
 
-  form.addEventListener('submit', handleSubmit);
-  closeBtn.addEventListener('click', closeModal);
+  form?.addEventListener('submit', handleSubmit);
+  createAccountForm?.addEventListener('submit', handleCreateAccountSubmit);
+  closeBtn?.addEventListener('click', closeModal);
+  showCreateAccountBtn?.addEventListener('click', () => setModalView('create'));
+  backToLoginBtn?.addEventListener('click', () => setModalView('login'));
 
   let initialRole = 'lifeguard';
   try {
@@ -310,6 +511,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   setRole(initialRole);
+  setModalView('login');
 });
 
 window.addEventListener('pageshow', (event) => {

@@ -516,7 +516,11 @@ function populatePoolSelects(pools) {
 // ============================================================
 
 function isSupervisor() {
-  // Check Firebase Auth first (most reliable)
+  try {
+    const storedRole = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
+    if (storedRole === 'lifeguard') return false;
+  } catch (_) { /* ignore */ }
+
   if (auth.currentUser) return true;
   try {
     const token = localStorage.getItem('loginToken');
@@ -609,7 +613,7 @@ function getLoggedInEmployeeName() {
   if (empId && employeesData.length) {
     const emp = employeesData.find(e =>
       String(e.email || '').toLowerCase() === String(empId).toLowerCase() ||
-      String(e.id || '') === String(empId)
+      String(e.id || '').toLowerCase() === String(empId).toLowerCase()
     );
     if (emp) return { firstName: emp.firstName || '', lastName: emp.lastName || '' };
   }
@@ -1067,7 +1071,10 @@ function renderDashboard(recentLogs) {
         const fullName = [firstName, lastName].filter(Boolean).join(' ');
         if (fullName) {
           const empId = log?.employeeId || '';
-          const empRecord = empId ? employeesData.find(e => String(e.id) === String(empId)) : null;
+          const empRecord = empId ? employeesData.find(e =>
+            String(e.id || '').toLowerCase() === String(empId).toLowerCase() ||
+            String(e.email || '').toLowerCase() === String(empId).toLowerCase()
+          ) : null;
           const rawPhone = empRecord?.phone || '';
           const homePool = empRecord?.homePool || '—';
           const digits = rawPhone.replace(/\D/g, '');
@@ -1142,7 +1149,7 @@ async function loadEmployees() {
     const snap = await getDoc(ref);
     if (snap.exists()) {
       const data = snap.data();
-      employeesData = Array.isArray(data.employees) ? data.employees : [];
+      employeesData = Array.isArray(data.employees) ? data.employees.map(normalizeEmployeeRecord) : [];
     } else {
       employeesData = [];
     }
@@ -1154,6 +1161,7 @@ async function loadEmployees() {
 
 async function saveEmployees() {
   try {
+    employeesData = employeesData.map(normalizeEmployeeRecord);
     await setDoc(doc(db, 'settings', 'employees'), { employees: employeesData }, { merge: true });
   } catch (err) {
     console.error('[ChemLog] Error saving employees:', err);
@@ -1315,6 +1323,23 @@ function normalizePhoneDigits(raw) {
   return (raw || '').replace(/\D/g, '');
 }
 
+function normalizeEmployeeRecord(rawEmployee) {
+  const employee = rawEmployee || {};
+  const legacyId = (employee.id ?? '').toString().trim();
+  const emailSource = employee.email ?? (legacyId.includes('@') ? legacyId : '');
+  const email = emailSource.toString().trim().toLowerCase();
+  return {
+    ...employee,
+    id: email || legacyId,
+    email,
+    username: (employee.username ?? '').toString().trim().toLowerCase(),
+    firstName: (employee.firstName ?? '').toString().trim(),
+    lastName: (employee.lastName ?? '').toString().trim(),
+    homePool: (employee.homePool ?? '').toString().trim(),
+    phone: normalizePhoneDigits(employee.phone ?? ''),
+  };
+}
+
 function renderEmployeesTable() {
   const tbody = document.getElementById('employeesTableBody');
   if (!tbody) return;
@@ -1334,10 +1359,13 @@ function renderEmployeesTable() {
     filteredEmployees = filteredEmployees.filter(({ emp }) => marketPoolNames.includes(emp.homePool));
   }
   filteredEmployees.sort((a, b) => {
-    const aNum = Number(String(a.emp.id || '').replace(/\D/g, ''));
-    const bNum = Number(String(b.emp.id || '').replace(/\D/g, ''));
-    if (!Number.isNaN(aNum) && !Number.isNaN(bNum) && aNum !== bNum) return aNum - bNum;
-    return String(a.emp.id || '').localeCompare(String(b.emp.id || ''));
+    const aLast = String(a.emp.lastName || '').toLowerCase();
+    const bLast = String(b.emp.lastName || '').toLowerCase();
+    if (aLast !== bLast) return aLast.localeCompare(bLast);
+    const aFirst = String(a.emp.firstName || '').toLowerCase();
+    const bFirst = String(b.emp.firstName || '').toLowerCase();
+    if (aFirst !== bFirst) return aFirst.localeCompare(bFirst);
+    return String(a.emp.email || a.emp.id || '').localeCompare(String(b.emp.email || b.emp.id || ''));
   });
 
   // Pagination: show 10 rows per page
@@ -1349,11 +1377,11 @@ function renderEmployeesTable() {
   pageEmployees.forEach(({ emp, index: sourceIndex }) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${emp.email || emp.id || ''}</td>
       <td>${emp.firstName || ''}</td>
       <td>${emp.lastName || ''}</td>
-      <td>${emp.homePool || ''}</td>
+      <td>${emp.email || emp.id || ''}</td>
       <td>${formatPhoneDisplay(emp.phone)}</td>
+      <td>${emp.homePool || ''}</td>
       <td class="actions-cell"></td>
     `;
     const actionsCell = tr.querySelector('.actions-cell');
@@ -1466,13 +1494,25 @@ function setupEmployeeManagement() {
       const lastName = document.getElementById('employeeLastNameInput')?.value.trim();
       const homePool = document.getElementById('employeeHomePoolInput')?.value || '';
       const phone = normalizePhoneDigits(document.getElementById('employeePhoneInput')?.value);
-      if (!email || !email.includes('@') || !lastName) { alert('Email and Last Name are required.'); return; }
+      if (!email || !email.includes('@') || !firstName || !lastName || !homePool) {
+        alert('Preferred First Name, Last Name, Email, and Home Pool are required.');
+        return;
+      }
       const wasEditing = editingEmployeeIdx >= 0;
+      const nextEmployee = normalizeEmployeeRecord({
+        ...(wasEditing ? employeesData[editingEmployeeIdx] : {}),
+        email,
+        id: email,
+        firstName,
+        lastName,
+        homePool,
+        phone
+      });
       if (wasEditing) {
-        employeesData[editingEmployeeIdx] = { email, id: email, firstName, lastName, homePool, phone };
+        employeesData[editingEmployeeIdx] = nextEmployee;
         editingEmployeeIdx = -1;
       } else {
-        employeesData.push({ email, id: email, firstName, lastName, homePool, phone });
+        employeesData.push(nextEmployee);
       }
       addBtn.textContent = 'Add';
       await saveEmployees();
@@ -1506,19 +1546,43 @@ function setupEmployeeManagement() {
           if (!XLSX) { alert('XLSX library not loaded.'); return; }
           const wb = XLSX.read(evt.target.result, { type: 'binary' });
           const ws = wb.Sheets[wb.SheetNames[0]];
-          const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-          const newEmps = [];
-          // Expected columns: Employee ID, Last Name, Phone[, First Name]
-          for (let i = 1; i < data.length; i++) {
-            const row = data[i];
-            if (!row[0]) continue;
-            newEmps.push({
-              id: String(row[0] || '').trim(),
-              lastName: String(row[1] || '').trim(),
-              phone: String(row[2] || '').trim(),
-              firstName: String(row[3] || '').trim()
-            });
-          }
+          const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+          const newEmps = rows
+            .map((row) => {
+              const data = Object.fromEntries(
+                Object.entries(row).map(([key, value]) => [String(key || '').trim().toLowerCase(), value])
+              );
+              const email = String(
+                data.email ||
+                data['email address'] ||
+                data['employee email'] ||
+                ''
+              ).trim().toLowerCase();
+              const firstName = String(
+                data['preferred first name'] ||
+                data['first name'] ||
+                data.firstname ||
+                ''
+              ).trim();
+              const lastName = String(data['last name'] || data.lastname || '').trim();
+              const phone = String(data['phone number'] || data.phone || '').trim();
+              const homePool = String(
+                data['home pool'] ||
+                data['home facility'] ||
+                data.facility ||
+                ''
+              ).trim();
+              if (!email) return null;
+              return normalizeEmployeeRecord({
+                email,
+                id: email,
+                firstName,
+                lastName,
+                phone,
+                homePool
+              });
+            })
+            .filter(Boolean);
           employeesData = [...employeesData, ...newEmps];
           await saveEmployees();
           renderEmployeesTable();
@@ -2038,7 +2102,8 @@ window.getEmployeeByID = function (idOrEmail) {
   const val = String(idOrEmail).toLowerCase();
   return employeesData.find(e =>
     String(e.email || '').toLowerCase() === val ||
-    String(e.id || '').toLowerCase() === val
+    String(e.id || '').toLowerCase() === val ||
+    String(e.username || '').toLowerCase() === val
   ) || null;
 };
 window.getEmployeeByEmail = window.getEmployeeByID;
@@ -2104,7 +2169,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
   // Firebase Auth state listener — keeps localStorage flags in sync and updates nav
   onAuthStateChanged(auth, (user) => {
+    const role = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
     if (user) {
+      if (role === 'lifeguard') {
+        signOut(auth).catch(() => {});
+        window.setupDropdownVisibility();
+        return;
+      }
       // Enforce fresh email auth every 10 days.
       let token = null;
       try {

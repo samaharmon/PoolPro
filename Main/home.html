@@ -43,17 +43,66 @@
 
       <form id="homeLoginForm">
         <div class="form-group">
-          <label id="homeUsernameLabel" for="homeUsernameInput">Email</label>
-          <input type="email" id="homeUsernameInput" autocomplete="email">
+          <label id="homeUsernameLabel" for="homeUsernameInput">Username</label>
+          <input type="text" id="homeUsernameInput" autocomplete="username">
         </div>
         <div class="form-group" id="homePasswordGroup">
           <label id="homePasswordLabel" for="homePasswordInput">Password</label>
-          <input type="password" id="homePasswordInput" autocomplete="off">
+          <input type="password" id="homePasswordInput" autocomplete="current-password">
         </div>
 
         <p class="form-message" id="homeLoginMessage"></p>
 
-        <button type="submit" class="submit-btn" id="homeLoginSubmit">Continue</button>
+        <div class="home-form-actions">
+          <button type="submit" class="submit-btn" id="homeLoginSubmit">Continue</button>
+          <button type="button" class="submit-btn secondary-btn" id="homeShowCreateAccountBtn">Create Account</button>
+        </div>
+      </form>
+
+      <form id="homeCreateAccountForm" class="hidden">
+        <div class="home-form-grid">
+          <div class="form-group">
+            <label for="homeCreateUsernameInput">Username</label>
+            <input type="text" id="homeCreateUsernameInput" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label for="homeCreateFirstNameInput">Preferred First Name</label>
+            <input type="text" id="homeCreateFirstNameInput" autocomplete="given-name">
+          </div>
+          <div class="form-group">
+            <label for="homeCreateLastNameInput">Last Name</label>
+            <input type="text" id="homeCreateLastNameInput" autocomplete="family-name">
+          </div>
+          <div class="form-group">
+            <label for="homeCreateEmailInput">Email</label>
+            <input type="email" id="homeCreateEmailInput" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label for="homeCreatePhoneInput">Phone Number</label>
+            <input type="tel" id="homeCreatePhoneInput" autocomplete="tel">
+          </div>
+          <div class="form-group">
+            <label for="homeCreatePoolInput">Home Facility</label>
+            <select id="homeCreatePoolInput">
+              <option value="">Select facility</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="homeCreatePasswordInput">Password</label>
+            <input type="password" id="homeCreatePasswordInput" autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label for="homeCreateConfirmPasswordInput">Confirm Password</label>
+            <input type="password" id="homeCreateConfirmPasswordInput" autocomplete="new-password">
+          </div>
+        </div>
+
+        <p class="form-message" id="homeCreateAccountMessage"></p>
+
+        <div class="home-form-actions">
+          <button type="submit" class="submit-btn" id="homeCreateAccountSubmit">Create Account</button>
+          <button type="button" class="submit-btn secondary-btn" id="homeBackToLoginBtn">Back to Sign In</button>
+        </div>
       </form>
     </div>
   </div>

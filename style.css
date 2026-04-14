@@ -2649,34 +2649,35 @@ textarea,
   background-color: #f9f9f9;
 }
 
-/* Employees table: column widths so "Employee ID" stays on one line */
+/* Employees table column sizing */
 .employee-table th:nth-child(1),
 .employee-table td:nth-child(1) {
-  width: 15%;
+  width: 18%;
 }
 
 .employee-table th:nth-child(2),
-.employee-table td:nth-child(2),
+.employee-table td:nth-child(2) {
+  width: 18%;
+}
+
 .employee-table th:nth-child(3),
 .employee-table td:nth-child(3) {
-  width: 25%;
+  width: 24%;
 }
 
 .employee-table th:nth-child(4),
 .employee-table td:nth-child(4) {
-  width: 20%;
+  width: 16%;
 }
 
 .employee-table th:nth-child(5),
 .employee-table td:nth-child(5) {
-  width: 15%;
-  white-space: nowrap;
-  text-align: center;
+  width: 16%;
 }
 
 .employee-add-row {
   display: grid !important;
-  grid-template-columns: 0.8fr 1fr 1fr 1.2fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 10px 0 0;
 }
@@ -2774,12 +2775,17 @@ textarea,
   width: 100%;
 }
 
-/* Widen Employee ID column so header stays on one line (and prevent wrapping) */
+/* Keep email and phone values from wrapping awkwardly */
+.employee-table th:nth-child(3),
+.employee-table td:nth-child(3),
+.employee-table th:nth-child(4),
+.employee-table td:nth-child(4) {
+  white-space: nowrap;
+}
+
 .employee-table th:nth-child(1),
 .employee-table td:nth-child(1) {
-  width: 13%;
-  min-width: 120px;
-  white-space: nowrap;
+  min-width: 130px;
 }
 
 /* Delete button spacing in table */
@@ -3063,6 +3069,12 @@ body.dark-mode .dash-respondent-tooltip {
   font-size: inherit;
   -webkit-appearance: none;
   appearance: none;
+}
+
+@media (max-width: 768px) {
+  .employee-add-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ============================================================
