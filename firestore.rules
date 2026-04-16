@@ -32,6 +32,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Cleanliness report submissions
+    match /dutySubmissions/{submissionId} {
+      allow read, write: if true;
+    }
+
     // Lifeguard employees who can log in via home screen
     match /employees/{employeeId} {
       allow read, write: if true;
@@ -42,13 +47,13 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Auditing form submissions
-    match /testingResults/{resultId} {
+    // Signed user agreement acknowledgments
+    match /userAgreements/{agreementId} {
       allow read, write: if true;
     }
 
-    // Daily Cleanliness Report (Job Form) submissions
-    match /dutySubmissions/{docId} {
+    // Auditing form submissions
+    match /testingResults/{resultId} {
       allow read, write: if true;
     }
 

@@ -23,6 +23,7 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential
 } from './firebase.js';
+import { requireUserAgreement } from './agreement.js';
 
 // ============================================================
 // PAGE-LOADED FADE-IN
@@ -48,6 +49,7 @@ let securitySettings = {
 };
 let securityIdleTimer = null;
 let securityEventsBound = false;
+let agreementGatePromise = null;
 window.trainingSchedule = trainingSchedule;
 window.addEventListener('load', () => {
   document.body.classList.add('page-loaded');
@@ -62,6 +64,11 @@ window.addEventListener('load', () => {
   }
   window.addEventListener('scroll', updateScrolledHeader, { passive: true });
 })();
+
+// Default to dark mode for all users unless they explicitly changed it.
+if (localStorage.getItem('chemlogDarkMode') === null) {
+  localStorage.setItem('chemlogDarkMode', 'true');
+}
 
 // Apply dark mode immediately (before DOMContentLoaded) to prevent flash
 if (localStorage.getItem('chemlogDarkMode') === 'true') {
@@ -172,6 +179,75 @@ window.logout = async function () {
   window.location.href = (_subDirs.includes(_last) ? '../' : '') + 'index.html';
 };
 
+function clearSupervisorLoginState() {
+  try {
+    localStorage.removeItem('loginToken');
+    localStorage.removeItem('ChemLogSupervisor');
+    localStorage.removeItem('chemlogRole');
+    localStorage.removeItem('trainingSupervisorLoggedIn');
+    localStorage.removeItem('training_supervisor_logged_in_v1');
+    localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
+  } catch (_) { /* ignore */ }
+}
+
+function getStoredSupervisorEmail() {
+  try {
+    const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
+    return (token?.username || '').toString().trim().toLowerCase();
+  } catch (_) {
+    return '';
+  }
+}
+
+function getCurrentAgreementContext() {
+  const storedRole = (sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole') || '').toLowerCase();
+
+  if (storedRole === 'lifeguard') {
+    const email = (sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId') || '').trim().toLowerCase();
+    const username = (sessionStorage.getItem('chemlogEmployeeUsername') || '').trim().toLowerCase();
+    const firstName = (sessionStorage.getItem('chemlogEmployeeFirstName') || '').trim();
+    const lastName = (sessionStorage.getItem('chemlogEmployeeLastName') || '').trim();
+    if (!email && !username) return null;
+    return {
+      role: 'lifeguard',
+      email,
+      username,
+      firstName,
+      lastName,
+      displayName: `${firstName} ${lastName}`.trim(),
+      employeeId: email || username,
+    };
+  }
+
+  const email = (auth.currentUser?.email || getStoredSupervisorEmail()).trim().toLowerCase();
+  if (!email) return null;
+  return {
+    role: 'supervisor',
+    email,
+    username: email,
+    displayName: (auth.currentUser?.displayName || '').trim(),
+    employeeId: email,
+  };
+}
+
+async function enforceAgreementForCurrentUser() {
+  if (agreementGatePromise) return agreementGatePromise;
+  const context = getCurrentAgreementContext();
+  if (!context) return true;
+
+  agreementGatePromise = requireUserAgreement(context, {
+    onDecline: async () => {
+      await window.logout();
+    },
+  });
+
+  try {
+    return await agreementGatePromise;
+  } finally {
+    agreementGatePromise = null;
+  }
+}
+
 // Firebase Auth sign-in bridge — used by home.js and training.js
 window.supervisorSignIn = async function (email, password) {
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
@@ -183,6 +259,13 @@ window.supervisorSignIn = async function (email, password) {
   localStorage.setItem('training_supervisor_logged_in_v1', 'true');
   localStorage.setItem('chemlogTrainingSupervisorLoggedIn', 'true');
   localStorage.setItem('chemlogRole', 'supervisor');
+
+  const accepted = await enforceAgreementForCurrentUser();
+  if (!accepted) {
+    const err = new Error('You must accept the user agreement before using PoolPro.');
+    err.code = 'agreement/required';
+    throw err;
+  }
   return userCredential;
 };
 
@@ -2184,7 +2267,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
   // Firebase Auth state listener — keeps localStorage flags in sync and updates nav
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     const role = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
     if (user) {
       if (role === 'lifeguard') {
@@ -2208,12 +2291,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         localStorage.setItem('ChemLogSupervisor', 'true');
         localStorage.setItem('chemlogTrainingSupervisorLoggedIn', 'true');
+        await enforceAgreementForCurrentUser();
       }
     } else {
       // Signed out: clear supervisor flags (but don't redirect — may be lifeguard session)
-      localStorage.removeItem('loginToken');
-      localStorage.removeItem('ChemLogSupervisor');
-      localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
+      clearSupervisorLoginState();
     }
     window.setupDropdownVisibility();
   });
@@ -2238,6 +2320,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadEmployees();
   setupEmployeeManagement();
   setupEmployeeOverlay();
+  await enforceAgreementForCurrentUser();
   setupDeleteAllEmployees();
   setupEmployeeFilters();
   setupSecuritySettingsUI();
@@ -2265,7 +2348,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadDashboardData();
   }
 
-  // Supervisor Dashboard tab switching (Pool Chemistry vs Job Form Submissions)
+  // Supervisor Dashboard tab switching (Pool Chemistry vs Cleanliness Reports)
   const dashTabs = document.querySelectorAll('[data-dash-tab]');
   dashTabs.forEach(tab => {
     tab.addEventListener('click', () => {
@@ -2309,7 +2392,7 @@ function renderJobFormSubmissions(submissions, container) {
   container.innerHTML = '';
 
   if (!submissions.length) {
-    container.innerHTML = '<p style="padding:16px;color:#666;">No job form submissions yet.</p>';
+    container.innerHTML = '<p style="padding:16px;color:#666;">No cleanliness reports yet.</p>';
     return;
   }
 
@@ -2379,7 +2462,7 @@ function renderJobFormSubmissions(submissions, container) {
         table.className = 'data-table dashboard-pool-table';
         table.style.width = '100%';
         table.innerHTML = `<thead><tr>
-          <th>Employee ID</th>
+          <th>Submitted By</th>
           <th>Photos</th>
           <th>Notes</th>
           <th>Submitted</th>
@@ -2390,15 +2473,22 @@ function renderJobFormSubmissions(submissions, container) {
           const tr = document.createElement('tr');
           const ts = sub.timestamp?.toDate ? sub.timestamp.toDate() : null;
           const timeStr = ts ? ts.toLocaleString() : '—';
-          const photoCells = (sub.photos || []).map(p =>
+          const photoGroups = sub.photos && typeof sub.photos === 'object'
+            ? Object.values(sub.photos).flat()
+            : [];
+          const photoCells = photoGroups.map((p) =>
             `<a href="${p.url}" target="_blank" rel="noopener">
                <img src="${p.url}" alt="Photo" style="width:60px;height:60px;object-fit:cover;cursor:pointer;border:1px solid #ccc;margin:2px;"
                  onclick="event.preventDefault();openPhotoModal('${p.url}')" />
              </a>`
           ).join('');
-          tr.innerHTML = `<td>${sub.guardId || '—'}</td>
+          const noteParts = [
+            sub.damagedNotes,
+            sub.otherNotes
+          ].filter(Boolean);
+          tr.innerHTML = `<td>${sub.submitterEmail || '—'}</td>
             <td style="white-space:nowrap;">${photoCells || '—'}</td>
-            <td>${sub.notes || '—'}</td>
+            <td>${noteParts.join('<br><br>') || '—'}</td>
             <td style="white-space:nowrap;">${timeStr}</td>`;
           tbody.appendChild(tr);
         });

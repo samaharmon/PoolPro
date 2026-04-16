@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta http-equiv="refresh" content="0; url=../index.html">
-  <title>ChemLog</title>
+  <title>PoolPro</title>
 </head>
 <body>
   <p>Redirecting… <a href="../index.html">Click here if not redirected.</a></p>
@@ -110,19 +110,11 @@
         <p class="home-verify-copy" id="homeVerifySubtitle"></p>
 
         <div class="home-verify-methods">
-          <button type="button" class="submit-btn secondary-btn" id="homeVerifyEmailBtn">Use Email</button>
-          <button type="button" class="submit-btn secondary-btn" id="homeVerifySmsBtn">Use Text Message</button>
+          <button type="button" class="submit-btn" id="homeVerifyEmailBtn">Send Verification Email</button>
+          <button type="button" class="submit-btn secondary-btn" id="homeVerifyResendBtn">Resend Verification Email</button>
         </div>
 
-        <div id="homeVerifyCodeGroup" class="hidden">
-          <div class="form-group">
-            <label for="homeVerifyCodeInput">Text Message Code</label>
-            <input type="text" id="homeVerifyCodeInput" inputmode="numeric" autocomplete="one-time-code">
-          </div>
-          <button type="submit" class="submit-btn" id="homeVerifyCodeSubmit">Verify Code</button>
-        </div>
-
-        <div id="homeRecaptchaContainer" class="home-recaptcha"></div>
+        <p class="home-verify-timer" id="homeVerifyCooldownText"></p>
 
         <p class="form-message" id="homeVerifyMessage"></p>
 

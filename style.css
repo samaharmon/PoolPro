@@ -22,6 +22,20 @@ body > .container {
   flex: 1;
 }
 
+#mainForm,
+#empPageContent,
+#testPageContent {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#mainForm > .container,
+#empPageContent > .container,
+#testPageContent > .container {
+  flex: 1;
+}
+
 
 body.page-loaded {
     opacity: 1;

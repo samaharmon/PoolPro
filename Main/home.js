@@ -1,5 +1,6 @@
 // home.js – landing page login logic
 import { db, auth, doc, getDoc, setDoc, getDocs, collection, onAuthStateChanged } from '../firebase.js';
+import { requireUserAgreement } from '../agreement.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -7,10 +8,7 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   EmailAuthProvider,
-  reauthenticateWithCredential,
-  RecaptchaVerifier,
-  linkWithPhoneNumber,
-  reauthenticateWithPhoneNumber
+  reauthenticateWithCredential
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 
 const DESTINATIONS = {
@@ -23,6 +21,7 @@ const ROLE_STORAGE_KEY = 'chemlogRole';
 const DEVICE_ID_KEY = 'poolproDeviceId';
 const VERIFY_CONTEXT_KEY = 'poolproPendingLifeguardVerification';
 const VERIFY_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
+const VERIFY_EMAIL_RESEND_MS = 30 * 1000;
 const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 
 let pendingTarget = null;
@@ -32,7 +31,8 @@ let employeesCache = [];
 let employeeDocSnapshot = [];
 let homePoolOptions = [];
 let pendingVerification = null;
-let phoneRecaptchaVerifier = null;
+let verifyCooldownUntil = 0;
+let verifyCooldownTimer = null;
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
@@ -48,10 +48,9 @@ const messageEl = document.getElementById('homeLoginMessage');
 const createMessageEl = document.getElementById('homeCreateAccountMessage');
 const verifyMessageEl = document.getElementById('homeVerifyMessage');
 const verifySubtitleEl = document.getElementById('homeVerifySubtitle');
-const verifyCodeGroup = document.getElementById('homeVerifyCodeGroup');
-const verifyCodeInput = document.getElementById('homeVerifyCodeInput');
 const verifyEmailBtn = document.getElementById('homeVerifyEmailBtn');
-const verifySmsBtn = document.getElementById('homeVerifySmsBtn');
+const verifyResendBtn = document.getElementById('homeVerifyResendBtn');
+const verifyCooldownText = document.getElementById('homeVerifyCooldownText');
 const verifyBackBtn = document.getElementById('homeVerifyBackBtn');
 const roleToggle = document.getElementById('roleToggle');
 const showCreateAccountBtn = document.getElementById('homeShowCreateAccountBtn');
@@ -214,6 +213,37 @@ function hasPendingEmailVerification() {
   return !!loadPendingVerificationContext();
 }
 
+function stopVerifyCooldownTimer() {
+  if (verifyCooldownTimer) {
+    clearInterval(verifyCooldownTimer);
+    verifyCooldownTimer = null;
+  }
+}
+
+function updateVerifyCooldownUi() {
+  const remainingMs = Math.max(0, verifyCooldownUntil - Date.now());
+  const remainingSeconds = Math.ceil(remainingMs / 1000);
+  const coolingDown = remainingMs > 0;
+
+  if (verifyResendBtn) verifyResendBtn.disabled = coolingDown;
+  if (verifyCooldownText) {
+    verifyCooldownText.textContent = coolingDown
+      ? `You can resend the verification email in ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}.`
+      : '';
+  }
+
+  if (!coolingDown) {
+    stopVerifyCooldownTimer();
+  }
+}
+
+function startVerifyCooldown() {
+  verifyCooldownUntil = Date.now() + VERIFY_EMAIL_RESEND_MS;
+  updateVerifyCooldownUi();
+  stopVerifyCooldownTimer();
+  verifyCooldownTimer = window.setInterval(updateVerifyCooldownUi, 1000);
+}
+
 function setMessage(el, text, isError = false) {
   if (!el) return;
   el.textContent = text || '';
@@ -229,14 +259,10 @@ function clearMessages() {
 function resetVerificationState() {
   pendingVerification = null;
   if (verifyForm) verifyForm.reset();
-  verifyCodeGroup?.classList.add('hidden');
   if (verifySubtitleEl) verifySubtitleEl.textContent = '';
-  if (phoneRecaptchaVerifier) {
-    try { phoneRecaptchaVerifier.clear(); } catch (_) { /* ignore */ }
-    phoneRecaptchaVerifier = null;
-  }
-  const recaptchaContainer = document.getElementById('homeRecaptchaContainer');
-  if (recaptchaContainer) recaptchaContainer.innerHTML = '';
+  verifyCooldownUntil = 0;
+  updateVerifyCooldownUi();
+  stopVerifyCooldownTimer();
 }
 
 function resetForms() {
@@ -310,12 +336,55 @@ function persistLifeguardSession(employee, username) {
   sessionStorage.setItem('chemlogEmployeeEmail', normalizedEmployee.email || '');
   sessionStorage.setItem('chemlogEmployeeId', normalizedEmployee.email || normalizedEmployee.id || '');
   sessionStorage.setItem('chemlogEmployeeUsername', normalizeUsername(username || normalizedEmployee.username || ''));
+  sessionStorage.setItem('chemlogEmployeeFirstName', normalizedEmployee.firstName || '');
+  sessionStorage.setItem('chemlogEmployeeLastName', normalizedEmployee.lastName || '');
   localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
   localStorage.removeItem('loginToken');
   localStorage.removeItem('ChemLogSupervisor');
   localStorage.removeItem('trainingSupervisorLoggedIn');
   localStorage.removeItem('training_supervisor_logged_in_v1');
   localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
+}
+
+function clearLifeguardSession() {
+  sessionStorage.removeItem('chemlogRole');
+  sessionStorage.removeItem('chemlogEmployeeEmail');
+  sessionStorage.removeItem('chemlogEmployeeId');
+  sessionStorage.removeItem('chemlogEmployeeUsername');
+  sessionStorage.removeItem('chemlogEmployeeFirstName');
+  sessionStorage.removeItem('chemlogEmployeeLastName');
+  localStorage.removeItem(ROLE_STORAGE_KEY);
+}
+
+function clearSupervisorSession() {
+  localStorage.removeItem('trainingSupervisorLoggedIn');
+  localStorage.removeItem('training_supervisor_logged_in_v1');
+  localStorage.removeItem('ChemLogSupervisor');
+  localStorage.removeItem('loginToken');
+  localStorage.removeItem(ROLE_STORAGE_KEY);
+}
+
+function buildLifeguardAgreementContext(account, username) {
+  return {
+    role: 'lifeguard',
+    email: (account?.employeeEmail || account?.authEmail || '').toString().trim().toLowerCase(),
+    username: normalizeUsername(username || account?.username || ''),
+    firstName: (account?.firstName || '').toString().trim(),
+    lastName: (account?.lastName || '').toString().trim(),
+    displayName: `${account?.firstName || ''} ${account?.lastName || ''}`.trim(),
+    employeeId: (account?.employeeEmail || account?.authEmail || '').toString().trim().toLowerCase(),
+  };
+}
+
+function buildSupervisorAgreementContext(email) {
+  const user = auth.currentUser;
+  return {
+    role: 'supervisor',
+    email: (user?.email || email || '').toString().trim().toLowerCase(),
+    username: (user?.email || email || '').toString().trim().toLowerCase(),
+    displayName: (user?.displayName || '').toString().trim(),
+    employeeId: (user?.email || email || '').toString().trim().toLowerCase(),
+  };
 }
 
 function setRole(role) {
@@ -428,7 +497,43 @@ async function getLifeguardAccount(usernameRaw) {
   if (!username) throw new Error('Please enter your username.');
   const accountRef = doc(db, 'lifeguardAccounts', username);
   const accountSnap = await getDoc(accountRef);
-  if (!accountSnap.exists()) throw new Error('Username not found. Create an account or contact your supervisor.');
+  if (!accountSnap.exists()) {
+    if (!employeesCache.length) {
+      await loadEmployees();
+    }
+
+    const matchingEmployee = employeesCache.find((employee) => {
+      const normalizedEmployee = normalizeEmployeeRecord(employee);
+      const employeeUsername = normalizeUsername(normalizedEmployee.username || '');
+      const employeeEmail = (normalizedEmployee.email || '').toLowerCase();
+      const emailLocalPart = employeeEmail.includes('@') ? employeeEmail.split('@')[0] : '';
+      return employeeUsername === username || employeeEmail === username || emailLocalPart === username;
+    });
+
+    if (matchingEmployee?.email) {
+      const repairedAccount = {
+        username,
+        authEmail: matchingEmployee.email,
+        employeeEmail: matchingEmployee.email,
+        firstName: matchingEmployee.firstName || '',
+        lastName: matchingEmployee.lastName || '',
+        phone: matchingEmployee.phone || '',
+        homePool: matchingEmployee.homePool || '',
+        phoneLinked: false,
+        repairedFromEmployeesAt: new Date().toISOString(),
+      };
+
+      try {
+        await setDoc(accountRef, repairedAccount, { merge: true });
+      } catch (repairError) {
+        console.warn('Could not repair missing lifeguard account from Employees data:', repairError);
+      }
+
+      return repairedAccount;
+    }
+
+    throw new Error('Username not found. Create an account first, or ask your supervisor to confirm your Employees entry has the correct username.');
+  }
   return { username, ...accountSnap.data() };
 }
 
@@ -481,6 +586,14 @@ async function finalizeLifeguardAccess({ username, account, target, method }) {
   await signOut(auth).catch(() => {});
   resetVerificationState();
   closeModal();
+
+  const accepted = await requireUserAgreement(buildLifeguardAgreementContext(account, username), {
+    onDecline: async () => {
+      clearLifeguardSession();
+    },
+  });
+  if (!accepted) return;
+
   window.location.href = target || getDestinationPath();
 }
 
@@ -490,19 +603,26 @@ function openVerificationView({ username, account, target, force = false, origin
     account,
     target: target || getDestinationPath(),
     origin,
-    confirmationResult: null,
     force,
   };
 
-  const phoneNumber = normalizePhoneE164(account.phone);
   if (verifySubtitleEl) {
-    verifySubtitleEl.textContent = `Choose how to verify this ${force ? 'new' : ''} device for ${account.firstName || 'your'} account. Email will go to ${maskEmail(account.employeeEmail)}.${phoneNumber ? ` Text messages will go to ${maskPhone(phoneNumber)}.` : ''}`;
+    verifySubtitleEl.textContent = `Check your email to verify this ${force ? 'new ' : ''}device for ${account.firstName || 'your'} account. Verification emails will be sent to ${maskEmail(account.employeeEmail || getAuthEmail(account))}.`;
   }
-  verifySmsBtn?.toggleAttribute('disabled', !phoneNumber);
-  verifyCodeGroup?.classList.add('hidden');
-  verifyCodeInput && (verifyCodeInput.value = '');
-  setMessage(verifyMessageEl, 'Verification is required on new devices and every 10 days.');
+  setMessage(verifyMessageEl, 'Verification is required on new devices and every 10 days. We are sending a verification email now.');
   setModalView('verify');
+  sendEmailVerificationLink({ isResend: false }).catch((err) => {
+    console.error('Unable to send initial verification email:', err);
+    const code = err.code || '';
+    const friendly = code === 'auth/operation-not-allowed'
+      ? 'Enable Email Link sign-in in Firebase Authentication to use email verification.'
+      : code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri'
+        ? 'Add this site domain to Firebase Authentication > Settings > Authorized domains, then try again.'
+      : code === 'auth/invalid-email'
+        ? 'This account email is invalid in Firebase. Update the employee email and try again.'
+      : (err.message || 'Unable to send the verification email.');
+    setMessage(verifyMessageEl, friendly, true);
+  });
 }
 
 function markSupervisorLoggedIn(email) {
@@ -556,30 +676,14 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
   return { requiresVerification: false };
 }
 
-async function ensurePhoneVerifier() {
-  const user = auth.currentUser || await waitForAuthUser();
-  if (!user) throw new Error('Please sign in again before requesting a text message.');
-
-  if (phoneRecaptchaVerifier) {
-    try { phoneRecaptchaVerifier.clear(); } catch (_) { /* ignore */ }
-    phoneRecaptchaVerifier = null;
-  }
-
-  const container = document.getElementById('homeRecaptchaContainer');
-  if (!container) throw new Error('Phone verification is not available right now.');
-  container.innerHTML = '';
-
-  phoneRecaptchaVerifier = new RecaptchaVerifier(auth, container, {
-    size: 'invisible',
-  });
-  await phoneRecaptchaVerifier.render();
-  return phoneRecaptchaVerifier;
-}
-
-async function sendEmailVerificationLink() {
+async function sendEmailVerificationLink({ isResend = false } = {}) {
   if (!pendingVerification) throw new Error('No verification session is active.');
   const email = pendingVerification.account.employeeEmail || getAuthEmail(pendingVerification.account);
   if (!email) throw new Error('This account does not have an email address on file.');
+  if (isResend && Date.now() < verifyCooldownUntil) {
+    const remainingSeconds = Math.ceil((verifyCooldownUntil - Date.now()) / 1000);
+    throw new Error(`Please wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending the verification email.`);
+  }
 
   savePendingVerificationContext({
     username: pendingVerification.username,
@@ -592,52 +696,16 @@ async function sendEmailVerificationLink() {
     handleCodeInApp: true,
   });
 
-  setMessage(verifyMessageEl, `Verification link sent to ${maskEmail(email)}. Open it on this device to finish signing in.`);
-}
+  try {
+    localStorage.setItem('poolproEmailForSignIn', email);
+  } catch (_) { /* ignore */ }
 
-async function sendSmsVerificationCode() {
-  if (!pendingVerification) throw new Error('No verification session is active.');
-  const phoneNumber = normalizePhoneE164(pendingVerification.account.phone);
-  if (!phoneNumber) throw new Error('Add a valid phone number before using text-message verification.');
-
-  const user = auth.currentUser || await waitForAuthUser();
-  if (!user) throw new Error('Please sign in again before requesting a text message.');
-
-  const verifier = await ensurePhoneVerifier();
-  const hasPhoneProvider = user.providerData.some((provider) => provider.providerId === 'phone');
-  pendingVerification.confirmationResult = hasPhoneProvider
-    ? await reauthenticateWithPhoneNumber(user, phoneNumber, verifier)
-    : await linkWithPhoneNumber(user, phoneNumber, verifier);
-
-  verifyCodeGroup?.classList.remove('hidden');
-  verifyCodeInput?.focus();
-  setMessage(verifyMessageEl, `Verification code sent to ${maskPhone(phoneNumber)}.`);
-}
-
-async function submitSmsVerificationCode(event) {
-  event.preventDefault();
-  if (!pendingVerification?.confirmationResult) {
-    setMessage(verifyMessageEl, 'Request a text message first.', true);
-    return;
-  }
-
-  const code = (verifyCodeInput?.value || '').trim();
-  if (!code) {
-    setMessage(verifyMessageEl, 'Enter the text message code to continue.', true);
-    return;
-  }
-
-  await pendingVerification.confirmationResult.confirm(code);
-  const account = {
-    ...pendingVerification.account,
-    phoneLinked: true,
-  };
-  await finalizeLifeguardAccess({
-    username: pendingVerification.username,
-    account,
-    target: pendingVerification.target,
-    method: 'sms',
-  });
+  auth.useDeviceLanguage();
+  startVerifyCooldown();
+  setMessage(
+    verifyMessageEl,
+    `${isResend ? 'Verification email resent' : 'Verification email sent'} to ${maskEmail(email)}. Open it on this device to finish signing in. If it does not appear soon, check spam or junk.`
+  );
 }
 
 async function handleSubmit(event) {
@@ -653,12 +721,21 @@ async function handleSubmit(event) {
 
     await authenticateSupervisor(usernameInput.value, passwordInput.value);
     closeModal();
+    const accepted = await requireUserAgreement(buildSupervisorAgreementContext(usernameInput.value), {
+      onDecline: async () => {
+        await signOut(auth).catch(() => {});
+        clearSupervisorSession();
+      },
+    });
+    if (!accepted) return;
     window.location.href = getDestinationPath();
   } catch (err) {
     console.error('Home login failed:', err);
     const code = err.code || '';
     const friendly = code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential'
       ? (currentRole === 'lifeguard' ? 'Incorrect username or password.' : 'Incorrect email or password.')
+      : code === 'agreement/required'
+        ? 'You must accept the user agreement before using PoolPro.'
       : (err.message || 'Login failed. Please try again.');
     setMessage(messageEl, friendly, true);
   }
@@ -815,7 +892,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   form?.addEventListener('submit', handleSubmit);
   createAccountForm?.addEventListener('submit', handleCreateAccountSubmit);
-  verifyForm?.addEventListener('submit', submitSmsVerificationCode);
   closeBtn?.addEventListener('click', async () => {
     if (auth.currentUser && currentRole === 'lifeguard' && !hasPendingEmailVerification()) {
       await signOut(auth).catch(() => {});
@@ -839,23 +915,29 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   verifyEmailBtn?.addEventListener('click', async () => {
     try {
-      await sendEmailVerificationLink();
+      await sendEmailVerificationLink({ isResend: false });
     } catch (err) {
       const code = err.code || '';
       const friendly = code === 'auth/operation-not-allowed'
         ? 'Enable Email Link sign-in in Firebase Authentication to use email verification.'
+        : code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri'
+          ? 'Add this site domain to Firebase Authentication > Settings > Authorized domains, then try email verification again.'
+        : code === 'auth/invalid-email'
+          ? 'This account email is invalid in Firebase. Update the employee email and try again.'
         : (err.message || 'Unable to send the verification email.');
       setMessage(verifyMessageEl, friendly, true);
     }
   });
-  verifySmsBtn?.addEventListener('click', async () => {
+  verifyResendBtn?.addEventListener('click', async () => {
     try {
-      await sendSmsVerificationCode();
+      await sendEmailVerificationLink({ isResend: true });
     } catch (err) {
       const code = err.code || '';
       const friendly = code === 'auth/operation-not-allowed'
-        ? 'Enable Phone sign-in in Firebase Authentication to use text-message verification.'
-        : (err.message || 'Unable to send the text message.');
+        ? 'Enable Email Link sign-in in Firebase Authentication to use email verification.'
+        : code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri'
+          ? 'Add this site domain to Firebase Authentication > Settings > Authorized domains, then try again.'
+        : (err.message || 'Unable to resend the verification email.');
       setMessage(verifyMessageEl, friendly, true);
     }
   });

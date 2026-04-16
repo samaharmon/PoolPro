@@ -218,9 +218,11 @@ body {
   margin-top: 0;
 }
 
-.home-recaptcha {
-  min-height: 2px;
-  margin-top: 10px;
+.home-verify-timer {
+  min-height: 18px;
+  margin: 0 0 6px;
+  color: #c8c8c8;
+  font-size: 13px;
 }
 
 .home-create-link-btn {
