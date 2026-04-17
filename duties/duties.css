@@ -78,6 +78,10 @@ body.dark-mode .duties-group-desc {
   margin-top: 36px;
 }
 
+.duties-manager-section.duties-section:last-of-type {
+  border-bottom: 2px solid #69140e;
+}
+
 .duties-manager-title {
   color: #69140e;
   border-color: #69140e;

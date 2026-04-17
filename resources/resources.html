@@ -87,6 +87,141 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="settingsOverlay"></div>
+
+  <div id="settingsModal">
+    <div class="modal-content settings-modal-content">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <span class="close" onclick="closeSettings()">&times;</span>
+      </div>
+      <div class="settings-section">
+        <h3>Website Setup</h3>
+        <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
+      </div>
+      <div class="settings-section">
+        <h3>Market</h3>
+        <p class="section-subtitle">Select which markets' pools are visible on the supervisor dashboard.</p>
+        <div id="marketSection" class="sanitation-section overlay-disabled">
+          <div class="market-options">
+            <label class="market-option">
+              <input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Columbia"> Columbia
+            </label>
+            <label class="market-option">
+              <input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Greenville"> Greenville
+            </label>
+            <label class="market-option">
+              <input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Charlotte"> Charlotte
+            </label>
+            <label class="market-option">
+              <input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Charleston"> Charleston
+            </label>
+          </div>
+        </div>
+        <div class="toggle-btn">
+          <div class="sanitation-controls">
+            <button type="button" class="editAndSave active" id="marketEditBtn">Edit</button>
+            <button type="button" class="editAndSave" id="marketSaveBtn" disabled>Save</button>
+          </div>
+        </div>
+      </div>
+      <section class="settings-section settings-group" id="employeeSettings">
+        <h3>Employees</h3>
+        <p class="section-subtitle">Add employee information by uploading a master staffing file, or add employees individually.</p>
+        <div class="settings-row employee-file-row" style="margin-top: 20px;">
+          <input type="file" id="employeeFileInput" accept=".csv,.txt,.xlsx,.xls" />
+          <button type="button" id="employeeDeleteAllBtn" class="submit-btn danger-button employee-delete-inline-btn">Delete All Employees</button>
+        </div>
+        <div class="settings-row employee-add-row">
+          <div class="settings-field">
+            <label for="employeeFirstNameInput">Preferred First Name</label>
+            <input type="text" id="employeeFirstNameInput" />
+          </div>
+          <div class="settings-field">
+            <label for="employeeLastNameInput">Last Name</label>
+            <input type="text" id="employeeLastNameInput" />
+          </div>
+          <div class="settings-field">
+            <label for="employeeIdInput">Email</label>
+            <input type="email" id="employeeIdInput" />
+          </div>
+          <div class="settings-field">
+            <label for="employeePhoneInput">Phone Number</label>
+            <input type="tel" id="employeePhoneInput" />
+          </div>
+          <div class="settings-field">
+            <label for="employeeHomePoolInput">Home Pool</label>
+            <select id="employeeHomePoolInput">
+              <option value="">Select pool</option>
+            </select>
+          </div>
+        </div>
+        <div class="employee-add-btn-row">
+          <button type="button" class="submit-btn button-shadow employee-action-btn" id="employeeAddBtn">Add</button>
+        </div>
+        <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
+          <span class="filter-by-label">Filter By:</span>
+          <select id="employeeMarketFilter" class="training-filter-select">
+            <option value="all">Market</option>
+            <option value="Charleston">Charleston</option>
+            <option value="Charlotte">Charlotte</option>
+            <option value="Columbia">Columbia</option>
+            <option value="Greenville">Greenville</option>
+          </select>
+          <select id="employeePoolFilter" class="training-filter-select">
+            <option value="all">Home Pool</option>
+          </select>
+        </div>
+        <div id="employeeTableSection" class="sanitation-section overlay-disabled">
+          <table class="employee-table">
+            <thead>
+              <tr>
+                <th>Preferred First Name</th>
+                <th>Last Name</th>
+                <th>Email</th>
+                <th>Phone Number</th>
+                <th>Home Pool</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="employeeTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+      <div class="settings-section">
+        <h3>Sanitation Methods</h3>
+        <p class="section-subtitle">Sanitation methods are managed per market. Only markets selected below are shown.</p>
+        <div id="sanitationTablesContainer"></div>
+      </div>
+      <div class="settings-section">
+        <h3>Security</h3>
+        <p class="section-subtitle">Choose session timeout length and whether password confirmation is required before data-clearing actions.</p>
+        <div id="securitySection" class="security-section overlay-disabled">
+          <div id="securityControls" class="sanitation-controls">
+            <button type="button" class="editAndSave active" id="securityEditBtn">Edit</button>
+            <button type="button" class="editAndSave" id="securitySaveBtn" disabled>Save</button>
+          </div>
+          <div class="settings-row" style="margin-top: 16px;">
+            <div class="settings-field">
+              <label for="sessionTimeoutSelect">Session Timeout</label>
+              <select id="sessionTimeoutSelect">
+                <option value="never">Never</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">1 hour</option>
+                <option value="120">2 hours</option>
+              </select>
+            </div>
+          </div>
+          <label class="security-require-row">
+            <input type="checkbox" id="requirePasswordConfirmCheckbox">
+            Require password confirmation before data-clearing actions
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="../script.js"></script>
 </body>
 </html>

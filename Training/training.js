@@ -210,7 +210,7 @@ function buildTimeOptions(selectEl, placeholderText) {
 function normalizeTrainingHeaderCopy() {
   const subtitle = document.querySelector('.header-title-block p, #CCA');
   if (subtitle && subtitle.dataset.headerCopyReady !== 'true') {
-    subtitle.innerHTML = '<span class="header-subtitle-line">Capital City Aquatics &amp;</span><span class="header-subtitle-line">Upstate Pool Management</span>';
+    subtitle.textContent = '';
     subtitle.dataset.headerCopyReady = 'true';
   }
 }
@@ -233,7 +233,25 @@ function wrapResponsiveTables(root = document) {
     table.style.setProperty('--table-min-width', getResponsiveTableMinWidth(table));
     table.parentNode.insertBefore(wrapper, table);
     wrapper.appendChild(table);
+    bindTableScrollShadow(wrapper);
   });
+}
+
+function updateTableScrollShadow(wrapper) {
+  if (!wrapper) return;
+  const hasOverflow = wrapper.scrollWidth > wrapper.clientWidth + 2;
+  wrapper.classList.toggle('has-overflow-right', hasOverflow && (wrapper.scrollLeft + wrapper.clientWidth) < (wrapper.scrollWidth - 2));
+  wrapper.classList.toggle('has-overflow-left', hasOverflow && wrapper.scrollLeft > 2);
+  wrapper.classList.toggle('has-overflow', hasOverflow);
+}
+
+function bindTableScrollShadow(wrapper) {
+  if (!wrapper || wrapper.dataset.shadowBound === 'true') return;
+  wrapper.dataset.shadowBound = 'true';
+  const refresh = () => updateTableScrollShadow(wrapper);
+  wrapper.addEventListener('scroll', refresh, { passive: true });
+  window.addEventListener('resize', refresh, { passive: true });
+  requestAnimationFrame(refresh);
 }
 
 function observeResponsiveTables() {

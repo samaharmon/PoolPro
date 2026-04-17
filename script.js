@@ -128,7 +128,7 @@ function injectResourcesMenuLinks() {
 function normalizeSharedHeaderCopy() {
   document.querySelectorAll('.header-title-block p, .header-left > div:first-child > p').forEach((subtitle) => {
     if (!subtitle || subtitle.dataset.headerCopyReady === 'true') return;
-    subtitle.innerHTML = '<span class="header-subtitle-line">Capital City Aquatics &amp;</span><span class="header-subtitle-line">Upstate Pool Management</span>';
+    subtitle.textContent = '';
     subtitle.dataset.headerCopyReady = 'true';
   });
 }
@@ -154,7 +154,25 @@ function wrapResponsiveTables(root = document) {
     table.style.setProperty('--table-min-width', getResponsiveTableMinWidth(table));
     table.parentNode.insertBefore(wrapper, table);
     wrapper.appendChild(table);
+    bindTableScrollShadow(wrapper);
   });
+}
+
+function updateTableScrollShadow(wrapper) {
+  if (!wrapper) return;
+  const hasOverflow = wrapper.scrollWidth > wrapper.clientWidth + 2;
+  wrapper.classList.toggle('has-overflow-right', hasOverflow && (wrapper.scrollLeft + wrapper.clientWidth) < (wrapper.scrollWidth - 2));
+  wrapper.classList.toggle('has-overflow-left', hasOverflow && wrapper.scrollLeft > 2);
+  wrapper.classList.toggle('has-overflow', hasOverflow);
+}
+
+function bindTableScrollShadow(wrapper) {
+  if (!wrapper || wrapper.dataset.shadowBound === 'true') return;
+  wrapper.dataset.shadowBound = 'true';
+  const refresh = () => updateTableScrollShadow(wrapper);
+  wrapper.addEventListener('scroll', refresh, { passive: true });
+  window.addEventListener('resize', refresh, { passive: true });
+  requestAnimationFrame(refresh);
 }
 
 function observeResponsiveTables() {
@@ -719,13 +737,24 @@ window.setupDropdownVisibility = function () {
       el.style.display = sup ? '' : 'none';
     });
   });
-  document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.toggle('supervisor-active', sup));
+  document.querySelectorAll('.dropdown-menu').forEach((m) => {
+    m.classList.toggle('supervisor-active', sup);
+    m.querySelectorAll('.supervisor-only').forEach((item) => {
+      item.classList.remove('supervisor-group-start', 'supervisor-group-end');
+    });
+    const visibleSupervisorItems = Array.from(m.querySelectorAll('.supervisor-only'))
+      .filter((item) => item.style.display !== 'none');
+    if (visibleSupervisorItems.length) {
+      visibleSupervisorItems[0].classList.add('supervisor-group-start');
+      visibleSupervisorItems[visibleSupervisorItems.length - 1].classList.add('supervisor-group-end');
+    }
+  });
 };
 
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const lastDir = parts.length > 1 ? parts[parts.length - 2] : '';
-  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Employees', 'Testing'];
+  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'resources', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Employees', 'Testing', 'Resources'];
   return subDirs.includes(lastDir) ? '../' : '';
 }
 
@@ -734,13 +763,16 @@ function mountUnifiedFooter() {
   document.querySelectorAll('.footer').forEach((footer) => {
     if (footer.dataset.unifiedFooter === 'true') return;
     footer.innerHTML = `
-      <div class="site-footer-meta">
-        <img src="${prefix}Images/Logos/logo.png" alt="PoolPro logo" class="site-footer-logo">
-        <span class="site-footer-divider" aria-hidden="true"></span>
-        <div class="site-footer-copy">
-          <div class="site-footer-title">PoolPro v3.1</div>
-          <div class="site-footer-date">Published April 2026</div>
+      <div class="site-footer-shell">
+        <div class="site-footer-meta">
+          <img src="${prefix}Images/Logos/logo.png" alt="PoolPro logo" class="site-footer-logo">
+          <span class="site-footer-divider" aria-hidden="true"></span>
+          <div class="site-footer-copy">
+            <div class="site-footer-title">PoolPro v3.1</div>
+            <div class="site-footer-date">Published April 2026</div>
+          </div>
         </div>
+        <div class="site-footer-company-row">Capital City Aquatics &amp; Upstate Pool Management</div>
       </div>
     `;
     footer.dataset.unifiedFooter = 'true';
@@ -2419,11 +2451,6 @@ function setupSettingsAccordions() {
       section.classList.toggle('collapsed', !isCollapsed);
     });
   });
-
-  const firstSection = sections.find((section) => section.dataset.accordionReady === 'true');
-  if (firstSection) {
-    firstSection.classList.remove('collapsed');
-  }
 }
 
 // ============================================================
