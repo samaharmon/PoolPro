@@ -6,6 +6,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   sendSignInLinkToEmail,
+  signInWithEmailLink,
   isSignInWithEmailLink,
   EmailAuthProvider,
   reauthenticateWithCredential
@@ -207,6 +208,29 @@ function clearPendingVerificationContext() {
   try {
     localStorage.removeItem(VERIFY_CONTEXT_KEY);
   } catch (_) { /* ignore */ }
+}
+
+function buildVerificationLinkUrl({ username, email, target }) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('verifyUser', normalizeUsername(username));
+  url.searchParams.set('verifyEmail', (email || '').trim().toLowerCase());
+  url.searchParams.set('verifyTarget', target || getDestinationPath());
+  return url.toString();
+}
+
+function loadVerificationContextFromUrl() {
+  try {
+    const url = new URL(window.location.href);
+    const username = normalizeUsername(url.searchParams.get('verifyUser') || '');
+    const email = (url.searchParams.get('verifyEmail') || '').trim().toLowerCase();
+    const target = url.searchParams.get('verifyTarget') || getDestinationPath();
+    if (!username || !email) return null;
+    return { username, email, target };
+  } catch (_) {
+    return null;
+  }
 }
 
 function hasPendingEmailVerification() {
@@ -611,6 +635,26 @@ function openVerificationView({ username, account, target, force = false, origin
   }
   setMessage(verifyMessageEl, 'Verification is required on new devices and every 10 days. We are sending a verification email now.');
   setModalView('verify');
+
+  const existingContext = loadPendingVerificationContext();
+  const existingEmail = (existingContext?.email || '').trim().toLowerCase();
+  const nextEmail = (account.employeeEmail || getAuthEmail(account) || '').trim().toLowerCase();
+  if (
+    existingContext?.username === pendingVerification.username &&
+    existingEmail &&
+    existingEmail === nextEmail &&
+    Number(existingContext?.sentAt || 0) > 0 &&
+    (Date.now() - Number(existingContext.sentAt)) < VERIFY_EMAIL_RESEND_MS
+  ) {
+    verifyCooldownUntil = Number(existingContext.sentAt) + VERIFY_EMAIL_RESEND_MS;
+    updateVerifyCooldownUi();
+    setMessage(
+      verifyMessageEl,
+      `Verification email already sent to ${maskEmail(nextEmail)}. Open it to finish signing in, or wait for the resend timer if you need another one.`
+    );
+    return;
+  }
+
   sendEmailVerificationLink({ isResend: false }).catch((err) => {
     console.error('Unable to send initial verification email:', err);
     const code = err.code || '';
@@ -689,10 +733,15 @@ async function sendEmailVerificationLink({ isResend = false } = {}) {
     username: pendingVerification.username,
     email,
     target: pendingVerification.target,
+    sentAt: Date.now(),
   });
 
   await sendSignInLinkToEmail(auth, email, {
-    url: `${window.location.origin}${window.location.pathname}`,
+    url: buildVerificationLinkUrl({
+      username: pendingVerification.username,
+      email,
+      target: pendingVerification.target,
+    }),
     handleCodeInApp: true,
   });
 
@@ -834,21 +883,24 @@ async function handleCreateAccountSubmit(event) {
 async function handleEmailLinkCallback() {
   if (!isSignInWithEmailLink(auth, window.location.href)) return false;
 
-  const context = loadPendingVerificationContext();
+  const context = loadPendingVerificationContext() || loadVerificationContextFromUrl();
   if (!context?.username || !context?.email) {
     console.error('Missing pending verification context for email-link authentication.');
-    return false;
-  }
-
-  const user = auth.currentUser || await waitForAuthUser();
-  if (!user) {
-    setMessage(messageEl, 'Please open the email link on the same device you used to sign in.', true);
+    setMessage(messageEl, 'This verification link is missing account details. Please request a new verification email.', true);
     return false;
   }
 
   try {
-    const credential = EmailAuthProvider.credentialWithLink(context.email, window.location.href);
-    await reauthenticateWithCredential(user, credential);
+    savePendingVerificationContext(context);
+
+    const user = auth.currentUser || await waitForAuthUser();
+    if (user) {
+      const credential = EmailAuthProvider.credentialWithLink(context.email, window.location.href);
+      await reauthenticateWithCredential(user, credential);
+    } else {
+      await signInWithEmailLink(auth, context.email, window.location.href);
+    }
+
     const account = await getLifeguardAccount(context.username);
     window.history.replaceState({}, document.title, window.location.pathname);
     await finalizeLifeguardAccess({

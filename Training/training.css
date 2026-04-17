@@ -5,13 +5,14 @@ html {
   background-image: linear-gradient(#69140e, #69140e), linear-gradient(#666, #666);
   background-repeat: no-repeat, no-repeat;
   background-position: top, bottom;
-  background-size: 100% 100px, 100% 100px;
-  height: 100%;
+  background-size: 100% calc(120px + env(safe-area-inset-top, 0px)), 100% calc(120px + env(safe-area-inset-bottom, 0px));
+  min-height: 100%;
 }
 
 body {
   background-color: white;
   min-height: 100vh;
+  min-height: 100dvh;
   background-clip: content-box;
   margin: 0;
   padding: 0;
@@ -19,6 +20,7 @@ body {
   color: #333;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
 }
 
 p {
@@ -30,13 +32,14 @@ p {
 #CCA {
   color: white;
   font-size: 18px;
+  line-height: 1.2;
 }
 
 /* Header – red ChemLog band with square button */
 .app-header {
   background-color: #69140e;
   color: white;
-  padding: 20px;
+  padding: calc(20px + env(safe-area-inset-top, 0px)) 20px 20px;
   position: sticky;
   top: 0;
   z-index: 500;
@@ -51,7 +54,7 @@ p {
 
 .app-header.scrolled {
   min-height: 60px;
-  padding: 10px 20px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 20px 10px;
 }
 
 .app-header .header-title-block {
@@ -68,29 +71,37 @@ p {
 
 /* Logo — same position as main site */
 #logo {
-  position: absolute;
+  position: static !important;
   display: block !important;
   visibility: visible !important;
   opacity: 1 !important;
-  top: 37.75px !important;
-  right: 20px !important;
-  height: 125px !important;
+  top: auto !important;
+  right: auto !important;
+  height: 116px !important;
   width: auto !important;
   object-fit: contain;
   z-index: 10;
   pointer-events: none;
-  transition: height 0.3s ease, top 0.3s ease !important;
+  grid-area: logo;
+  justify-self: end;
+  align-self: center;
+  transition: height 0.3s ease, transform 0.3s ease !important;
 }
 
 .app-header.scrolled #logo {
-  top: 8px !important;
-  height: 44px !important;
+  height: 58px !important;
 }
 
 .training-header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "title logo"
+    "menu logo";
+  align-items: center;
+  column-gap: 24px;
+  row-gap: 16px;
+  width: 100%;
 }
 
 .training-header-right {
@@ -98,9 +109,22 @@ p {
   align-items: center;
 }
 
+.header-title-block {
+  grid-area: title;
+}
+
+.header-title-block p {
+  max-width: 420px;
+}
+
+.header-subtitle-line {
+  display: block;
+}
+
 .app-title {
   font-size: 55px;
   margin: 0;
+  line-height: 0.95;
 }
 
 .supervisor-login-btn {
@@ -123,7 +147,9 @@ p {
 /* Main layout + card panels */
 .training-main {
   flex: 1;
-  margin: 30px 50px;
+  width: min(1320px, 100%);
+  margin: 30px auto;
+  padding: 0 14px;
   display: flex;
   flex-direction: column;
   gap: 50px;
@@ -135,12 +161,13 @@ p {
 }
 
 .card {
-  width: calc(100vw - 100px);
+  width: 100%;
   max-width: 1100px;
   background-color: white;
   padding: 30px;
   border-radius: 0;
   box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
+  overflow-x: hidden;
 }
 
 /* Page-level section title (Training Signup / Training Setup at top of page) */
@@ -153,7 +180,9 @@ p {
   text-transform: uppercase;
   border-bottom: 2px solid #ff8080;
   padding-bottom: 6px;
-  margin: 20px 0 12px;
+  margin: 20px auto 12px;
+  text-align: center;
+  width: min(100%, 1200px);
 }
 
 .training-card h2 {
@@ -170,7 +199,9 @@ p {
   text-transform: uppercase;
   border-bottom: 2px solid #ff8080;
   padding-bottom: 6px;
-  margin: 20px 0 12px;
+  margin: 20px auto 12px;
+  text-align: center;
+  width: min(100%, 1200px);
 }
 
 /* "Scheduling Form" label inside admin panel */
@@ -195,15 +226,16 @@ body.dark-mode .training-admin-section-label {
 .form-row {
   display: flex;
   flex-wrap: wrap;
-  gap: min(10%, 90px);
+  gap: 16px;
   margin-bottom: 15px;
-  margin-right: min(10%, 30px);
-  margin-left: min(10%, 30px);
+  margin-right: 0;
+  margin-left: 0;
 }
 
 .form-group {
-  flex: 1;
-  max-width: 35%;
+  flex: 1 1 calc(50% - 8px);
+  max-width: none;
+  min-width: 0;
   font-family: "Franklin Gothic Medium", Arial, sans-serif;
   font-weight: bold;
 }
@@ -215,8 +247,8 @@ body.dark-mode .training-admin-section-label {
 /* On the Schedule Trainings panel, allow Notes to span both columns */
 #scheduleTrainingsSection .form-group.full-width {
     max-width: 100%;
-    margin-left: 30px;
-    margin-right: 30px;
+    margin-left: 0;
+    margin-right: 0;
 }
 
 .login-input {
@@ -688,15 +720,12 @@ body.dark-mode .attendance-add-grid select.is-placeholder {
     width: 100%;
     padding: 20px;
   }
-
-  .form-row {
-    flex-direction: column;
-  }
 }
 
 /* Menu button styles for dashboard */
 .menu-container {
-    position: relative; /* NEW: Essential for positioning the dropdown menu */
+    grid-area: menu;
+    position: relative;
     /* Adjust margin/padding as needed relative to other header-left content */
     /* Example: If you want menu button higher than text: margin-bottom: auto; */
 }
@@ -1423,6 +1452,37 @@ body.dark-mode #trainingNotesInput {
   cursor: pointer;
 }
 
+.table-scroll-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+  margin: 0 auto;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(255, 255, 255, 0.45) rgba(255, 255, 255, 0.12);
+}
+
+.table-scroll-wrap > table {
+  min-width: max-content;
+  width: max(100%, var(--table-min-width, 720px));
+  margin-top: 0;
+}
+
+.table-scroll-wrap::-webkit-scrollbar {
+  height: 10px;
+}
+
+.table-scroll-wrap::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.table-scroll-wrap::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+}
+
 /* Dim rows where capacity is fully filled */
 .session-row-full td {
   background-color: rgba(105, 20, 14, 0.07) !important;
@@ -1455,7 +1515,7 @@ body.dark-mode .training-filter-select {
   justify-content: center;
   color: #fff;
   text-align: center;
-  padding: 12px 16px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
 }
 
 .site-footer-meta {
@@ -1514,6 +1574,9 @@ body.dark-mode .training-filter-select {
   background: rgba(0, 0, 0, 0.55);
   align-items: center;
   justify-content: center;
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   opacity: 0;
   transition: opacity 0.25s ease;
 }
@@ -1673,11 +1736,11 @@ button:active,
   z-index: 9999;
   padding: 20px 30px 80px 30px;
   border-radius: 0;
-  width: 90vw;
-  max-width: 1100px;
+  width: min(1100px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
   height: auto;
   text-align: left;
-  max-height: 90vh;
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   opacity: 0;
   transition: opacity 0.25s ease, transform 0.25s ease;
@@ -1690,13 +1753,18 @@ button:active,
 
 @media (max-width: 768px) {
   #settingsModal {
-    width: 95vw;
-    max-width: 95vw;
-    height: 95vh;
-    padding: 15px;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    height: auto;
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    padding: 8px;
   }
   .settings-modal-content {
-    padding: 10px;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-top: 0 !important;
+    max-height: none;
+    padding: 14px;
   }
 }
 
@@ -1980,7 +2048,7 @@ body.dark-mode #settingsModal .modal-header {
 
 .employee-add-row {
   display: grid;
-  grid-template-columns: 0.8fr 1fr 1fr 1.2fr auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin: 10px 0 16px;
 }
@@ -2294,53 +2362,138 @@ body.dark-mode .help-text {
 
 /* ---- Mobile responsive ---- */
 @media (max-width: 768px) {
-  /* Training page main container */
-  .training-container,
-  .training-content {
-    padding: 0 10px;
+  .app-header {
+    min-height: auto;
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px;
   }
 
-  /* Roster table: horizontal scroll */
-  .roster-table-wrapper,
-  .training-table-container {
+  .app-title {
+    font-size: clamp(2.2rem, 9vw, 3.2rem);
+  }
+
+  #CCA {
+    font-size: 0.95rem;
+  }
+
+  .training-header-left {
+    column-gap: 14px;
+    row-gap: 12px;
+  }
+
+  .header-title-block p {
+    max-width: min(54vw, 280px);
+  }
+
+  #logo {
+    height: 82px !important;
+    max-width: 34vw;
+  }
+
+  .training-main {
+    margin: 16px auto;
+    padding: 0 10px;
+    gap: 24px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .page-content-title,
+  .training-card h2.page-content-title {
+    font-size: clamp(2.2rem, 13vw, 4rem);
+    margin-top: 8px;
+    width: 100%;
+    max-width: 100%;
+    line-height: 0.98;
+  }
+
+  .training-card > h2,
+  #trainingAdminPanel h2,
+  #scheduleTrainingsSection h2 {
+    text-align: center;
+  }
+
+  .training-filter-bar {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .training-filter-select {
+    width: min(31vw, 150px) !important;
+    min-width: 110px;
+    flex: 0 1 auto;
+  }
+
+  .form-row,
+  .admin-form-cols {
+    gap: 12px;
+  }
+
+  .form-group {
+    flex: 1 1 calc(50% - 6px);
+  }
+
+  .form-group.full-width {
+    flex-basis: 100%;
+  }
+
+  .admin-form-cols {
+    flex-direction: row;
+  }
+
+  .admin-form-col {
+    min-width: 0;
+  }
+
+  .employee-add-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .employee-file-row {
+    align-items: flex-start;
+  }
+
+  .employee-delete-inline-btn {
+    margin-left: 0;
+  }
+
+  .attendance-modal .modal-content.large {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    margin: 2vh auto;
+    padding: 14px;
+  }
+
+  .attendance-modal-body {
     overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   .roster-table {
     min-width: 540px;
   }
 
-  /* Signup form: full width */
-  .signup-form-row {
-    flex-direction: column;
-  }
-
-  /* Attendance modal: fill screen */
-  .attendance-modal .modal-content.large {
-    width: 95vw;
-    max-width: 95vw;
-    margin: 4vh auto;
-    padding: 14px;
-  }
-
-  /* Attendance roster table: scroll */
-  .attendance-modal-body {
-    overflow-x: auto;
-  }
-
-  .roster-table {
-    min-width: 480px;
-  }
-
-  /* Public sessions table: scroll */
   .public-sessions-table {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
   .public-sessions-table table {
-    min-width: 400px;
+    min-width: 720px;
+  }
+}
+
+@media (max-width: 560px) {
+  .form-group {
+    flex-basis: 100%;
+  }
+
+  .admin-form-cols {
+    flex-direction: column;
+  }
+
+  .employee-add-row {
+    grid-template-columns: 1fr;
   }
 }
 

@@ -207,6 +207,57 @@ function buildTimeOptions(selectEl, placeholderText) {
 
 // ---------- UI helpers ----------
 
+function normalizeTrainingHeaderCopy() {
+  const subtitle = document.querySelector('.header-title-block p, #CCA');
+  if (subtitle && subtitle.dataset.headerCopyReady !== 'true') {
+    subtitle.innerHTML = '<span class="header-subtitle-line">Capital City Aquatics &amp;</span><span class="header-subtitle-line">Upstate Pool Management</span>';
+    subtitle.dataset.headerCopyReady = 'true';
+  }
+}
+
+function getResponsiveTableMinWidth(table) {
+  if (table.matches('.training-schedule-table')) return '980px';
+  if (table.matches('.attendance-table')) return '900px';
+  if (table.matches('.employee-table')) return '760px';
+  if (table.matches('.sanitation-table')) return '700px';
+  return '720px';
+}
+
+function wrapResponsiveTables(root = document) {
+  const tables = root.querySelectorAll('table');
+  tables.forEach((table) => {
+    if (table.closest('.table-scroll-wrap')) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-scroll-wrap';
+    table.style.setProperty('--table-min-width', getResponsiveTableMinWidth(table));
+    table.parentNode.insertBefore(wrapper, table);
+    wrapper.appendChild(table);
+  });
+}
+
+function observeResponsiveTables() {
+  if (!document.body || document.body.dataset.trainingTableObserverReady === 'true') return;
+  document.body.dataset.trainingTableObserverReady = 'true';
+
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (node.matches?.('table')) {
+          wrapResponsiveTables(node.parentElement || document);
+          return;
+        }
+        if (node.querySelector?.('table')) {
+          wrapResponsiveTables(node);
+        }
+      });
+    });
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
 function updateCapacityInfo(session, el) {
   if (!el.capacityInfo) return;
 
@@ -1389,6 +1440,9 @@ function setupPublicFilters(el) {
 // ---------- Bootstrapping ----------
 
 document.addEventListener('DOMContentLoaded', async () => {
+  normalizeTrainingHeaderCopy();
+  wrapResponsiveTables();
+  observeResponsiveTables();
   // Set up login + basic UI wiring
   const el = {
     trainingAdminPanel: document.getElementById('trainingAdminPanel'),

@@ -24,6 +24,8 @@ import {
   reauthenticateWithCredential
 } from './firebase.js';
 import { requireUserAgreement } from './agreement.js';
+import { getApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
 
 // ============================================================
 // PAGE-LOADED FADE-IN
@@ -96,6 +98,86 @@ document.addEventListener('click', (e) => {
     document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
   }
 });
+
+function getPagePrefix() {
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  parts.pop();
+  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources'];
+  const last = parts[parts.length - 1] || '';
+  return subDirs.includes(last) ? '../' : '';
+}
+
+function injectResourcesMenuLinks() {
+  const prefix = getPagePrefix();
+  const isResourcesPage = /\/resources\/resources\.html$/i.test(window.location.pathname);
+
+  document.querySelectorAll('.dropdown-menu').forEach((menu) => {
+    if (menu.querySelector('[data-nav="resources"]')) return;
+    const dutiesLink = menu.querySelector('[data-nav="duties"]');
+    if (!dutiesLink) return;
+
+    const link = document.createElement('a');
+    link.href = isResourcesPage ? 'resources.html' : `${prefix}resources/resources.html`;
+    link.className = `dropdown-item${isResourcesPage ? ' active-page' : ''}`;
+    link.dataset.nav = 'resources';
+    link.textContent = 'Resources';
+    dutiesLink.insertAdjacentElement('afterend', link);
+  });
+}
+
+function normalizeSharedHeaderCopy() {
+  document.querySelectorAll('.header-title-block p, .header-left > div:first-child > p').forEach((subtitle) => {
+    if (!subtitle || subtitle.dataset.headerCopyReady === 'true') return;
+    subtitle.innerHTML = '<span class="header-subtitle-line">Capital City Aquatics &amp;</span><span class="header-subtitle-line">Upstate Pool Management</span>';
+    subtitle.dataset.headerCopyReady = 'true';
+  });
+}
+
+function getResponsiveTableMinWidth(table) {
+  if (table.matches('.dashboard-pool-table, .pool-table')) return '920px';
+  if (table.matches('.training-schedule-table')) return '980px';
+  if (table.matches('.attendance-table, .test-rubric-table')) return '900px';
+  if (table.matches('.employee-table')) return '760px';
+  if (table.matches('.sanitation-table')) return '700px';
+  if (table.matches('.resource-table')) return '760px';
+  return '720px';
+}
+
+function wrapResponsiveTables(root = document) {
+  const tables = root.querySelectorAll('table');
+  tables.forEach((table) => {
+    if (table.closest('.table-scroll-wrap')) return;
+    if (table.closest('.rules-table')) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-scroll-wrap';
+    table.style.setProperty('--table-min-width', getResponsiveTableMinWidth(table));
+    table.parentNode.insertBefore(wrapper, table);
+    wrapper.appendChild(table);
+  });
+}
+
+function observeResponsiveTables() {
+  if (!document.body || document.body.dataset.tableObserverReady === 'true') return;
+  document.body.dataset.tableObserverReady = 'true';
+
+  const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (node.matches?.('table')) {
+          wrapResponsiveTables(node.parentElement || document);
+          return;
+        }
+        if (node.querySelector?.('table')) {
+          wrapResponsiveTables(node);
+        }
+      });
+    });
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+}
 
 // ============================================================
 // SETTINGS MODAL
@@ -174,7 +256,7 @@ window.logout = async function () {
   } catch (_) { /* ignore */ }
   const _parts = window.location.pathname.split('/').filter(Boolean);
   _parts.pop();
-  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing'];
+  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources'];
   const _last = _parts[_parts.length - 1] || '';
   window.location.href = (_subDirs.includes(_last) ? '../' : '') + 'index.html';
 };
@@ -280,7 +362,7 @@ window.goToEditor = function () {
   // Remove the filename (last element)
   parts.pop();
   // Remove segments that are known subdirectories to find the project root depth
-  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties'];
+  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties', 'resources'];
   const lastPart = parts[parts.length - 1] || '';
   const stepsUp = subDirs.some(d => d.toLowerCase() === lastPart.toLowerCase()) ? 1 : 0;
   const prefix = stepsUp > 0 ? '../' : '';
@@ -310,7 +392,7 @@ window.goToTrainingSetup = function () {
     sessionStorage.setItem('trainingIntentAdmin', '1');
     const parts = window.location.pathname.split('/').filter(Boolean);
     parts.pop();
-    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing'];
+    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources'];
     const lastPart = parts[parts.length - 1] || '';
     const prefix = subDirs.includes(lastPart) ? '../' : '';
     window.location.href = prefix + 'Training/training.html';
@@ -600,6 +682,9 @@ function populatePoolSelects(pools) {
 
   // Refresh employee pool filter options when pools update
   populateEmployeePoolFilter(employeeMarketFilter);
+  refreshResourceControls();
+  renderResourcesPageTable();
+  renderResourcesSettingsTable();
 }
 
 // ============================================================
@@ -1767,6 +1852,581 @@ function setupEmployeeFilters() {
 }
 
 // ============================================================
+// RESOURCES
+// ============================================================
+
+let resourcesData = [];
+let resourceEditingId = '';
+let pendingResourceFile = null;
+let resourcePageMarketFilter = 'all';
+let resourcePagePoolFilter = 'all';
+let resourceSettingsMarketFilter = 'all';
+let resourceSettingsPoolFilter = 'all';
+
+function getResourceStorage() {
+  return getStorage(getApp());
+}
+
+function ensureResourcesSettingsSection() {
+  if (document.getElementById('resourceSettings')) return;
+  const employeeSettings = document.getElementById('employeeSettings');
+  if (!employeeSettings) return;
+
+  const section = document.createElement('section');
+  section.className = 'settings-section settings-group';
+  section.id = 'resourceSettings';
+  section.innerHTML = `
+    <h3>Resources</h3>
+    <p class="section-subtitle">Upload and manage the documents available on the Resources page.</p>
+    <div class="settings-row employee-file-row" style="margin-top: 20px;">
+      <input type="file" id="resourceFileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.jpg,.jpeg,.png" />
+      <button type="button" id="resourceDeleteAllBtn" class="submit-btn danger-button employee-delete-inline-btn">Delete All Files</button>
+    </div>
+    <div class="settings-row resource-add-row">
+      <div class="settings-field">
+        <label for="resourceDocumentNameInput">Document Name</label>
+        <input type="text" id="resourceDocumentNameInput" />
+      </div>
+      <div class="settings-field">
+        <label for="resourceUploadDateInput">Upload Date</label>
+        <input type="date" id="resourceUploadDateInput" />
+      </div>
+      <div class="settings-field settings-field-full">
+        <label for="resourceDescriptionInput">Description</label>
+        <input type="text" id="resourceDescriptionInput" />
+      </div>
+      <div class="settings-field">
+        <label for="resourceMarketInput">Market</label>
+        <select id="resourceMarketInput">
+          <option value="">Select market</option>
+        </select>
+      </div>
+      <div class="settings-field">
+        <label for="resourcePoolInput">Pool</label>
+        <select id="resourcePoolInput">
+          <option value="">Select pool</option>
+        </select>
+      </div>
+    </div>
+    <div class="employee-add-btn-row">
+      <button type="button" class="submit-btn button-shadow employee-action-btn" id="resourceAddBtn">Add</button>
+    </div>
+    <div class="training-filter-bar employee-filter-bar" id="resourceFilterBar" style="margin: 20px 0 4px;">
+      <span class="filter-by-label">Filter By:</span>
+      <select id="resourceMarketFilter" class="training-filter-select">
+        <option value="all">All Markets</option>
+      </select>
+      <select id="resourcePoolFilter" class="training-filter-select">
+        <option value="all">All Pools</option>
+      </select>
+    </div>
+    <div id="resourceTableSection" class="sanitation-section overlay-disabled resource-table-section">
+      <table class="employee-table resource-table resource-table-admin">
+        <thead>
+          <tr>
+            <th>Document Name</th>
+            <th>Upload Date</th>
+            <th>Description</th>
+            <th>Market</th>
+            <th>Pool</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="resourceTableBody"></tbody>
+      </table>
+    </div>
+  `;
+  employeeSettings.insertAdjacentElement('afterend', section);
+}
+
+function getPoolName(pool) {
+  return (pool?.name || pool?.id || '').toString().trim();
+}
+
+function getPoolMarket(poolName) {
+  const match = poolsCache.find((pool) => getPoolName(pool) === poolName);
+  if (!match) return '';
+  const markets = Array.isArray(match.markets) ? match.markets : (match.market ? [match.market] : []);
+  return markets[0] || '';
+}
+
+function getAllMarkets() {
+  return Array.from(new Set(
+    poolsCache
+      .flatMap((pool) => {
+        const markets = Array.isArray(pool.markets) ? pool.markets : (pool.market ? [pool.market] : []);
+        return markets.length ? markets : ['Other'];
+      })
+      .filter(Boolean)
+  )).sort((a, b) => a.localeCompare(b));
+}
+
+function normalizeResourceRecord(rawDoc, idOverride = '') {
+  const docData = rawDoc || {};
+  const uploadDate = (docData.uploadDate || '').toString().trim();
+  const parsedDate = uploadDate ? new Date(`${uploadDate}T00:00:00`) : null;
+  const fallbackDate = docData.uploadedAt?.toDate ? docData.uploadedAt.toDate() : null;
+  const sortDate = Number.isFinite(docData.sortDate)
+    ? docData.sortDate
+    : parsedDate && !Number.isNaN(parsedDate.getTime())
+      ? parsedDate.getTime()
+      : fallbackDate
+        ? fallbackDate.getTime()
+        : 0;
+
+  return {
+    id: idOverride || docData.id || '',
+    documentName: (docData.documentName || '').toString().trim(),
+    uploadDate,
+    description: (docData.description || '').toString().trim(),
+    market: (docData.market || '').toString().trim(),
+    pool: (docData.pool || '').toString().trim(),
+    fileUrl: (docData.fileUrl || '').toString().trim(),
+    fileName: (docData.fileName || '').toString().trim(),
+    storagePath: (docData.storagePath || '').toString().trim(),
+    sortDate,
+    uploadedAt: docData.uploadedAt || null,
+  };
+}
+
+function sortResourcesDescending(a, b) {
+  if (b.sortDate !== a.sortDate) return b.sortDate - a.sortDate;
+  return (a.documentName || '').localeCompare(b.documentName || '');
+}
+
+function formatResourceDate(uploadDate, uploadedAt) {
+  if (uploadDate) {
+    const parsed = new Date(`${uploadDate}T00:00:00`);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toLocaleDateString();
+  }
+  const fallback = uploadedAt?.toDate ? uploadedAt.toDate() : null;
+  return fallback ? fallback.toLocaleDateString() : '—';
+}
+
+function getFilteredResources({ market = 'all', pool = 'all' } = {}) {
+  return resourcesData
+    .filter((item) => (market === 'all' ? true : item.market === market))
+    .filter((item) => (pool === 'all' ? true : item.pool === pool))
+    .sort(sortResourcesDescending);
+}
+
+function populateResourcePoolOptions(selectEl, market = 'all', includeAll = false) {
+  if (!selectEl) return;
+  const current = selectEl.value;
+  const defaultLabel = includeAll ? 'All Pools' : 'Select pool';
+  selectEl.innerHTML = `<option value="${includeAll ? 'all' : ''}">${defaultLabel}</option>`;
+
+  const pools = (market === 'all' || !market)
+    ? [...poolsCache]
+    : poolsCache.filter((pool) => {
+      const markets = Array.isArray(pool.markets) ? pool.markets : (pool.market ? [pool.market] : []);
+      return markets.includes(market);
+    });
+
+  pools
+    .map((pool) => getPoolName(pool))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+    .forEach((poolName) => {
+      const option = document.createElement('option');
+      option.value = poolName;
+      option.textContent = poolName;
+      selectEl.appendChild(option);
+    });
+
+  if (current && Array.from(selectEl.options).some((option) => option.value === current)) {
+    selectEl.value = current;
+  }
+}
+
+function populateResourceMarketOptions(selectEl, includeAll = false) {
+  if (!selectEl) return;
+  const current = selectEl.value;
+  const label = includeAll ? 'All Markets' : 'Select market';
+  selectEl.innerHTML = `<option value="${includeAll ? 'all' : ''}">${label}</option>`;
+  getAllMarkets().forEach((market) => {
+    const option = document.createElement('option');
+    option.value = market;
+    option.textContent = market;
+    selectEl.appendChild(option);
+  });
+  if (current && Array.from(selectEl.options).some((option) => option.value === current)) {
+    selectEl.value = current;
+  }
+}
+
+function refreshResourceControls() {
+  populateResourceMarketOptions(document.getElementById('resourceMarketInput'), false);
+  populateResourceMarketOptions(document.getElementById('resourceMarketFilter'), true);
+  populateResourceMarketOptions(document.getElementById('resourcesMarketFilter'), true);
+
+  populateResourcePoolOptions(document.getElementById('resourcePoolInput'), document.getElementById('resourceMarketInput')?.value || 'all', false);
+  populateResourcePoolOptions(document.getElementById('resourcePoolFilter'), document.getElementById('resourceMarketFilter')?.value || 'all', true);
+  populateResourcePoolOptions(document.getElementById('resourcesPoolFilter'), document.getElementById('resourcesMarketFilter')?.value || 'all', true);
+}
+
+function buildResourceRowCells(item, includeActions = false) {
+  const nameHtml = item.fileUrl
+    ? `<a href="${item.fileUrl}" target="_blank" rel="noopener">${item.documentName || item.fileName || 'Untitled document'}</a>`
+    : (item.documentName || item.fileName || 'Untitled document');
+
+  const row = `
+    <td>${nameHtml}</td>
+    <td>${formatResourceDate(item.uploadDate, item.uploadedAt)}</td>
+    <td>${item.description || '—'}</td>
+    <td>${item.market || '—'}</td>
+    <td>${item.pool || '—'}</td>
+    ${includeActions ? '<td class="actions-cell"></td>' : ''}
+  `;
+  return row;
+}
+
+function renderResourcesPageTable() {
+  const tbody = document.getElementById('resourcesTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const rows = getFilteredResources({
+    market: resourcePageMarketFilter,
+    pool: resourcePagePoolFilter,
+  });
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
+    return;
+  }
+
+  rows.forEach((item) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = buildResourceRowCells(item, false);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderResourcesSettingsTable() {
+  const tbody = document.getElementById('resourceTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const rows = getFilteredResources({
+    market: resourceSettingsMarketFilter,
+    pool: resourceSettingsPoolFilter,
+  });
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
+    return;
+  }
+
+  rows.forEach((item) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = buildResourceRowCells(item, true);
+    const actionsCell = tr.querySelector('.actions-cell');
+    actionsCell.style.cssText = 'text-align:center;vertical-align:middle;padding:4px 6px;';
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;';
+
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.textContent = 'Edit';
+    editBtn.className = 'submit-btn';
+    editBtn.style.cssText = 'padding:3px 10px;font-size:0.82rem;width:70px;';
+    editBtn.addEventListener('click', () => {
+      resourceEditingId = item.id;
+      pendingResourceFile = null;
+      const fileInput = document.getElementById('resourceFileInput');
+      if (fileInput) fileInput.value = '';
+      document.getElementById('resourceDocumentNameInput').value = item.documentName || '';
+      document.getElementById('resourceUploadDateInput').value = item.uploadDate || '';
+      document.getElementById('resourceDescriptionInput').value = item.description || '';
+      document.getElementById('resourceMarketInput').value = item.market || '';
+      populateResourcePoolOptions(document.getElementById('resourcePoolInput'), item.market || 'all', false);
+      document.getElementById('resourcePoolInput').value = item.pool || '';
+      const actionBtn = document.getElementById('resourceAddBtn');
+      if (actionBtn) actionBtn.textContent = 'Save';
+      document.getElementById('resourceTableSection')?.classList.remove('overlay-disabled');
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = 'Remove';
+    removeBtn.className = 'submit-btn';
+    removeBtn.style.cssText = 'padding:3px 10px;font-size:0.82rem;width:70px;';
+    removeBtn.addEventListener('click', async () => {
+      if (!confirm(`Remove "${item.documentName || item.fileName || 'this document'}"?`)) return;
+      await deleteResourceRecord(item);
+    });
+
+    wrap.appendChild(editBtn);
+    wrap.appendChild(removeBtn);
+    actionsCell.appendChild(wrap);
+    tbody.appendChild(tr);
+  });
+}
+
+function clearResourceForm() {
+  resourceEditingId = '';
+  pendingResourceFile = null;
+  const ids = ['resourceDocumentNameInput', 'resourceUploadDateInput', 'resourceDescriptionInput'];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  const fileInput = document.getElementById('resourceFileInput');
+  if (fileInput) fileInput.value = '';
+  const marketInput = document.getElementById('resourceMarketInput');
+  const poolInput = document.getElementById('resourcePoolInput');
+  if (marketInput) marketInput.value = '';
+  if (poolInput) poolInput.value = '';
+  const actionBtn = document.getElementById('resourceAddBtn');
+  if (actionBtn) actionBtn.textContent = 'Add';
+  document.getElementById('resourceTableSection')?.classList.add('overlay-disabled');
+}
+
+async function uploadResourceFile(file) {
+  const safeName = `${Date.now()}_${String(file.name || 'resource').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const path = `resources/${safeName}`;
+  const storage = getResourceStorage();
+  const refObj = storageRef(storage, path);
+  await uploadBytes(refObj, file);
+  const fileUrl = await getDownloadURL(refObj);
+  return {
+    storagePath: path,
+    fileUrl,
+    fileName: file.name || safeName,
+  };
+}
+
+async function deleteResourceRecord(item) {
+  try {
+    if (item.storagePath) {
+      await deleteObject(storageRef(getResourceStorage(), item.storagePath)).catch(() => {});
+    }
+    await deleteDoc(doc(db, 'resourcesDocuments', item.id));
+    await loadResourcesDocuments();
+    if (resourceEditingId === item.id) clearResourceForm();
+  } catch (err) {
+    console.error('[PoolPro] Unable to remove resource:', err);
+    alert('Unable to remove this document right now.');
+  }
+}
+
+async function loadResourcesDocuments() {
+  try {
+    const snap = await getDocs(query(collection(db, 'resourcesDocuments'), orderBy('sortDate', 'desc')));
+    resourcesData = snap.docs.map((docSnap) => normalizeResourceRecord(docSnap.data(), docSnap.id));
+  } catch (err) {
+    console.error('[PoolPro] Error loading resources:', err);
+    resourcesData = [];
+  }
+  renderResourcesPageTable();
+  renderResourcesSettingsTable();
+}
+
+function setupResourcesPageFilters() {
+  const marketFilter = document.getElementById('resourcesMarketFilter');
+  const poolFilter = document.getElementById('resourcesPoolFilter');
+  if (!marketFilter || !poolFilter) return;
+
+  marketFilter.value = 'all';
+  poolFilter.value = 'all';
+  resourcePageMarketFilter = 'all';
+  resourcePagePoolFilter = 'all';
+
+  marketFilter.addEventListener('change', () => {
+    resourcePageMarketFilter = marketFilter.value || 'all';
+    resourcePagePoolFilter = 'all';
+    populateResourcePoolOptions(poolFilter, resourcePageMarketFilter, true);
+    poolFilter.value = 'all';
+    renderResourcesPageTable();
+  });
+
+  poolFilter.addEventListener('change', () => {
+    resourcePagePoolFilter = poolFilter.value || 'all';
+    renderResourcesPageTable();
+  });
+}
+
+function setupResourcesSettingsUI() {
+  const fileInput = document.getElementById('resourceFileInput');
+  const marketInput = document.getElementById('resourceMarketInput');
+  const poolInput = document.getElementById('resourcePoolInput');
+  const addBtn = document.getElementById('resourceAddBtn');
+  const marketFilter = document.getElementById('resourceMarketFilter');
+  const poolFilter = document.getElementById('resourcePoolFilter');
+  const deleteAllBtn = document.getElementById('resourceDeleteAllBtn');
+
+  if (!fileInput || !marketInput || !poolInput || !addBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
+  if (addBtn.dataset.bound === 'true') return;
+  addBtn.dataset.bound = 'true';
+
+  fileInput.addEventListener('change', () => {
+    pendingResourceFile = fileInput.files?.[0] || null;
+  });
+
+  marketInput.addEventListener('change', () => {
+    populateResourcePoolOptions(poolInput, marketInput.value || 'all', false);
+    poolInput.value = '';
+  });
+
+  marketFilter.value = 'all';
+  poolFilter.value = 'all';
+
+  marketFilter.addEventListener('change', () => {
+    resourceSettingsMarketFilter = marketFilter.value || 'all';
+    resourceSettingsPoolFilter = 'all';
+    populateResourcePoolOptions(poolFilter, resourceSettingsMarketFilter, true);
+    poolFilter.value = 'all';
+    renderResourcesSettingsTable();
+  });
+
+  poolFilter.addEventListener('change', () => {
+    resourceSettingsPoolFilter = poolFilter.value || 'all';
+    renderResourcesSettingsTable();
+  });
+
+  addBtn.addEventListener('click', async () => {
+    const documentName = document.getElementById('resourceDocumentNameInput')?.value.trim() || '';
+    const uploadDate = document.getElementById('resourceUploadDateInput')?.value || '';
+    const description = document.getElementById('resourceDescriptionInput')?.value.trim() || '';
+    const market = marketInput.value || '';
+    const pool = poolInput.value || '';
+
+    if (!documentName || !uploadDate || !description || !market || !pool) {
+      alert('Document Name, Upload Date, Description, Market, and Pool are required.');
+      return;
+    }
+
+    const existing = resourceEditingId
+      ? resourcesData.find((item) => item.id === resourceEditingId)
+      : null;
+    if (!existing && !pendingResourceFile) {
+      alert('Choose a file before adding a resource.');
+      return;
+    }
+
+    try {
+      let fileMeta = existing ? {
+        fileUrl: existing.fileUrl,
+        fileName: existing.fileName,
+        storagePath: existing.storagePath,
+      } : null;
+
+      if (pendingResourceFile) {
+        fileMeta = await uploadResourceFile(pendingResourceFile);
+        if (existing?.storagePath) {
+          await deleteObject(storageRef(getResourceStorage(), existing.storagePath)).catch(() => {});
+        }
+      }
+
+      const payload = normalizeResourceRecord({
+        documentName,
+        uploadDate,
+        description,
+        market,
+        pool,
+        fileUrl: fileMeta?.fileUrl || '',
+        fileName: fileMeta?.fileName || '',
+        storagePath: fileMeta?.storagePath || '',
+        sortDate: new Date(`${uploadDate}T00:00:00`).getTime(),
+        uploadedAt: existing?.uploadedAt || null,
+      }, resourceEditingId);
+
+      const targetRef = resourceEditingId
+        ? doc(db, 'resourcesDocuments', resourceEditingId)
+        : doc(collection(db, 'resourcesDocuments'));
+
+      await setDoc(targetRef, {
+        documentName: payload.documentName,
+        uploadDate: payload.uploadDate,
+        description: payload.description,
+        market: payload.market,
+        pool: payload.pool,
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        storagePath: payload.storagePath,
+        sortDate: payload.sortDate,
+        uploadedAt: existing?.uploadedAt || serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      clearResourceForm();
+      await loadResourcesDocuments();
+    } catch (err) {
+      console.error('[PoolPro] Unable to save resource:', err);
+      alert('Unable to save this document right now.');
+    }
+  });
+
+  deleteAllBtn.addEventListener('click', async () => {
+    if (!resourcesData.length) {
+      alert('There are no files to delete.');
+      return;
+    }
+    if (!confirm('Delete all uploaded files and resource records? This cannot be undone.')) return;
+
+    try {
+      const removals = resourcesData.map(async (item) => {
+        if (item.storagePath) {
+          await deleteObject(storageRef(getResourceStorage(), item.storagePath)).catch(() => {});
+        }
+        await deleteDoc(doc(db, 'resourcesDocuments', item.id));
+      });
+      await Promise.all(removals);
+      clearResourceForm();
+      await loadResourcesDocuments();
+    } catch (err) {
+      console.error('[PoolPro] Unable to delete all resource files:', err);
+      alert('Unable to delete all files right now.');
+    }
+  });
+}
+
+function setupSettingsAccordions() {
+  const sections = Array.from(document.querySelectorAll('#settingsModal .settings-section'));
+
+  sections.forEach((section) => {
+    const title = section.querySelector(':scope > h3');
+    if (!title || section.dataset.accordionReady === 'true') return;
+
+    const content = document.createElement('div');
+    content.className = 'settings-section-body';
+    const contentInner = document.createElement('div');
+    contentInner.className = 'settings-section-body-inner';
+
+    Array.from(section.children).forEach((child) => {
+      if (child !== title) contentInner.appendChild(child);
+    });
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'settings-section-toggle';
+    button.innerHTML = `<span class="settings-section-title">${title.textContent}</span><span class="settings-section-caret">▾</span>`;
+
+    title.replaceWith(button);
+    content.appendChild(contentInner);
+    section.appendChild(content);
+    section.classList.add('collapsed');
+    section.dataset.accordionReady = 'true';
+
+    button.addEventListener('click', () => {
+      const isCollapsed = section.classList.contains('collapsed');
+      document.querySelectorAll('#settingsModal .settings-section').forEach((other) => {
+        if (other === section || other.dataset.accordionReady !== 'true') return;
+        other.classList.add('collapsed');
+      });
+      section.classList.toggle('collapsed', !isCollapsed);
+    });
+  });
+
+  const firstSection = sections.find((section) => section.dataset.accordionReady === 'true');
+  if (firstSection) {
+    firstSection.classList.remove('collapsed');
+  }
+}
+
+// ============================================================
 // SANITATION METHODS
 // ============================================================
 
@@ -2258,6 +2918,12 @@ function checkDashboardAnchor() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
+  normalizeSharedHeaderCopy();
+  injectResourcesMenuLinks();
+  ensureResourcesSettingsSection();
+  setupSettingsAccordions();
+  wrapResponsiveTables();
+  observeResponsiveTables();
   const feedbackModal = document.getElementById('feedbackModal');
   if (feedbackModal) {
     feedbackModal.addEventListener('click', (event) => {
@@ -2308,6 +2974,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Market filter checkboxes in settings
   setupMarketFilters();
+  setupResourcesPageFilters();
+  setupResourcesSettingsUI();
 
   // Load pools from Firestore and populate all dropdowns
   listenPools(populatePoolSelects);
@@ -2318,6 +2986,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Employee management
   await loadSecuritySettings();
   loadEmployees();
+  await loadResourcesDocuments();
   setupEmployeeManagement();
   setupEmployeeOverlay();
   await enforceAgreementForCurrentUser();

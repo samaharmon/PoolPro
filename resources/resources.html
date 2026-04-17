@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PoolPro</title>
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PoolPro">
+  <meta name="theme-color" content="#69140e">
+
+  <link rel="icon" href="../Images/Logos/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="../Images/Logos/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="../Images/Logos/favicon-16x16.png" />
+  <link rel="icon" type="image/png" href="../Images/Logos/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="../Images/Logos/favicon.svg" />
+  <link rel="shortcut icon" href="../Images/Logos/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="../Images/Logos/apple-touch-icon.png" />
+
+  <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+  <div id="mainForm">
+    <div class="header">
+      <div class="header-content">
+        <div class="header-left">
+          <div class="header-title-block">
+            <h1>PoolPro</h1>
+            <p>Capital City Aquatics &amp; Upstate Pool Management</p>
+          </div>
+          <img id="logo" src="../Images/Logos/logo.png" alt="PoolPro logo" />
+          <div class="menu-container">
+            <button class="menu-btn" onclick="toggleMenu(this)">
+              <span>≡</span>
+              <span>Menu</span>
+            </button>
+            <div class="dropdown-menu" id="dropdownMenu">
+              <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
+              <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+              <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
+              <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
+              <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
+              <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
+              <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+              <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+              <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
+      <h2 class="page-content-title">Resources</h2>
+      <div class="form-container resource-table-page-wrap">
+        <div class="section">
+          <h2>Documents</h2>
+          <div class="training-filter-bar" style="margin-bottom: 16px;">
+            <span class="filter-by-label">Filter By:</span>
+            <select id="resourcesMarketFilter" class="training-filter-select">
+              <option value="all">All Markets</option>
+            </select>
+            <select id="resourcesPoolFilter" class="training-filter-select">
+              <option value="all">All Pools</option>
+            </select>
+          </div>
+
+          <table class="data-table resource-table">
+            <thead>
+              <tr>
+                <th>Document Name</th>
+                <th>Upload Date</th>
+                <th>Description</th>
+                <th>Market</th>
+                <th>Pool</th>
+              </tr>
+            </thead>
+            <tbody id="resourcesTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <em>Developed by Sam Harmon | 2025<br>v1.0</em>
+    </div>
+  </div>
+
+  <script type="module" src="../script.js"></script>
+</body>
+</html>
