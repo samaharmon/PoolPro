@@ -52,30 +52,16 @@ let securitySettings = {
 let securityIdleTimer = null;
 let securityEventsBound = false;
 let agreementGatePromise = null;
+let sanitationEditing = false;
+let sanitationMarketFilter = 'all';
 window.trainingSchedule = trainingSchedule;
 window.addEventListener('load', () => {
   document.body.classList.add('page-loaded');
 });
 
-// Floating header: add/remove .scrolled class on scroll (works for .header and .app-header)
-(function () {
-  function updateScrolledHeader() {
-    const header = document.querySelector('.header, .app-header');
-    if (!header) return;
-    header.classList.toggle('scrolled', window.scrollY > 60);
-  }
-  window.addEventListener('scroll', updateScrolledHeader, { passive: true });
-})();
-
-// Default to dark mode for all users unless they explicitly changed it.
-if (localStorage.getItem('chemlogDarkMode') === null) {
-  localStorage.setItem('chemlogDarkMode', 'true');
-}
-
-// Apply dark mode immediately (before DOMContentLoaded) to prevent flash
-if (localStorage.getItem('chemlogDarkMode') === 'true') {
-  document.body.classList.add('dark-mode');
-}
+// PoolPro now uses dark styling by default across the app.
+localStorage.setItem('chemlogDarkMode', 'true');
+document.body.classList.add('dark-mode');
 
 // ============================================================
 // MENU / DROPDOWN
@@ -133,8 +119,52 @@ function normalizeSharedHeaderCopy() {
   });
 }
 
+function createFloatingHeader(sourceHeader) {
+  if (!sourceHeader || sourceHeader.dataset.floatingReady === 'true') return;
+  const menuContainer = sourceHeader.querySelector('.menu-container');
+  const logo = sourceHeader.querySelector('#logo, img[alt*="logo" i]');
+  if (!menuContainer || !logo) return;
+
+  const floating = document.createElement(sourceHeader.tagName.toLowerCase());
+  floating.className = `${sourceHeader.className} floating-header`;
+
+  const content = document.createElement('div');
+  content.className = 'header-content';
+  const left = document.createElement('div');
+  left.className = sourceHeader.matches('.app-header')
+    ? 'training-header-left header-left--compact'
+    : 'header-left header-left--compact';
+
+  const menuClone = menuContainer.cloneNode(true);
+  const logoClone = logo.cloneNode(true);
+  menuClone.querySelectorAll('[id]').forEach((node) => node.removeAttribute('id'));
+  logoClone.removeAttribute('id');
+
+  left.appendChild(menuClone);
+  left.appendChild(logoClone);
+  content.appendChild(left);
+  floating.appendChild(content);
+  document.body.appendChild(floating);
+
+  const updateFloatingHeader = () => {
+    const rect = sourceHeader.getBoundingClientRect();
+    const visible = sourceHeader.offsetParent !== null && rect.bottom <= 0;
+    floating.classList.toggle('visible', visible);
+  };
+
+  window.addEventListener('scroll', updateFloatingHeader, { passive: true });
+  window.addEventListener('resize', updateFloatingHeader, { passive: true });
+  requestAnimationFrame(updateFloatingHeader);
+
+  sourceHeader.dataset.floatingReady = 'true';
+}
+
+function setupFloatingHeaders() {
+  document.querySelectorAll('.header, .app-header').forEach(createFloatingHeader);
+}
+
 function getResponsiveTableMinWidth(table) {
-  if (table.matches('.dashboard-pool-table, .pool-table')) return '920px';
+  if (table.matches('.dashboard-pool-table, .pool-table')) return '1200px';
   if (table.matches('.training-schedule-table')) return '980px';
   if (table.matches('.attendance-table, .test-rubric-table')) return '900px';
   if (table.matches('.employee-table')) return '760px';
@@ -776,6 +806,16 @@ function mountUnifiedFooter() {
       </div>
     `;
     footer.dataset.unifiedFooter = 'true';
+  });
+}
+
+function removeSiteAppearanceSections() {
+  document.querySelectorAll('#settingsModal .settings-section').forEach((section) => {
+    const heading = section.querySelector(':scope > h3, :scope > .settings-section-toggle .settings-section-title');
+    const label = heading?.textContent?.trim().toLowerCase() || '';
+    if (label === 'site appearance') {
+      section.remove();
+    }
   });
 }
 
@@ -2419,15 +2459,16 @@ function setupSettingsAccordions() {
   const sections = Array.from(document.querySelectorAll('#settingsModal .settings-section'));
 
   sections.forEach((section) => {
-    const title = section.querySelector(':scope > h3');
+    const title = section.querySelector(':scope > h3, :scope > #sanitationMethodsSection > h3');
     if (!title || section.dataset.accordionReady === 'true') return;
+    const titleContainer = title.parentElement === section ? section : title.parentElement;
 
     const content = document.createElement('div');
     content.className = 'settings-section-body';
     const contentInner = document.createElement('div');
     contentInner.className = 'settings-section-body-inner';
 
-    Array.from(section.children).forEach((child) => {
+    Array.from(titleContainer.children).forEach((child) => {
       if (child !== title) contentInner.appendChild(child);
     });
 
@@ -2438,7 +2479,7 @@ function setupSettingsAccordions() {
 
     title.replaceWith(button);
     content.appendChild(contentInner);
-    section.appendChild(content);
+    titleContainer.appendChild(content);
     section.classList.add('collapsed');
     section.dataset.accordionReady = 'true';
 
@@ -2477,11 +2518,10 @@ async function loadSanitationMethods() {
     sanitationData = {};
   }
 
-  renderSanitationTables(container, null); // null = all markets read-only
+  renderSanitationTables(container);
 }
 
-// editableMarket: market name currently in edit mode, or null for all read-only
-function renderSanitationTables(container, editableMarket) {
+function renderSanitationTables(container) {
   container.innerHTML = '';
   const groups = groupPoolsByMarket(poolsCache);
   if (!groups.length) {
@@ -2489,124 +2529,105 @@ function renderSanitationTables(container, editableMarket) {
     return;
   }
 
-  groups.forEach(({ market, pools: mPools }) => {
-    const isEditable = (editableMarket === market);
+  const rows = groups.flatMap(({ market, pools: mPools }) =>
+    mPools.map((pool) => ({ market, pool }))
+  );
 
-    const block = document.createElement('div');
-    block.className = 'sanitation-market-block';
-    block.dataset.market = market;
+  const filterBar = document.createElement('div');
+  filterBar.className = 'training-filter-bar sanitation-filter-bar';
+  filterBar.innerHTML = `
+    <span class="filter-by-label">Filter By:</span>
+    <select id="sanitationMarketFilter" class="training-filter-select">
+      <option value="all">All Markets</option>
+      ${groups.map(({ market }) => `<option value="${market}">${market}</option>`).join('')}
+    </select>
+  `;
+  container.appendChild(filterBar);
 
-    const heading = document.createElement('h4');
-    heading.textContent = market;
-    block.appendChild(heading);
+  const marketFilter = filterBar.querySelector('#sanitationMarketFilter');
+  marketFilter.value = sanitationMarketFilter;
+  marketFilter.addEventListener('change', () => {
+    sanitationMarketFilter = marketFilter.value || 'all';
+    renderSanitationTables(container);
+  });
 
-    // Table wrapper — the overlay covers only this element
-    const tableWrap = document.createElement('div');
-    tableWrap.className = 'sanitation-market-table-wrap sanitation-section';
-    if (!isEditable) tableWrap.classList.add('overlay-disabled');
+  const controlsWrap = document.createElement('div');
+  controlsWrap.className = 'toggle-btn sanitation-market-controls';
+  controlsWrap.innerHTML = `
+    <div class="sanitation-controls">
+      <div class="sanitation-controls-thumb" style="transform:${sanitationEditing ? 'translateX(0%)' : 'translateX(100%)'}"></div>
+      <button type="button" class="editAndSave${sanitationEditing ? ' active' : ''}" ${sanitationEditing ? 'disabled' : ''}>Edit</button>
+      <button type="button" class="editAndSave${sanitationEditing ? '' : ' active'}" ${sanitationEditing ? '' : 'disabled'}>Save</button>
+    </div>
+  `;
+  container.appendChild(controlsWrap);
 
-    const table = document.createElement('table');
-    table.className = 'sanitation-table';
-    table.innerHTML = '<thead><tr><th>Pool</th><th>Bleach</th><th>Granular</th></tr></thead>';
-    const tbody = document.createElement('tbody');
+  const tableWrap = document.createElement('div');
+  tableWrap.className = 'sanitation-market-table-wrap sanitation-section';
+  if (!sanitationEditing) tableWrap.classList.add('overlay-disabled');
 
-    mPools.forEach(pool => {
+  const table = document.createElement('table');
+  table.className = 'sanitation-table sanitation-table--settings';
+  table.innerHTML = '<thead><tr><th>Market</th><th>Pool</th><th>Bleach</th><th>Granular</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+
+  rows
+    .filter(({ market }) => sanitationMarketFilter === 'all' || market === sanitationMarketFilter)
+    .forEach(({ market, pool }) => {
       const saved = sanitationData[pool.id] || 'bleach';
       const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${market}</td><td>${pool.name || pool.id}</td>`;
 
       const bleachCb = document.createElement('input');
       bleachCb.type = 'checkbox';
       bleachCb.className = 'market-filter-checkbox';
-      bleachCb.checked = (saved === 'bleach');
-      bleachCb.disabled = !isEditable;
-      bleachCb.dataset.poolId = pool.id;
-      bleachCb.dataset.method = 'bleach';
+      bleachCb.checked = saved === 'bleach';
+      bleachCb.disabled = !sanitationEditing;
 
       const granularCb = document.createElement('input');
       granularCb.type = 'checkbox';
       granularCb.className = 'market-filter-checkbox';
-      granularCb.checked = (saved === 'granular');
-      granularCb.disabled = !isEditable;
-      granularCb.dataset.poolId = pool.id;
-      granularCb.dataset.method = 'granular';
+      granularCb.checked = saved === 'granular';
+      granularCb.disabled = !sanitationEditing;
 
-      if (isEditable) {
-        bleachCb.addEventListener('change', () => {
-          if (bleachCb.checked) granularCb.checked = false;
-          else bleachCb.checked = true;
-        });
-        granularCb.addEventListener('change', () => {
-          if (granularCb.checked) bleachCb.checked = false;
-          else granularCb.checked = true;
-        });
-      }
+      const updateSelection = (method) => {
+        sanitationData[pool.id] = method;
+        bleachCb.checked = method === 'bleach';
+        granularCb.checked = method === 'granular';
+      };
 
-      const nameTd = document.createElement('td');
-      nameTd.textContent = pool.name || pool.id;
+      bleachCb.addEventListener('change', () => updateSelection('bleach'));
+      granularCb.addEventListener('change', () => updateSelection('granular'));
+
       const bleachTd = document.createElement('td');
       bleachTd.style.textAlign = 'center';
       bleachTd.appendChild(bleachCb);
       const granularTd = document.createElement('td');
       granularTd.style.textAlign = 'center';
       granularTd.appendChild(granularCb);
-
-      tr.appendChild(nameTd);
       tr.appendChild(bleachTd);
       tr.appendChild(granularTd);
       tbody.appendChild(tr);
     });
 
-    table.appendChild(tbody);
-    tableWrap.appendChild(table);
-    block.appendChild(tableWrap);
+  table.appendChild(tbody);
+  tableWrap.appendChild(table);
+  container.appendChild(tableWrap);
+  wrapResponsiveTables(container);
 
-    // Per-market Edit/Save controls
-    const controlsWrap = document.createElement('div');
-    controlsWrap.className = 'toggle-btn sanitation-market-controls';
-    const controls = document.createElement('div');
-    controls.className = 'sanitation-controls';
-    const thumb = document.createElement('div');
-    thumb.className = 'sanitation-controls-thumb';
-    thumb.style.transform = isEditable ? 'translateX(0%)' : 'translateX(100%)';
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = isEditable ? 'editAndSave active' : 'editAndSave';
-    editBtn.textContent = 'Edit';
-    editBtn.disabled = isEditable;
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.className = isEditable ? 'editAndSave' : 'editAndSave active';
-    saveBtn.textContent = 'Save';
-    saveBtn.disabled = !isEditable;
-
-    controls.appendChild(thumb);
-    controls.appendChild(editBtn);
-    controls.appendChild(saveBtn);
-    controlsWrap.appendChild(controls);
-    block.appendChild(controlsWrap);
-
-    editBtn.addEventListener('click', () => {
-      renderSanitationTables(container, market);
-    });
-
-    saveBtn.addEventListener('click', async () => {
-      // Update sanitationData for pools in this market only
-      tableWrap.querySelectorAll('input[type="checkbox"][data-pool-id]').forEach(cb => {
-        if (cb.checked) sanitationData[cb.dataset.poolId] = cb.dataset.method;
-      });
-      // Ensure every pool in this market has a value
-      mPools.forEach(pool => {
-        if (!sanitationData[pool.id]) sanitationData[pool.id] = 'bleach';
-      });
-      try {
-        await setDoc(doc(db, 'settings', 'sanitation'), { pools: sanitationData }, { merge: true });
-      } catch (err) {
-        console.error('[ChemLog] Error saving sanitation methods:', err);
-      }
-      renderSanitationTables(container, null);
-    });
-
-    container.appendChild(block);
+  const [editBtn, saveBtn] = controlsWrap.querySelectorAll('.editAndSave');
+  editBtn?.addEventListener('click', () => {
+    sanitationEditing = true;
+    renderSanitationTables(container);
+  });
+  saveBtn?.addEventListener('click', async () => {
+    try {
+      await setDoc(doc(db, 'settings', 'sanitation'), { pools: sanitationData }, { merge: true });
+    } catch (err) {
+      console.error('[ChemLog] Error saving sanitation methods:', err);
+    }
+    sanitationEditing = false;
+    renderSanitationTables(container);
   });
 }
 
@@ -2737,15 +2758,9 @@ function setupClearData() {
 // ============================================================
 
 function setupDarkMode() {
-  const toggle = document.getElementById('darkModeToggle');
-  if (!toggle) return;
-  toggle.checked = localStorage.getItem('chemlogDarkMode') === 'true';
-  // Enable transition after initial state is applied (prevents flash on load)
+  document.body.classList.add('dark-mode');
+  localStorage.setItem('chemlogDarkMode', 'true');
   setTimeout(() => document.body.classList.add('dark-mode-transition'), 50);
-  toggle.addEventListener('change', () => {
-    document.body.classList.toggle('dark-mode', toggle.checked);
-    localStorage.setItem('chemlogDarkMode', String(toggle.checked));
-  });
 }
 
 // ============================================================
@@ -2992,6 +3007,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     window.setupDropdownVisibility();
   });
+
+  normalizeSharedHeaderCopy();
+  setupFloatingHeaders();
+  removeSiteAppearanceSections();
 
   // Show/hide supervisor-only dropdown items (initial render before auth resolves)
   window.setupDropdownVisibility();

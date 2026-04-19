@@ -41,34 +41,20 @@ p {
 .app-header {
   background: var(--poolpro-accent-gradient);
   color: white;
-  padding: calc(20px + env(safe-area-inset-top, 0px)) 20px 20px;
-  position: sticky;
-  top: 0;
-  z-index: 500;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 16px;
+  position: relative;
+  z-index: 20;
   box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3);
-  min-height: 120px;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   border-bottom: 2px solid #fff;
-  transition: min-height 0.3s ease, padding 0.3s ease;
-}
-
-.app-header.scrolled {
-  min-height: 60px;
-  padding: calc(10px + env(safe-area-inset-top, 0px)) 20px 10px;
 }
 
 .app-header .header-title-block {
   overflow: hidden;
-  max-height: 120px;
   opacity: 1;
-  transition: max-height 0.3s ease, opacity 0.25s ease;
-}
-
-.app-header.scrolled .header-title-block {
-  max-height: 0;
-  opacity: 0;
 }
 
 /* Logo — same position as main site */
@@ -79,7 +65,7 @@ p {
   opacity: 1 !important;
   top: auto !important;
   right: auto !important;
-  height: 116px !important;
+  height: 96px !important;
   width: auto !important;
   object-fit: contain;
   z-index: 10;
@@ -87,11 +73,7 @@ p {
   grid-area: logo;
   justify-self: end;
   align-self: center;
-  transition: height 0.3s ease, transform 0.3s ease !important;
-}
-
-.app-header.scrolled #logo {
-  height: 58px !important;
+  transition: none !important;
 }
 
 .training-header-left {
@@ -915,7 +897,7 @@ button:active,
 }
 
 .sanitation-table th {
-    background-color: #69140e;
+    background-color: transparent;
     color: white;
     font-weight: bold;
 }
@@ -1090,15 +1072,16 @@ body.dark-mode #trainingNotesInput {
 .training-schedule-table {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed;
+    table-layout: auto;
     margin: 1.5rem 0;
 }
 
 .training-schedule-table thead {
-    background-color: #5d130f;
+    background: var(--poolpro-accent-gradient);
 }
 
 .training-schedule-table thead th {
+    background: transparent !important;
     color: #ffffff;
     font-weight: 700;
 }
@@ -1238,8 +1221,8 @@ body.dark-mode #trainingNotesInput {
 }
 
 .training-schedule-table thead th {
-  background-color: #69140e;
-  color: #000;            /* you asked for black header text */
+  background-color: transparent !important;
+  color: #fff;
   font-weight: bold;
   text-align: left;
 }
@@ -1366,7 +1349,7 @@ body.dark-mode #trainingNotesInput {
 }
 
 .training-schedule-table thead th {
-  background-color: #69140e;
+  background-color: transparent !important;
   color: White !important; /* override the later black-text block */
   font-weight: bold;
 }
@@ -1605,16 +1588,47 @@ body.dark-mode .training-filter-select {
   line-height: 1.2;
 }
 
-.training-schedule-table thead th,
-.training-schedule-table th,
-.employee-table th {
+#resourceUploadDateInput {
+  color-scheme: dark;
+}
+
+#resourceUploadDateInput::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.9;
+  cursor: pointer;
+}
+
+#resourceFilterBar {
+  margin: 28px 0 12px !important;
+}
+
+.training-schedule-table thead,
+.employee-table thead,
+.sanitation-table thead {
   background: var(--poolpro-accent-gradient);
 }
 
 body.dark-mode .training-schedule-table thead th,
-body.dark-mode .training-schedule-table th,
-body.dark-mode .employee-table th {
-  background: var(--poolpro-accent-gradient) !important;
+body.dark-mode .employee-table th,
+body.dark-mode .sanitation-table th {
+  background: transparent !important;
+}
+
+.sanitation-table.sanitation-table--settings th:nth-child(1),
+.sanitation-table.sanitation-table--settings td:nth-child(1) {
+  width: 20%;
+}
+
+.sanitation-table.sanitation-table--settings th:nth-child(2),
+.sanitation-table.sanitation-table--settings td:nth-child(2) {
+  width: 50%;
+}
+
+.sanitation-table.sanitation-table--settings th:nth-child(3),
+.sanitation-table.sanitation-table--settings td:nth-child(3),
+.sanitation-table.sanitation-table--settings th:nth-child(4),
+.sanitation-table.sanitation-table--settings td:nth-child(4) {
+  width: 15%;
 }
 
 .small-button,
@@ -1644,6 +1658,17 @@ body.dark-mode .employee-table th {
 
 .settings-section.collapsed #securityControls {
   display: none !important;
+}
+
+.settings-section-body-inner {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.22s ease, transform 0.28s ease;
+}
+
+.settings-section.collapsed .settings-section-body-inner {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 /* =========================
@@ -1854,7 +1879,7 @@ button:active,
     max-width: 100% !important;
     margin-top: 0 !important;
     max-height: none;
-    padding: 14px;
+    padding: 0 14px 14px;
   }
 }
 
@@ -1865,17 +1890,14 @@ button:active,
     width: 100% !important;
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
-    padding: 20px;
+    padding: 0 20px 20px;
     border: 4px solid #69140e; /* Add red border */
     border-radius: 0px;
     background-color: white;
 }
 
-/* Scrollable settings modal with sticky header */
 #settingsModal .modal-header {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  position: static;
   background: var(--poolpro-accent-gradient);
   border-bottom: 2px solid #fff;
 }
@@ -2097,7 +2119,7 @@ body.dark-mode #settingsModal .modal-header {
 }
 
 .employee-table th {
-  background-color: #69140e;
+  background-color: transparent !important;
   color: #fff;
 }
 
@@ -2648,4 +2670,36 @@ body.dark-mode .help-text {
   max-height: 0 !important;
   opacity: 0 !important;
   margin-top: 0 !important;
+}
+.floating-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  z-index: 800;
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  padding-bottom: 10px;
+}
+
+.floating-header.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.floating-header .training-header-left.header-left--compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 18px;
+}
+
+.floating-header #logo,
+.floating-header img[alt*="logo" i] {
+  height: 62px !important;
 }
