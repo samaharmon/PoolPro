@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Uploaded documents shown on the Resources page
+    match /resources/{allPaths=**} {
+      allow read, write: if true;
+    }
+
+    // Cleanliness Report photo uploads
+    match /dutyPhotos/{allPaths=**} {
+      allow read, write: if true;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

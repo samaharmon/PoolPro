@@ -1959,10 +1959,6 @@ function ensureResourcesSettingsSection() {
         <label for="resourceDocumentNameInput">Document Name</label>
         <input type="text" id="resourceDocumentNameInput" />
       </div>
-      <div class="settings-field">
-        <label for="resourceUploadDateInput">Upload Date</label>
-        <input type="date" id="resourceUploadDateInput" />
-      </div>
       <div class="settings-field settings-field-full">
         <label for="resourceDescriptionInput">Description</label>
         <input type="text" id="resourceDescriptionInput" />
@@ -2210,7 +2206,6 @@ function renderResourcesSettingsTable() {
       const fileInput = document.getElementById('resourceFileInput');
       if (fileInput) fileInput.value = '';
       document.getElementById('resourceDocumentNameInput').value = item.documentName || '';
-      document.getElementById('resourceUploadDateInput').value = item.uploadDate || '';
       document.getElementById('resourceDescriptionInput').value = item.description || '';
       document.getElementById('resourceMarketInput').value = item.market || '';
       populateResourcePoolOptions(document.getElementById('resourcePoolInput'), item.market || 'all', false);
@@ -2240,7 +2235,7 @@ function renderResourcesSettingsTable() {
 function clearResourceForm() {
   resourceEditingId = '';
   pendingResourceFile = null;
-  const ids = ['resourceDocumentNameInput', 'resourceUploadDateInput', 'resourceDescriptionInput'];
+  const ids = ['resourceDocumentNameInput', 'resourceDescriptionInput'];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -2360,13 +2355,12 @@ function setupResourcesSettingsUI() {
 
   addBtn.addEventListener('click', async () => {
     const documentName = document.getElementById('resourceDocumentNameInput')?.value.trim() || '';
-    const uploadDate = document.getElementById('resourceUploadDateInput')?.value || '';
     const description = document.getElementById('resourceDescriptionInput')?.value.trim() || '';
     const market = marketInput.value || '';
     const pool = poolInput.value || '';
 
-    if (!documentName || !uploadDate || !description || !market || !pool) {
-      alert('Document Name, Upload Date, Description, Market, and Pool are required.');
+    if (!documentName || !description || !market || !pool) {
+      alert('Document Name, Description, Market, and Pool are required.');
       return;
     }
 
@@ -2392,6 +2386,16 @@ function setupResourcesSettingsUI() {
         }
       }
 
+      const uploadTimestampMs = Date.now();
+      const uploadDate = pendingResourceFile || !existing
+        ? new Date(uploadTimestampMs).toISOString().slice(0, 10)
+        : existing?.uploadDate
+          || (existing?.uploadedAt?.toDate ? existing.uploadedAt.toDate().toISOString().slice(0, 10) : '')
+          || new Date(uploadTimestampMs).toISOString().slice(0, 10);
+      const sortDate = pendingResourceFile || !existing
+        ? uploadTimestampMs
+        : existing?.sortDate || uploadTimestampMs;
+
       const payload = normalizeResourceRecord({
         documentName,
         uploadDate,
@@ -2401,8 +2405,8 @@ function setupResourcesSettingsUI() {
         fileUrl: fileMeta?.fileUrl || '',
         fileName: fileMeta?.fileName || '',
         storagePath: fileMeta?.storagePath || '',
-        sortDate: new Date(`${uploadDate}T00:00:00`).getTime(),
-        uploadedAt: existing?.uploadedAt || null,
+        sortDate,
+        uploadedAt: pendingResourceFile || !existing ? null : existing?.uploadedAt || null,
       }, resourceEditingId);
 
       const targetRef = resourceEditingId
@@ -2411,7 +2415,6 @@ function setupResourcesSettingsUI() {
 
       await setDoc(targetRef, {
         documentName: payload.documentName,
-        uploadDate: payload.uploadDate,
         description: payload.description,
         market: payload.market,
         pool: payload.pool,
@@ -2419,7 +2422,8 @@ function setupResourcesSettingsUI() {
         fileName: payload.fileName,
         storagePath: payload.storagePath,
         sortDate: payload.sortDate,
-        uploadedAt: existing?.uploadedAt || serverTimestamp(),
+        uploadDate: payload.uploadDate,
+        uploadedAt: pendingResourceFile || !existing ? serverTimestamp() : existing?.uploadedAt || serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
