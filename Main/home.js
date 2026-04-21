@@ -5,7 +5,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  sendEmailVerification
+  sendEmailVerification,
+  applyActionCode
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 
 const DESTINATIONS = {
@@ -30,6 +31,7 @@ let homePoolOptions = [];
 let pendingVerification = null;
 let verifyCooldownUntil = 0;
 let verifyCooldownTimer = null;
+let verifyStatusPoller = null;
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
@@ -45,7 +47,6 @@ const messageEl = document.getElementById('homeLoginMessage');
 const createMessageEl = document.getElementById('homeCreateAccountMessage');
 const verifyMessageEl = document.getElementById('homeVerifyMessage');
 const verifySubtitleEl = document.getElementById('homeVerifySubtitle');
-const verifyEmailBtn = document.getElementById('homeVerifyEmailBtn');
 const verifyResendBtn = document.getElementById('homeVerifyResendBtn');
 const verifyCooldownText = document.getElementById('homeVerifyCooldownText');
 const verifyBackBtn = document.getElementById('homeVerifyBackBtn');
@@ -206,10 +207,32 @@ function clearPendingVerificationContext() {
   } catch (_) { /* ignore */ }
 }
 
+function sanitizeTarget(target) {
+  const candidate = String(target || '').trim();
+  if (!candidate) return DESTINATIONS.chem;
+  return Object.values(DESTINATIONS).includes(candidate) ? candidate : DESTINATIONS.chem;
+}
+
+function buildVerificationActionUrl({ username, target }) {
+  const url = new URL(window.location.href);
+  url.search = '';
+  url.hash = '';
+  url.searchParams.set('username', normalizeUsername(username));
+  url.searchParams.set('target', sanitizeTarget(target));
+  return url.toString();
+}
+
 function stopVerifyCooldownTimer() {
   if (verifyCooldownTimer) {
     clearInterval(verifyCooldownTimer);
     verifyCooldownTimer = null;
+  }
+}
+
+function stopVerifyStatusPoller() {
+  if (verifyStatusPoller) {
+    clearInterval(verifyStatusPoller);
+    verifyStatusPoller = null;
   }
 }
 
@@ -250,6 +273,7 @@ function clearMessages() {
 }
 
 function resetVerificationState() {
+  stopVerifyStatusPoller();
   pendingVerification = null;
   if (verifyForm) verifyForm.reset();
   if (verifySubtitleEl) verifySubtitleEl.textContent = '';
@@ -281,7 +305,7 @@ function setModalView(view) {
   }
 
   if (view === 'create') createUsernameInput?.focus();
-  if (view === 'verify') verifyEmailBtn?.focus();
+  if (view === 'verify') verifyResendBtn?.focus();
   if (view === 'login') usernameInput?.focus();
 }
 
@@ -554,6 +578,7 @@ async function upsertEmployeeRecord(employee) {
 
 async function finalizeLifeguardAccess({ username, account, target, method }) {
   markVerificationComplete(username);
+  stopVerifyStatusPoller();
   clearPendingVerificationContext();
 
   try {
@@ -585,7 +610,7 @@ function openVerificationView({ username, account, target, force = false, origin
   pendingVerification = {
     username: normalizeUsername(username),
     account,
-    target: target || getDestinationPath(),
+    target: sanitizeTarget(target || getDestinationPath()),
     origin,
     force,
   };
@@ -598,10 +623,11 @@ function openVerificationView({ username, account, target, force = false, origin
   });
 
   if (verifySubtitleEl) {
-    verifySubtitleEl.textContent = `Email verification is required before PoolPro access${force ? ' for this new account' : ''}. Check ${maskEmail(account.employeeEmail || getAuthEmail(account))}, click the verification link, then return here and confirm.`;
+    verifySubtitleEl.textContent = `Email verification is required before PoolPro access${force ? ' for this new account' : ''}. Check ${maskEmail(account.employeeEmail || getAuthEmail(account))}, open the verification email, and PoolPro will finish access automatically after the link is clicked.`;
   }
-  setMessage(verifyMessageEl, 'Verification is required on new devices and every 10 days. We are checking your email verification status.');
+  setMessage(verifyMessageEl, 'Verification is required on new devices and every 10 days. We are checking your email verification status automatically.');
   setModalView('verify');
+  startVerificationStatusPolling();
 
   const existingContext = loadPendingVerificationContext();
   const existingEmail = (existingContext?.email || '').trim().toLowerCase();
@@ -617,13 +643,15 @@ function openVerificationView({ username, account, target, force = false, origin
     updateVerifyCooldownUi();
     setMessage(
       verifyMessageEl,
-      `A verification email was recently sent to ${maskEmail(nextEmail)}. After you click the email link, return here and confirm verification, or wait for the resend timer if you need another one.`
+      `A verification email was recently sent to ${maskEmail(nextEmail)}. Click the email link and PoolPro will finish access automatically, or wait for the resend timer if you need another one.`
     );
     return;
   }
 
   if (auth.currentUser?.emailVerified) {
-    setMessage(verifyMessageEl, 'This email is already verified. Click "I\'ve Verified My Email" to continue.');
+    confirmVerifiedEmail().catch((err) => {
+      setMessage(verifyMessageEl, err.message || 'Your email is verified, but PoolPro could not finish sign-in yet.', true);
+    });
     return;
   }
 
@@ -696,7 +724,7 @@ async function sendVerificationEmail({ isResend = false } = {}) {
   const email = pendingVerification.account.employeeEmail || getAuthEmail(pendingVerification.account);
   if (!email) throw new Error('This account does not have an email address on file.');
   if (!auth.currentUser) throw new Error('Please sign in again before requesting a verification email.');
-  if (auth.currentUser.emailVerified) throw new Error('This email is already verified. Click "I\'ve Verified My Email" to continue.');
+  if (auth.currentUser.emailVerified) throw new Error('This email is already verified. PoolPro should finish sign-in automatically.');
   if (isResend && Date.now() < verifyCooldownUntil) {
     const remainingSeconds = Math.ceil((verifyCooldownUntil - Date.now()) / 1000);
     throw new Error(`Please wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending the verification email.`);
@@ -710,11 +738,17 @@ async function sendVerificationEmail({ isResend = false } = {}) {
   });
 
   auth.useDeviceLanguage();
-  await sendEmailVerification(auth.currentUser);
+  await sendEmailVerification(auth.currentUser, {
+    url: buildVerificationActionUrl({
+      username: pendingVerification.username,
+      target: pendingVerification.target,
+    }),
+    handleCodeInApp: false,
+  });
   startVerifyCooldown();
   setMessage(
     verifyMessageEl,
-    `${isResend ? 'Verification email resent' : 'Verification email sent'} to ${maskEmail(email)}. Click the verification link in the email, then return here and press "I've Verified My Email." If it does not appear soon, check spam or junk.`
+    `${isResend ? 'Verification email resent' : 'Verification email sent'} to ${maskEmail(email)}. Click the verification link in the email and PoolPro will finish sign-in automatically. If it does not appear soon, check spam or junk.`
   );
 }
 
@@ -735,6 +769,74 @@ async function confirmVerifiedEmail() {
     target: pendingVerification.target,
     method: 'email-verification',
   });
+}
+
+function startVerificationStatusPolling() {
+  stopVerifyStatusPoller();
+  verifyStatusPoller = window.setInterval(async () => {
+    if (!pendingVerification || !auth.currentUser) return;
+    try {
+      await auth.currentUser.reload();
+      if (auth.currentUser.emailVerified) {
+        await confirmVerifiedEmail();
+      }
+    } catch (_) {
+      // Keep polling quietly while the verify view is open.
+    }
+  }, 2500);
+}
+
+async function handleEmailVerificationRedirect() {
+  const url = new URL(window.location.href);
+  const mode = url.searchParams.get('mode');
+  const oobCode = url.searchParams.get('oobCode');
+  if (mode !== 'verifyEmail' || !oobCode) return false;
+
+  try {
+    await applyActionCode(auth, oobCode);
+    if (auth.currentUser) {
+      await auth.currentUser.reload();
+    }
+
+    const username = normalizeUsername(url.searchParams.get('username') || loadPendingVerificationContext()?.username || '');
+    const target = sanitizeTarget(url.searchParams.get('target') || loadPendingVerificationContext()?.target || DESTINATIONS.chem);
+
+    if (!username) {
+      setMessage(messageEl, 'Your email was verified. Sign in again to continue.', false);
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return true;
+    }
+
+    const account = await getLifeguardAccount(username);
+    pendingVerification = {
+      username,
+      account,
+      target,
+      origin: 'redirect',
+      force: false,
+    };
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    if (auth.currentUser?.emailVerified) {
+      await finalizeLifeguardAccess({
+        username,
+        account,
+        target,
+        method: 'email-verification-link',
+      });
+    } else {
+      openModal(target === DESTINATIONS.training ? 'training' : 'chem');
+      openVerificationView({ username, account, target, origin: 'redirect' });
+      setMessage(verifyMessageEl, 'Your email was verified. PoolPro is restoring your sign-in session now.', false);
+    }
+  } catch (err) {
+    console.error('Email verification redirect failed:', err);
+    window.history.replaceState({}, document.title, window.location.pathname);
+    setMessage(messageEl, err.message || 'That verification link is invalid or expired. Sign in again to get a new email.', true);
+  }
+
+  return true;
 }
 
 async function handleSubmit(event) {
@@ -844,7 +946,7 @@ async function handleCreateAccountSubmit(event) {
       force: true,
       origin: 'create',
     });
-    setMessage(verifyMessageEl, 'Check your email, click the verification link, then return here and confirm verification to finish creating your account.');
+    setMessage(verifyMessageEl, 'Check your email and click the verification link. PoolPro will finish creating your access automatically after the link is opened.');
   } catch (err) {
     await signOut(auth).catch(() => {});
     console.error('Create account failed:', err);
@@ -877,6 +979,7 @@ function wireRoleToggle() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
+  const handledVerificationRedirect = await handleEmailVerificationRedirect();
   await Promise.all([loadEmployees(), loadPools()]);
   populatePoolOptions();
   wireMenu();
@@ -903,13 +1006,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearPendingVerificationContext();
     setModalView('login');
   });
-  verifyEmailBtn?.addEventListener('click', async () => {
-    try {
-      await confirmVerifiedEmail();
-    } catch (err) {
-      setMessage(verifyMessageEl, err.message || 'Unable to confirm verification right now.', true);
-    }
-  });
   verifyResendBtn?.addEventListener('click', async () => {
     try {
       await sendVerificationEmail({ isResend: true });
@@ -928,6 +1024,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     closeModal();
   });
+
+  if (handledVerificationRedirect) return;
 
   const pendingContext = loadPendingVerificationContext();
   if (pendingContext?.username && auth.currentUser) {
