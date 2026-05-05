@@ -56,6 +56,8 @@ let agreementGatePromise = null;
 let accountDeletionInProgress = false;
 let sanitationEditing = false;
 let sanitationMarketFilter = 'all';
+const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
+const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 window.trainingSchedule = trainingSchedule;
 window.addEventListener('load', () => {
   document.body.classList.add('page-loaded');
@@ -191,33 +193,58 @@ function getResponsiveTableMinWidth(table) {
   if (table.matches('.dashboard-pool-table, .pool-table')) return '1200px';
   if (table.matches('.training-schedule-table')) return '980px';
   if (table.matches('.attendance-table, .test-rubric-table')) return '900px';
-  if (table.matches('.employee-table')) return '760px';
+  if (table.matches('.employee-table')) return '980px';
   if (table.matches('.sanitation-table')) return '700px';
-  if (table.matches('.resource-table')) return '760px';
+  if (table.matches('.resource-table')) return '980px';
   return '720px';
 }
 
 function wrapResponsiveTables(root = document) {
   const tables = root.querySelectorAll('table');
   tables.forEach((table) => {
-    if (table.closest('.table-scroll-wrap')) return;
+    table.style.setProperty('--table-min-width', getResponsiveTableMinWidth(table));
+    const existingWrapper = table.closest('.table-scroll-wrap');
+    if (existingWrapper) {
+      ensureTableScrollShell(existingWrapper);
+      bindTableScrollShadow(existingWrapper);
+      updateTableScrollShadow(existingWrapper);
+      return;
+    }
     if (table.closest('.rules-table')) return;
 
     const wrapper = document.createElement('div');
     wrapper.className = 'table-scroll-wrap';
-    table.style.setProperty('--table-min-width', getResponsiveTableMinWidth(table));
-    table.parentNode.insertBefore(wrapper, table);
+    const shell = document.createElement('div');
+    shell.className = 'table-scroll-shell';
+    table.parentNode.insertBefore(shell, table);
+    shell.appendChild(wrapper);
     wrapper.appendChild(table);
     bindTableScrollShadow(wrapper);
   });
 }
 
+function ensureTableScrollShell(wrapper) {
+  if (!wrapper || wrapper.parentElement?.classList.contains('table-scroll-shell')) return wrapper?.parentElement || null;
+  const shell = document.createElement('div');
+  shell.className = 'table-scroll-shell';
+  wrapper.parentNode.insertBefore(shell, wrapper);
+  shell.appendChild(wrapper);
+  return shell;
+}
+
 function updateTableScrollShadow(wrapper) {
   if (!wrapper) return;
+  const shell = ensureTableScrollShell(wrapper) || wrapper;
   const hasOverflow = wrapper.scrollWidth > wrapper.clientWidth + 2;
-  wrapper.classList.toggle('has-overflow-right', hasOverflow && (wrapper.scrollLeft + wrapper.clientWidth) < (wrapper.scrollWidth - 2));
-  wrapper.classList.toggle('has-overflow-left', hasOverflow && wrapper.scrollLeft > 2);
+  const hasRight = hasOverflow && (wrapper.scrollLeft + wrapper.clientWidth) < (wrapper.scrollWidth - 2);
+  const hasLeft = hasOverflow && wrapper.scrollLeft > 2;
+  wrapper.classList.toggle('has-overflow-right', hasRight);
+  wrapper.classList.toggle('has-overflow-left', hasLeft);
   wrapper.classList.toggle('has-overflow', hasOverflow);
+  shell.classList.toggle('has-overflow-right', hasRight);
+  shell.classList.toggle('has-overflow-left', hasLeft);
+  shell.classList.toggle('has-overflow', hasOverflow);
+  shell.style.setProperty('--table-scroll-shadow-height', `${Math.max(0, wrapper.clientHeight - 8)}px`);
 }
 
 function bindTableScrollShadow(wrapper) {
@@ -477,6 +504,7 @@ window.logout = async function () {
     localStorage.removeItem('loginToken');
     localStorage.removeItem('ChemLogSupervisor');
     localStorage.removeItem('chemlogRole');
+    localStorage.removeItem(LIFEGUARD_SESSION_KEY);
     localStorage.removeItem('trainingSupervisorLoggedIn');
     localStorage.removeItem('training_supervisor_logged_in_v1');
     localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
@@ -493,10 +521,71 @@ function clearSupervisorLoginState() {
   try {
     localStorage.removeItem('loginToken');
     localStorage.removeItem('ChemLogSupervisor');
-    localStorage.removeItem('chemlogRole');
     localStorage.removeItem('trainingSupervisorLoggedIn');
     localStorage.removeItem('training_supervisor_logged_in_v1');
     localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
+    const hasLifeguardSession = !!getStoredLifeguardSession() || sessionStorage.getItem('chemlogRole') === 'lifeguard';
+    if (!hasLifeguardSession) {
+      localStorage.removeItem('chemlogRole');
+    }
+  } catch (_) { /* ignore */ }
+}
+
+function writeLifeguardSessionToSessionStorage(session) {
+  if (!session) return;
+  sessionStorage.setItem('chemlogRole', 'lifeguard');
+  sessionStorage.setItem('chemlogEmployeeEmail', session.email || '');
+  sessionStorage.setItem('chemlogEmployeeId', session.employeeId || session.email || '');
+  sessionStorage.setItem('chemlogEmployeeUsername', session.username || '');
+  sessionStorage.setItem('chemlogEmployeeFirstName', session.firstName || '');
+  sessionStorage.setItem('chemlogEmployeeLastName', session.lastName || '');
+}
+
+function hasFreshSupervisorToken() {
+  try {
+    const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
+    return !!(token?.expires && Date.now() < Number(token.expires));
+  } catch (_) {
+    return false;
+  }
+}
+
+function getStoredLifeguardSession() {
+  try {
+    const raw = localStorage.getItem(LIFEGUARD_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    const expires = Number(session?.expires || 0);
+    const hasIdentity = !!(session?.email || session?.employeeId || session?.username);
+    if (!hasIdentity || !expires || Date.now() >= expires) {
+      localStorage.removeItem(LIFEGUARD_SESSION_KEY);
+      if (localStorage.getItem('chemlogRole') === 'lifeguard') localStorage.removeItem('chemlogRole');
+      return null;
+    }
+    return session;
+  } catch (_) {
+    try {
+      localStorage.removeItem(LIFEGUARD_SESSION_KEY);
+    } catch (err) { /* ignore */ }
+    return null;
+  }
+}
+
+function restoreLifeguardSessionFromLocalStorage() {
+  if (hasFreshSupervisorToken()) return null;
+  const session = getStoredLifeguardSession();
+  if (!session) return null;
+  try {
+    writeLifeguardSessionToSessionStorage(session);
+    localStorage.setItem('chemlogRole', 'lifeguard');
+  } catch (_) { /* ignore */ }
+  return session;
+}
+
+function clearStoredLifeguardSession() {
+  try {
+    localStorage.removeItem(LIFEGUARD_SESSION_KEY);
+    if (localStorage.getItem('chemlogRole') === 'lifeguard') localStorage.removeItem('chemlogRole');
   } catch (_) { /* ignore */ }
 }
 
@@ -510,7 +599,10 @@ function getStoredSupervisorEmail() {
 }
 
 function getCurrentAgreementContext() {
-  const storedRole = (sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole') || '').toLowerCase();
+  restoreLifeguardSessionFromLocalStorage();
+  const storedRole = hasFreshSupervisorToken()
+    ? 'supervisor'
+    : (sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole') || '').toLowerCase();
 
   if (storedRole === 'lifeguard') {
     const email = (sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId') || '').trim().toLowerCase();
@@ -562,13 +654,14 @@ async function enforceAgreementForCurrentUser() {
 window.supervisorSignIn = async function (email, password) {
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
   // Sync localStorage flags so isSupervisor() works synchronously
-  const expires = Date.now() + 10 * 24 * 60 * 60 * 1000; // 10 days
+  const expires = Date.now() + SESSION_WINDOW_MS;
   localStorage.setItem('loginToken', JSON.stringify({ username: email, expires }));
   localStorage.setItem('ChemLogSupervisor', 'true');
   localStorage.setItem('trainingSupervisorLoggedIn', 'true');
   localStorage.setItem('training_supervisor_logged_in_v1', 'true');
   localStorage.setItem('chemlogTrainingSupervisorLoggedIn', 'true');
   localStorage.setItem('chemlogRole', 'supervisor');
+  localStorage.removeItem(LIFEGUARD_SESSION_KEY);
 
   const accepted = await enforceAgreementForCurrentUser();
   if (!accepted) {
@@ -921,7 +1014,8 @@ function populatePoolSelects(pools) {
 
 function isLifeguardSession() {
   try {
-    const role = sessionStorage.getItem('chemlogRole');
+    restoreLifeguardSessionFromLocalStorage();
+    const role = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
     const email = sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId');
     const username = sessionStorage.getItem('chemlogEmployeeUsername');
     return role === 'lifeguard' && !!(email || username);
@@ -932,19 +1026,17 @@ function isLifeguardSession() {
 
 function isSupervisor() {
   try {
+    restoreLifeguardSessionFromLocalStorage();
     const storedRole = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
     if (storedRole === 'lifeguard') return false;
   } catch (_) { /* ignore */ }
 
-  if (auth.currentUser) return true;
   try {
     const token = localStorage.getItem('loginToken');
     if (token) {
       const parsed = JSON.parse(token);
       if (parsed.expires && Date.now() < parsed.expires) return true;
     }
-    if (localStorage.getItem('ChemLogSupervisor') === 'true') return true;
-    if (localStorage.getItem('chemlogTrainingSupervisorLoggedIn') === 'true') return true;
   } catch (_) { /* ignore */ }
   return false;
 }
@@ -2656,6 +2748,7 @@ function setupResourcesSettingsUI() {
 }
 
 function setupSettingsAccordions() {
+  normalizeNestedSettingsSections();
   const sections = Array.from(document.querySelectorAll('#settingsModal .settings-section'));
 
   sections.forEach((section) => {
@@ -2685,13 +2778,26 @@ function setupSettingsAccordions() {
 
     button.addEventListener('click', () => {
       const isCollapsed = section.classList.contains('collapsed');
-      document.querySelectorAll('#settingsModal .settings-section').forEach((other) => {
-        if (other === section || other.dataset.accordionReady !== 'true') return;
-        other.classList.add('collapsed');
-      });
       section.classList.toggle('collapsed', !isCollapsed);
     });
   });
+}
+
+function normalizeNestedSettingsSections() {
+  const modalContent = document.querySelector('#settingsModal .settings-modal-content');
+  if (!modalContent) return;
+
+  let moved = true;
+  while (moved) {
+    moved = false;
+    const nestedSections = Array.from(modalContent.querySelectorAll('.settings-section .settings-section'));
+    nestedSections.reverse().forEach((nested) => {
+      const parent = nested.parentElement?.closest('.settings-section');
+      if (!parent) return;
+      parent.insertAdjacentElement('afterend', nested);
+      moved = true;
+    });
+  }
 }
 
 // ============================================================
@@ -2865,6 +2971,17 @@ function setupEmployeeOverlay() {
   });
 }
 
+function setSegmentedToggleThumb(container, activeSide) {
+  if (!container) return;
+  let thumb = container.querySelector('.sanitation-controls-thumb');
+  if (!thumb) {
+    thumb = document.createElement('div');
+    thumb.className = 'sanitation-controls-thumb';
+    container.prepend(thumb);
+  }
+  thumb.style.transform = activeSide === 'edit' ? 'translateX(0%)' : 'translateX(100%)';
+}
+
 // MARKET SECTION — Edit/Save toggle with overlay
 // ============================================================
 
@@ -2873,9 +2990,11 @@ function setupMarketEditSave() {
   const saveBtn = document.getElementById('marketSaveBtn');
   const section = document.getElementById('marketSection');
   if (!editBtn || !saveBtn || !section) return;
+  const controls = editBtn.closest('.sanitation-controls');
 
   // Start in read-only mode
   section.classList.add('overlay-disabled');
+  setSegmentedToggleThumb(controls, 'edit');
 
   editBtn.addEventListener('click', () => {
     section.classList.remove('overlay-disabled');
@@ -2883,6 +3002,7 @@ function setupMarketEditSave() {
     saveBtn.classList.add('active');
     editBtn.disabled = true;
     saveBtn.disabled = false;
+    setSegmentedToggleThumb(controls, 'save');
     section.querySelectorAll('.market-filter-checkbox').forEach(cb => { cb.disabled = false; });
   });
 
@@ -2894,6 +3014,7 @@ function setupMarketEditSave() {
     editBtn.classList.add('active');
     saveBtn.disabled = true;
     editBtn.disabled = false;
+    setSegmentedToggleThumb(controls, 'edit');
     section.querySelectorAll('.market-filter-checkbox').forEach(cb => { cb.disabled = true; });
   });
 
@@ -3159,6 +3280,7 @@ function checkDashboardAnchor() {
 // ============================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+  restoreLifeguardSessionFromLocalStorage();
   mountUnifiedFooter();
   normalizeSharedHeaderCopy();
   injectResourcesMenuLinks();
@@ -3179,14 +3301,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Firebase Auth state listener — keeps localStorage flags in sync and updates nav
   onAuthStateChanged(auth, async (user) => {
     if (accountDeletionInProgress) return;
-    const role = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
+    const role = hasFreshSupervisorToken()
+      ? 'supervisor'
+      : (sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole'));
     if (user) {
       if (role === 'lifeguard') {
         signOut(auth).catch(() => {});
         window.setupDropdownVisibility();
         return;
       }
-      // Enforce fresh email auth every 10 days.
+      // Enforce fresh email auth every 5 hours.
       let token = null;
       try {
         token = JSON.parse(localStorage.getItem('loginToken') || 'null');
@@ -3198,6 +3322,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         signOut(auth).catch(() => {});
         localStorage.removeItem('loginToken');
         localStorage.removeItem('ChemLogSupervisor');
+        localStorage.removeItem('trainingSupervisorLoggedIn');
+        localStorage.removeItem('training_supervisor_logged_in_v1');
         localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
       } else {
         localStorage.setItem('ChemLogSupervisor', 'true');

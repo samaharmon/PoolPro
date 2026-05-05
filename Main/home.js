@@ -23,7 +23,8 @@ const DESTINATIONS = {
 const ROLE_STORAGE_KEY = 'chemlogRole';
 const DEVICE_ID_KEY = 'poolproDeviceId';
 const VERIFY_CONTEXT_KEY = 'poolproPendingLifeguardVerification';
-const VERIFY_WINDOW_MS = 10 * 24 * 60 * 60 * 1000;
+const VERIFY_WINDOW_MS = 5 * 60 * 60 * 1000;
+const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 const VERIFY_EMAIL_RESEND_MS = 30 * 1000;
 const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
@@ -362,13 +363,23 @@ function populatePoolOptions() {
 
 function persistLifeguardSession(employee, username) {
   const normalizedEmployee = normalizeEmployeeRecord(employee);
+  const session = {
+    role: 'lifeguard',
+    email: normalizedEmployee.email || '',
+    employeeId: normalizedEmployee.email || normalizedEmployee.id || '',
+    username: normalizeUsername(username || normalizedEmployee.username || ''),
+    firstName: normalizedEmployee.firstName || '',
+    lastName: normalizedEmployee.lastName || '',
+    expires: Date.now() + VERIFY_WINDOW_MS,
+  };
   sessionStorage.setItem('chemlogRole', 'lifeguard');
-  sessionStorage.setItem('chemlogEmployeeEmail', normalizedEmployee.email || '');
-  sessionStorage.setItem('chemlogEmployeeId', normalizedEmployee.email || normalizedEmployee.id || '');
-  sessionStorage.setItem('chemlogEmployeeUsername', normalizeUsername(username || normalizedEmployee.username || ''));
-  sessionStorage.setItem('chemlogEmployeeFirstName', normalizedEmployee.firstName || '');
-  sessionStorage.setItem('chemlogEmployeeLastName', normalizedEmployee.lastName || '');
+  sessionStorage.setItem('chemlogEmployeeEmail', session.email);
+  sessionStorage.setItem('chemlogEmployeeId', session.employeeId);
+  sessionStorage.setItem('chemlogEmployeeUsername', session.username);
+  sessionStorage.setItem('chemlogEmployeeFirstName', session.firstName);
+  sessionStorage.setItem('chemlogEmployeeLastName', session.lastName);
   localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
+  localStorage.setItem(LIFEGUARD_SESSION_KEY, JSON.stringify(session));
   localStorage.removeItem('loginToken');
   localStorage.removeItem('ChemLogSupervisor');
   localStorage.removeItem('trainingSupervisorLoggedIn');
@@ -384,6 +395,36 @@ function clearLifeguardSession() {
   sessionStorage.removeItem('chemlogEmployeeFirstName');
   sessionStorage.removeItem('chemlogEmployeeLastName');
   localStorage.removeItem(ROLE_STORAGE_KEY);
+  localStorage.removeItem(LIFEGUARD_SESSION_KEY);
+}
+
+function getStoredLifeguardSession() {
+  try {
+    const raw = localStorage.getItem(LIFEGUARD_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    const expires = Number(session?.expires || 0);
+    const hasIdentity = !!(session?.email || session?.employeeId || session?.username);
+    if (!hasIdentity || !expires || Date.now() >= expires) {
+      clearLifeguardSession();
+      return null;
+    }
+    return session;
+  } catch (_) {
+    clearLifeguardSession();
+    return null;
+  }
+}
+
+function hasFreshSupervisorSession() {
+  try {
+    const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
+    if (token?.expires && Date.now() < Number(token.expires)) return true;
+    if (token?.expires && Date.now() >= Number(token.expires)) clearSupervisorSession();
+  } catch (_) {
+    return false;
+  }
+  return false;
 }
 
 function clearSupervisorSession() {
@@ -721,6 +762,7 @@ function markSupervisorLoggedIn(email) {
     const expires = Date.now() + VERIFY_WINDOW_MS;
     localStorage.setItem('loginToken', JSON.stringify({ username: email || 'supervisor', expires }));
     localStorage.setItem(ROLE_STORAGE_KEY, 'supervisor');
+    localStorage.removeItem(LIFEGUARD_SESSION_KEY);
   } catch (err) {
     console.warn('Could not persist supervisor login flags', err);
   }
@@ -1107,7 +1149,25 @@ async function handleCreateAccountSubmit(event) {
 
 function wireMenu() {
   document.querySelectorAll('.home-menu-item').forEach((btn) => {
-    btn.addEventListener('click', () => openModal(btn.dataset.target));
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.target;
+      pendingTarget = target;
+      if (target === 'supervisor') {
+        if (hasFreshSupervisorSession()) {
+          window.location.href = getDestinationPath();
+          return;
+        }
+        openModal(target);
+        return;
+      }
+
+      if (getStoredLifeguardSession() || hasFreshSupervisorSession()) {
+        window.location.href = getDestinationPath();
+        return;
+      }
+
+      openModal(target);
+    });
   });
 }
 

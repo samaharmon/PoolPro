@@ -218,7 +218,8 @@ function normalizeTrainingHeaderCopy() {
 function getResponsiveTableMinWidth(table) {
   if (table.matches('.training-schedule-table')) return '980px';
   if (table.matches('.attendance-table')) return '900px';
-  if (table.matches('.employee-table')) return '760px';
+  if (table.matches('.employee-table')) return '980px';
+  if (table.matches('.resource-table')) return '980px';
   if (table.matches('.sanitation-table')) return '700px';
   return '720px';
 }
@@ -226,23 +227,48 @@ function getResponsiveTableMinWidth(table) {
 function wrapResponsiveTables(root = document) {
   const tables = root.querySelectorAll('table');
   tables.forEach((table) => {
-    if (table.closest('.table-scroll-wrap')) return;
+    table.style.setProperty('--table-min-width', getResponsiveTableMinWidth(table));
+    const existingWrapper = table.closest('.table-scroll-wrap');
+    if (existingWrapper) {
+      ensureTableScrollShell(existingWrapper);
+      bindTableScrollShadow(existingWrapper);
+      updateTableScrollShadow(existingWrapper);
+      return;
+    }
 
     const wrapper = document.createElement('div');
     wrapper.className = 'table-scroll-wrap';
-    table.style.setProperty('--table-min-width', getResponsiveTableMinWidth(table));
-    table.parentNode.insertBefore(wrapper, table);
+    const shell = document.createElement('div');
+    shell.className = 'table-scroll-shell';
+    table.parentNode.insertBefore(shell, table);
+    shell.appendChild(wrapper);
     wrapper.appendChild(table);
     bindTableScrollShadow(wrapper);
   });
 }
 
+function ensureTableScrollShell(wrapper) {
+  if (!wrapper || wrapper.parentElement?.classList.contains('table-scroll-shell')) return wrapper?.parentElement || null;
+  const shell = document.createElement('div');
+  shell.className = 'table-scroll-shell';
+  wrapper.parentNode.insertBefore(shell, wrapper);
+  shell.appendChild(wrapper);
+  return shell;
+}
+
 function updateTableScrollShadow(wrapper) {
   if (!wrapper) return;
+  const shell = ensureTableScrollShell(wrapper) || wrapper;
   const hasOverflow = wrapper.scrollWidth > wrapper.clientWidth + 2;
-  wrapper.classList.toggle('has-overflow-right', hasOverflow && (wrapper.scrollLeft + wrapper.clientWidth) < (wrapper.scrollWidth - 2));
-  wrapper.classList.toggle('has-overflow-left', hasOverflow && wrapper.scrollLeft > 2);
+  const hasRight = hasOverflow && (wrapper.scrollLeft + wrapper.clientWidth) < (wrapper.scrollWidth - 2);
+  const hasLeft = hasOverflow && wrapper.scrollLeft > 2;
+  wrapper.classList.toggle('has-overflow-right', hasRight);
+  wrapper.classList.toggle('has-overflow-left', hasLeft);
   wrapper.classList.toggle('has-overflow', hasOverflow);
+  shell.classList.toggle('has-overflow-right', hasRight);
+  shell.classList.toggle('has-overflow-left', hasLeft);
+  shell.classList.toggle('has-overflow', hasOverflow);
+  shell.style.setProperty('--table-scroll-shadow-height', `${Math.max(0, wrapper.clientHeight - 8)}px`);
 }
 
 function bindTableScrollShadow(wrapper) {
@@ -274,6 +300,23 @@ function observeResponsiveTables() {
   });
 
   observer.observe(document.body, { childList: true, subtree: true });
+}
+
+function hasFreshSupervisorSession() {
+  try {
+    const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
+    if (token?.expires && Date.now() < Number(token.expires)) return true;
+    if (token?.expires && Date.now() >= Number(token.expires)) {
+      localStorage.setItem(LOGIN_KEY, 'false');
+      localStorage.removeItem('loginToken');
+      localStorage.removeItem('ChemLogSupervisor');
+      localStorage.removeItem('trainingSupervisorLoggedIn');
+      localStorage.removeItem('training_supervisor_logged_in_v1');
+      localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
+      if (localStorage.getItem('chemlogRole') === 'supervisor') localStorage.removeItem('chemlogRole');
+    }
+  } catch (_) { /* ignore */ }
+  return false;
 }
 
 function updateCapacityInfo(session, el) {
@@ -1368,12 +1411,11 @@ function setupLogin(el) {
     }, 200);
   }
 
-  // Always start each visit in the lifeguard view; do NOT auto-restore login
-  setLoggedIn(false);
+  setLoggedIn(hasFreshSupervisorSession());
 
   if (openBtn) {
     openBtn.addEventListener('click', () => {
-      if (localStorage.getItem(LOGIN_KEY) === 'true') {
+      if (hasFreshSupervisorSession()) {
         if (typeof showSupervisorView === 'function') {
           showSupervisorView();
         } else {
@@ -1549,14 +1591,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (adminIntent === '1') {
     sessionStorage.removeItem('trainingIntentAdmin');
     // Check all auth sources before showing login modal
-    const alreadyAuth = localStorage.getItem(LOGIN_KEY) === 'true'
-      || localStorage.getItem('ChemLogSupervisor') === 'true'
-      || (() => {
-          try {
-            const t = JSON.parse(localStorage.getItem('loginToken') || 'null');
-            return t && t.expires && Date.now() < t.expires;
-          } catch (_) { return false; }
-        })();
+    const alreadyAuth = hasFreshSupervisorSession();
     if (alreadyAuth) {
       localStorage.setItem(LOGIN_KEY, 'true');
       showSupervisorView();

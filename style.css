@@ -95,7 +95,9 @@ body.dark-mode .page-content-title {
     position: relative;
     z-index: 20;
     box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3);
-    min-height: 0;
+    min-height: calc(130px + env(safe-area-inset-top, 0px));
+    display: flex;
+    align-items: center;
     border-bottom: 2px solid #fff;
 }
 
@@ -142,6 +144,8 @@ body.dark-mode .page-content-title {
 }
 
 .header-right {
+    grid-area: logo;
+    justify-self: end;
     margin-left: auto;
     display: flex;
     align-items: center;
@@ -181,9 +185,10 @@ body.dark-mode .page-content-title {
     left: 0;
     right: 0;
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
     transform: translateY(-8px);
-    transition: opacity 0.22s ease, transform 0.22s ease;
+    transition: opacity 0.36s ease, transform 0.36s ease, visibility 0s linear 0.36s;
     z-index: 800;
     padding-top: calc(10px + env(safe-area-inset-top, 0px));
     padding-bottom: 10px;
@@ -191,8 +196,10 @@ body.dark-mode .page-content-title {
 
 .floating-header.visible {
     opacity: 1;
+    visibility: visible;
     pointer-events: auto;
     transform: translateY(0);
+    transition-delay: 0s;
 }
 
 .floating-header .header-left--compact,
@@ -1018,6 +1025,42 @@ button:active,
     box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
 }
 
+.table-scroll-shell {
+    width: 100%;
+    max-width: 100%;
+    position: relative;
+    margin: 0 auto;
+    outline: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.table-scroll-shell::before,
+.table-scroll-shell::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    height: var(--table-scroll-shadow-height, calc(100% - 8px));
+    width: 28px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 5;
+}
+
+.table-scroll-shell::before {
+    left: 0;
+    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.28));
+}
+
+.table-scroll-shell::after {
+    right: 0;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.28), transparent);
+}
+
+.table-scroll-shell.has-overflow-left::before,
+.table-scroll-shell.has-overflow-right::after {
+    opacity: 1;
+}
+
 .table-scroll-wrap {
     width: 100%;
     max-width: 100%;
@@ -1026,7 +1069,9 @@ button:active,
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 8px;
-    margin: 0 auto;
+    margin: 0;
+    background-repeat: no-repeat;
+    background-size: 28px calc(100% - 8px);
     scrollbar-width: auto;
     scrollbar-color: rgba(255, 255, 255, 0.45) rgba(255, 255, 255, 0.12);
 }
@@ -1039,30 +1084,25 @@ button:active,
 
 .table-scroll-wrap::before,
 .table-scroll-wrap::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 8px;
-    width: 16px;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.18s ease;
-    z-index: 2;
+    content: none;
 }
 
-.table-scroll-wrap::before {
-    left: 0;
-    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.22));
+.table-scroll-wrap.has-overflow-left {
+    background-image: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.28));
+    background-position: left top;
 }
 
-.table-scroll-wrap::after {
-    right: 0;
-    background: linear-gradient(to left, transparent, rgba(0, 0, 0, 0.22));
+.table-scroll-wrap.has-overflow-right {
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.28), transparent);
+    background-position: right top;
 }
 
-.table-scroll-wrap.has-overflow-left::before,
-.table-scroll-wrap.has-overflow-right::after {
-    opacity: 1;
+.table-scroll-wrap.has-overflow-left.has-overflow-right {
+    background-image:
+        linear-gradient(to right, transparent, rgba(0, 0, 0, 0.28)),
+        linear-gradient(to right, rgba(0, 0, 0, 0.28), transparent);
+    background-position: left top, right top;
+    background-size: 28px calc(100% - 8px), 28px calc(100% - 8px);
 }
 
 .table-scroll-wrap::-webkit-scrollbar {
@@ -3215,6 +3255,96 @@ textarea,
   width: 100%;
 }
 
+#settingsModal .employee-add-row {
+  grid-template-columns: repeat(2, minmax(180px, 260px)) !important;
+  justify-content: flex-start;
+  align-items: end;
+  gap: 12px 16px;
+}
+
+#settingsModal .employee-add-row .settings-field,
+#settingsModal .employee-add-row .employee-add-btn-cell {
+  width: 100%;
+  max-width: 260px;
+}
+
+#settingsModal .employee-add-row .employee-add-btn-cell {
+  align-self: end;
+}
+
+.table-scroll-wrap > .employee-table,
+.table-scroll-wrap > .resource-table {
+  table-layout: auto;
+  width: max(100%, var(--table-min-width, 980px));
+}
+
+.table-scroll-wrap > .employee-table th,
+.table-scroll-wrap > .employee-table td,
+.table-scroll-wrap > .resource-table th,
+.table-scroll-wrap > .resource-table td {
+  overflow: visible;
+  text-overflow: clip;
+  vertical-align: middle;
+}
+
+.table-scroll-wrap > .employee-table th:nth-child(1),
+.table-scroll-wrap > .employee-table td:nth-child(1) { min-width: 170px; width: auto; }
+
+.table-scroll-wrap > .employee-table th:nth-child(2),
+.table-scroll-wrap > .employee-table td:nth-child(2) { min-width: 150px; width: auto; }
+
+.table-scroll-wrap > .employee-table th:nth-child(3),
+.table-scroll-wrap > .employee-table td:nth-child(3) { min-width: 240px; width: auto; }
+
+.table-scroll-wrap > .employee-table th:nth-child(4),
+.table-scroll-wrap > .employee-table td:nth-child(4) { min-width: 150px; width: auto; }
+
+.table-scroll-wrap > .employee-table th:nth-child(5),
+.table-scroll-wrap > .employee-table td:nth-child(5) { min-width: 190px; width: auto; }
+
+.table-scroll-wrap > .employee-table th:nth-child(6),
+.table-scroll-wrap > .employee-table td:nth-child(6) { min-width: 130px; width: auto; text-align: center; }
+
+.table-scroll-wrap > .resource-table th:nth-child(1),
+.table-scroll-wrap > .resource-table td:nth-child(1) { min-width: 220px; width: auto; }
+
+.table-scroll-wrap > .resource-table th:nth-child(2),
+.table-scroll-wrap > .resource-table td:nth-child(2) { min-width: 150px; width: auto; }
+
+.table-scroll-wrap > .resource-table th:nth-child(3),
+.table-scroll-wrap > .resource-table td:nth-child(3) { min-width: 280px; width: auto; white-space: normal; }
+
+.table-scroll-wrap > .resource-table th:nth-child(4),
+.table-scroll-wrap > .resource-table td:nth-child(4),
+.table-scroll-wrap > .resource-table th:nth-child(5),
+.table-scroll-wrap > .resource-table td:nth-child(5) { min-width: 150px; width: auto; }
+
+.table-scroll-wrap > .resource-table.resource-table-admin th:nth-child(6),
+.table-scroll-wrap > .resource-table.resource-table-admin td:nth-child(6) { min-width: 140px; width: auto; text-align: center; }
+
+#settingsModal .section-subtitle {
+  margin-bottom: 18px;
+}
+
+#settingsModal .section-subtitle + .training-filter-bar,
+#settingsModal .sanitation-filter-bar,
+#employeeFilterBar,
+#resourceFilterBar {
+  margin-top: 18px !important;
+}
+
+#settingsModal .training-filter-bar,
+#settingsModal .sanitation-filter-bar {
+  margin-bottom: 18px !important;
+}
+
+#settingsModal .training-filter-bar + .toggle-btn,
+#settingsModal .sanitation-filter-bar + .toggle-btn,
+#settingsModal .sanitation-market-controls {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}
+
 .settings-section-toggle {
   width: auto;
   display: inline-flex;
@@ -3317,6 +3447,7 @@ td.concern-major {
    ========================= */
 
 .dashboard-market-section {
+  width: 100%;
   margin-bottom: 40px;
 }
 
@@ -3359,7 +3490,7 @@ td.concern-major {
   border-radius: 0;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .dashboard-tab-panel.active {
@@ -3370,6 +3501,21 @@ td.concern-major {
   width: 100%;
   table-layout: auto;
   --table-min-width: 1200px;
+}
+
+#supervisorDashboard .container {
+  align-items: stretch;
+}
+
+#dashboardContent,
+#jobFormsContent {
+  width: 100%;
+}
+
+#supervisorDashboard .dashboard-market-section {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 /* 5-column widths: Facility Name, pH, Cl, Timestamp, Respondent */
@@ -3416,6 +3562,7 @@ body.dark-mode .dashboard-tab-panel {
 .sanitation-table.sanitation-table--settings th:nth-child(2),
 .sanitation-table.sanitation-table--settings td:nth-child(2) {
   width: 50%;
+  text-align: left !important;
 }
 
 .sanitation-table.sanitation-table--settings th:nth-child(3),
@@ -3495,7 +3642,7 @@ body.dark-mode .dash-respondent-tooltip {
 @media (max-width: 768px) {
   /* Header */
   .header {
-    min-height: auto;
+    min-height: calc(112px + env(safe-area-inset-top, 0px));
     padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 14px;
   }
 
@@ -3765,4 +3912,15 @@ body.dark-mode .dash-respondent-tooltip {
   margin-top: 6px;
   border-top: 1px dashed #ddd;
   padding-top: 4px;
+}
+
+@media (max-width: 640px) {
+  #settingsModal .employee-add-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  #settingsModal .employee-add-row .settings-field,
+  #settingsModal .employee-add-row .employee-add-btn-cell {
+    max-width: none;
+  }
 }
