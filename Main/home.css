@@ -76,6 +76,20 @@ body {
   box-shadow: 0 6px 10px rgba(0, 0, 0, 0.5);
 }
 
+.home-menu-item:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+.home-menu-item-supervisor {
+  background: linear-gradient(135deg, rgba(105, 20, 14, 0.96), rgba(32, 40, 52, 0.96));
+  border-color: #ffffff;
+}
+
+.home-menu-item-supervisor:hover {
+  background: linear-gradient(135deg, rgba(126, 27, 19, 0.98), rgba(42, 54, 72, 0.98));
+}
+
 /* Modal shell – match main site feel */
 .modal {
   display: none;
@@ -207,14 +221,27 @@ body {
   margin-bottom: 14px;
 }
 
-.home-verify-methods {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
+.home-verify-hint {
+  color: #cfcfcf;
+  font-style: italic;
+  line-height: 1.45;
+  margin: 0 0 18px;
 }
 
-.home-verify-methods .submit-btn {
+.home-verify-status {
+  min-height: 54px;
+}
+
+.home-verify-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.home-verify-actions .submit-btn {
   margin-top: 0;
 }
 
@@ -265,10 +292,22 @@ body {
   border-radius: 0;
   margin-top: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  transition: background-color 0.15s ease, transform 0.06s ease, box-shadow 0.15s ease;
 }
 
 .submit-btn:hover {
   background-color: #521008;
+}
+
+.submit-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+.submit-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
 }
 
 .submit-btn.secondary-btn:hover {
@@ -357,5 +396,10 @@ body {
 
   .home-form-actions {
     flex-direction: column;
+  }
+
+  .home-verify-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }

@@ -29,6 +29,9 @@
       <button class="home-menu-item" data-target="resources">
         <span>Resources</span>
       </button>
+      <button class="home-menu-item home-menu-item-supervisor" data-target="supervisor">
+        <span>Supervisor Tools</span>
+      </button>
     </nav>
   </main>
 
@@ -111,16 +114,15 @@
 
       <form id="homeVerifyForm" class="hidden">
         <p class="home-verify-copy" id="homeVerifySubtitle"></p>
+        <p class="home-verify-hint" id="homeVerifyHint">Check your junk/spam folders if you do not see the email within 60 seconds. Otherwise, click below to resend the verification email.</p>
 
-        <div class="home-verify-methods">
-          <button type="button" class="submit-btn secondary-btn" id="homeVerifyResendBtn">Resend Verification Email</button>
+        <div class="home-verify-status">
+          <p class="home-verify-timer" id="homeVerifyCooldownText"></p>
+          <p class="form-message" id="homeVerifyMessage"></p>
         </div>
 
-        <p class="home-verify-timer" id="homeVerifyCooldownText"></p>
-
-        <p class="form-message" id="homeVerifyMessage"></p>
-
-        <div class="home-form-actions">
+        <div class="home-verify-actions">
+          <button type="button" class="submit-btn secondary-btn" id="homeVerifyResendBtn">Resend Verification</button>
           <button type="button" class="submit-btn secondary-btn" id="homeVerifyBackBtn">Return to Login</button>
         </div>
       </form>

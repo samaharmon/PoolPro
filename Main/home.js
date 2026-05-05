@@ -54,6 +54,7 @@ const messageEl = document.getElementById('homeLoginMessage');
 const createMessageEl = document.getElementById('homeCreateAccountMessage');
 const verifyMessageEl = document.getElementById('homeVerifyMessage');
 const verifySubtitleEl = document.getElementById('homeVerifySubtitle');
+const verifyHintEl = document.getElementById('homeVerifyHint');
 const verifyResendBtn = document.getElementById('homeVerifyResendBtn');
 const verifyCooldownText = document.getElementById('homeVerifyCooldownText');
 const verifyBackBtn = document.getElementById('homeVerifyBackBtn');
@@ -285,7 +286,10 @@ function resetVerificationState() {
   pendingVerification = null;
   if (verifyForm) verifyForm.reset();
   if (verifySubtitleEl) verifySubtitleEl.textContent = '';
-  if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification Email';
+  if (verifyHintEl) {
+    verifyHintEl.textContent = 'Check your junk/spam folders if you do not see the email within 60 seconds. Otherwise, click below to resend the verification email.';
+  }
+  if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification';
   verifyCooldownUntil = 0;
   updateVerifyCooldownUi();
   stopVerifyCooldownTimer();
@@ -653,18 +657,17 @@ function openVerificationView({
     emailAuthMode,
   });
 
-  const usesSignInLink = emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK;
   if (verifySubtitleEl) {
-    verifySubtitleEl.textContent = usesSignInLink
-      ? `A fresh email authentication link is required before PoolPro access. Check ${maskEmail(email)}, open the email, and PoolPro will finish access automatically after the link is clicked.`
-      : `Email verification is required before PoolPro access${force && origin === 'create' ? ' for this new account' : ''}. Check ${maskEmail(email)}, open the verification email, and PoolPro will finish access automatically after the link is clicked.`;
+    verifySubtitleEl.textContent = `Email verification is required to access PoolPro. Check the inbox for ${maskEmail(email)} and open the verification email. Then, click the verification link and you will be granted access to PoolPro in your original browser.`;
   }
-  if (verifyResendBtn) {
-    verifyResendBtn.textContent = usesSignInLink ? 'Resend Authentication Email' : 'Resend Verification Email';
+  if (verifyHintEl) {
+    verifyHintEl.textContent = 'Check your junk/spam folders if you do not see the email within 60 seconds. Otherwise, click below to resend the verification email.';
   }
+  if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification';
+  const usesSignInLink = emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK;
   setMessage(
     verifyMessageEl,
-    usesSignInLink ? 'Waiting for the authentication email link.' : 'We are checking your email verification status automatically.'
+    ''
   );
   setModalView('verify');
   if (usesSignInLink) stopVerifyStatusPoller();
@@ -684,7 +687,7 @@ function openVerificationView({
     updateVerifyCooldownUi();
     setMessage(
       verifyMessageEl,
-      `An ${usesSignInLink ? 'authentication' : 'verification'} email was recently sent to ${maskEmail(email)}. Click the email link and PoolPro will finish access automatically, or wait for the resend timer if you need another one.`
+      `A verification email was recently sent to ${maskEmail(email)}.`
     );
     return;
   }
@@ -828,7 +831,7 @@ async function sendVerificationEmail({ isResend = false } = {}) {
   startVerifyCooldown();
   setMessage(
     verifyMessageEl,
-    `${isResend ? (usesSignInLink ? 'Authentication email resent' : 'Verification email resent') : (usesSignInLink ? 'Authentication email sent' : 'Verification email sent')} to ${maskEmail(email)}. Click the ${usesSignInLink ? 'authentication' : 'verification'} link in the email and PoolPro will finish sign-in automatically. If it does not appear soon, check spam or junk.`
+    `${isResend ? 'Verification email resent' : 'Verification email sent'} to ${maskEmail(email)}.`
   );
 }
 
