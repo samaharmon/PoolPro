@@ -114,6 +114,10 @@ function populateCYAFields(poolId) {
 // photo slot counter per group
 const slotCounters = {};
 
+function getSlotCount(group) {
+  return group?.querySelectorAll('.duties-photo-slot').length || 0;
+}
+
 function initPhotoGroups() {
   document.querySelectorAll('.duties-multi-upload').forEach(group => {
     const min = parseInt(group.dataset.min || '0', 10);
@@ -139,7 +143,7 @@ window.addPhotoSlot = function (groupId) {
 function addPhotoSlotToGroup(group) {
   const groupId = group.id;
   const max = parseInt(group.dataset.max || '10', 10);
-  if (slotCounters[groupId] >= max) return;
+  if (getSlotCount(group) >= max) return null;
 
   const idx = ++slotCounters[groupId];
   const slotId = `${groupId}_slot${idx}`;
@@ -167,20 +171,21 @@ function addPhotoSlotToGroup(group) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'image/*';
-  fileInput.capture = 'environment';
+  fileInput.multiple = true;
   fileInput.style.display = 'none';
   fileInput.id = inputId;
   fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      preview.src = ev.target.result;
-      preview.style.display = 'block';
-      placeholder.style.display = 'none';
-      removeBtn.style.display = 'inline-block';
-    };
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    setPhotoSlotFile({ slot, fileInput, preview, placeholder, removeBtn }, files[0]);
+
+    const remainingCapacity = Math.max(0, max - getSlotCount(group));
+    files.slice(1, remainingCapacity + 1).forEach((file) => {
+      const nextSlot = addPhotoSlotToGroup(group);
+      if (!nextSlot) return;
+      setPhotoSlotFile(nextSlot, file);
+    });
+    updateAddBtn(groupId);
   });
 
   const removeBtn = document.createElement('button');
@@ -191,13 +196,13 @@ function addPhotoSlotToGroup(group) {
   removeBtn.onclick = () => {
     const min = parseInt(group.dataset.min || '0', 10);
     // Always remove slot if above minimum, or just clear if at minimum
-    if (slotCounters[groupId] > Math.max(min, 1)) {
+    if (getSlotCount(group) > Math.max(min, 1)) {
       slot.remove();
-      slotCounters[groupId]--;
       updateAddBtn(groupId);
     } else {
       // Just clear the photo
       fileInput.value = '';
+      fileInput._selectedFile = null;
       preview.src = '';
       preview.style.display = 'none';
       placeholder.style.display = 'flex';
@@ -211,16 +216,39 @@ function addPhotoSlotToGroup(group) {
   slot.appendChild(uploadArea);
   slot.appendChild(removeBtn);
   group.appendChild(slot);
+  return { slot, fileInput, preview, placeholder, removeBtn };
+}
+
+function setPhotoSlotFile(slotParts, file) {
+  const { fileInput, preview, placeholder, removeBtn } = slotParts;
+  if (!fileInput || !file) return;
+  try {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    fileInput.files = transfer.files;
+  } catch (_) {
+    fileInput._selectedFile = file;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    preview.src = ev.target.result;
+    preview.style.display = 'block';
+    placeholder.style.display = 'none';
+    removeBtn.style.display = 'inline-block';
+  };
+  reader.readAsDataURL(file);
 }
 
 function updateAddBtn(groupId) {
   const group = document.getElementById(groupId);
   if (!group) return;
   const max = parseInt(group.dataset.max || '10', 10);
+  const count = getSlotCount(group);
   const btn = group.nextElementSibling;
   if (btn && btn.classList.contains('duties-add-photo-btn')) {
-    btn.style.display = slotCounters[groupId] >= max ? 'none' : 'inline-block';
-    btn.textContent = `+ Add Photo (${slotCounters[groupId]}/${max})`;
+    btn.style.display = count >= max ? 'none' : 'inline-block';
+    btn.textContent = `+ Add Photo (${count}/${max})`;
   }
 }
 
@@ -233,9 +261,75 @@ function collectPhotosFromGroup(groupId) {
   if (!group) return [];
   const files = [];
   group.querySelectorAll('input[type="file"]').forEach(input => {
-    if (input.files[0]) files.push(input.files[0]);
+    const file = input.files?.[0] || input._selectedFile;
+    if (file) files.push(file);
   });
   return files;
+}
+
+function timeoutAfter(ms, label) {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+  });
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function compressImageToDataURL(file) {
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Unable to prepare image preview.'));
+      img.src = objectUrl;
+    });
+
+    const maxSide = 900;
+    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+    const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', 0.65);
+  } catch (err) {
+    console.warn('[Duties] Image compression failed; using original file data.', err);
+    return readFileAsDataURL(file);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function uploadDutyPhoto({ storage, pool, category, file, index }) {
+  const safeName = String(file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `dutyPhotos/${pool}/${category}/${Date.now()}_${index}_${safeName}`;
+  const storageRef = ref(storage, path);
+
+  try {
+    await Promise.race([
+      uploadBytes(storageRef, file),
+      timeoutAfter(12000, 'Firebase Storage upload'),
+    ]);
+    const url = await Promise.race([
+      getDownloadURL(storageRef),
+      timeoutAfter(12000, 'Firebase Storage download URL'),
+    ]);
+    return { index, url, name: file.name, storagePath: path, source: 'storage' };
+  } catch (err) {
+    console.warn('[Duties] Storage upload failed; saving compressed inline photo instead.', err);
+    const dataUrl = await compressImageToDataURL(file);
+    return { index, url: dataUrl, name: file.name, storagePath: '', source: 'inline' };
+  }
 }
 
 // ============================================================
@@ -278,11 +372,7 @@ window.submitDutiesForm = async function () {
       const files = collectPhotosFromGroup(groupId);
       const urls = [];
       for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const storageRef = ref(storage, `dutyPhotos/${pool}/${category}/${Date.now()}_${i}_${file.name}`);
-        await uploadBytes(storageRef, file);
-        const url = await getDownloadURL(storageRef);
-        urls.push({ index: i, url, name: file.name });
+        urls.push(await uploadDutyPhoto({ storage, pool, category, file: files[i], index: i }));
       }
       return urls;
     }

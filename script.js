@@ -1613,7 +1613,9 @@ function renderDashboard(recentLogs) {
           ) : null;
           const rawPhone = empRecord?.phone || '';
           const homePool = empRecord?.homePool || '—';
-          const digits = rawPhone.replace(/\D/g, '');
+          const phoneDigits = getTenDigitPhone(rawPhone);
+          const displayPhone = phoneDigits ? formatPhoneDisplay(phoneDigits) : '—';
+          const phoneHref = phoneDigits ? `+1${phoneDigits}` : '';
 
           const nameWrapper = document.createElement('span');
           nameWrapper.className = 'dash-respondent-cell';
@@ -1621,21 +1623,42 @@ function renderDashboard(recentLogs) {
           const nameSpan = document.createElement('span');
           nameSpan.className = 'dash-respondent-name';
           nameSpan.textContent = fullName;
-          if (digits.length >= 10) {
-            nameSpan.style.cursor = 'pointer';
-            nameSpan.addEventListener('click', () => {
-              window.location.href = `sms:+1${digits.slice(-10)}`;
-            });
-          }
 
           const tooltip = document.createElement('div');
           tooltip.className = 'dash-respondent-tooltip';
-          tooltip.innerHTML = `
-            <strong>${fullName}</strong><br>
-            ID: ${empId || '—'}<br>
-            Home Pool: ${homePool}<br>
-            Phone: ${rawPhone || '—'}
-          `;
+          const tooltipName = document.createElement('strong');
+          tooltipName.textContent = fullName;
+          const idLine = document.createElement('div');
+          idLine.textContent = `ID: ${empId || '—'}`;
+          const homePoolLine = document.createElement('div');
+          homePoolLine.textContent = `Home Pool: ${homePool}`;
+          const phoneLine = document.createElement('div');
+          phoneLine.className = 'dash-phone-line';
+          phoneLine.textContent = `Phone: ${displayPhone}`;
+
+          tooltip.appendChild(tooltipName);
+          tooltip.appendChild(idLine);
+          tooltip.appendChild(homePoolLine);
+          tooltip.appendChild(phoneLine);
+
+          if (phoneHref) {
+            const actions = document.createElement('div');
+            actions.className = 'dash-phone-actions';
+
+            const textLink = document.createElement('a');
+            textLink.href = `sms:${phoneHref}`;
+            textLink.textContent = 'Text';
+            textLink.addEventListener('click', (event) => event.stopPropagation());
+
+            const callLink = document.createElement('a');
+            callLink.href = `tel:${phoneHref}`;
+            callLink.textContent = 'Call';
+            callLink.addEventListener('click', (event) => event.stopPropagation());
+
+            actions.appendChild(textLink);
+            actions.appendChild(callLink);
+            tooltip.appendChild(actions);
+          }
 
           nameWrapper.appendChild(nameSpan);
           nameWrapper.appendChild(tooltip);
@@ -1853,6 +1876,12 @@ function formatPhoneDisplay(raw) {
   if (digits.length === 10) return `(${digits.slice(0,3)}) ${digits.slice(3,6)}-${digits.slice(6)}`;
   if (digits.length === 11 && digits[0] === '1') return `(${digits.slice(1,4)}) ${digits.slice(4,7)}-${digits.slice(7)}`;
   return raw || '';
+}
+
+function getTenDigitPhone(raw) {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (digits.length >= 10) return digits.slice(-10);
+  return '';
 }
 
 function normalizePhoneDigits(raw) {
@@ -2252,15 +2281,9 @@ function ensureResourcesSettingsSection() {
         <input type="text" id="resourceDescriptionInput" />
       </div>
       <div class="settings-field">
-        <label for="resourceMarketInput">Market</label>
-        <select id="resourceMarketInput">
-          <option value="">Select market</option>
-        </select>
-      </div>
-      <div class="settings-field">
-        <label for="resourcePoolInput">Pool</label>
+        <label for="resourcePoolInput">Facility</label>
         <select id="resourcePoolInput">
-          <option value="">Select pool</option>
+          <option value="">Select facility</option>
         </select>
       </div>
     </div>
@@ -2273,7 +2296,7 @@ function ensureResourcesSettingsSection() {
         <option value="all">All Markets</option>
       </select>
       <select id="resourcePoolFilter" class="training-filter-select">
-        <option value="all">All Pools</option>
+        <option value="all">All Facilities</option>
       </select>
     </div>
     <div id="resourceTableSection" class="sanitation-section overlay-disabled resource-table-section">
@@ -2284,7 +2307,7 @@ function ensureResourcesSettingsSection() {
             <th>Upload Date</th>
             <th>Description</th>
             <th>Market</th>
-            <th>Pool</th>
+            <th>Facility</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -2304,6 +2327,10 @@ function getPoolMarket(poolName) {
   if (!match) return '';
   const markets = Array.isArray(match.markets) ? match.markets : (match.market ? [match.market] : []);
   return markets[0] || '';
+}
+
+function getResourceMarket(item) {
+  return (item?.market || getPoolMarket(item?.pool || '') || '').toString().trim();
 }
 
 function getAllMarkets() {
@@ -2361,7 +2388,7 @@ function formatResourceDate(uploadDate, uploadedAt) {
 
 function getFilteredResources({ market = 'all', pool = 'all' } = {}) {
   return resourcesData
-    .filter((item) => (market === 'all' ? true : item.market === market))
+    .filter((item) => (market === 'all' ? true : getResourceMarket(item) === market))
     .filter((item) => (pool === 'all' ? true : item.pool === pool))
     .sort(sortResourcesDescending);
 }
@@ -2369,7 +2396,7 @@ function getFilteredResources({ market = 'all', pool = 'all' } = {}) {
 function populateResourcePoolOptions(selectEl, market = 'all', includeAll = false) {
   if (!selectEl) return;
   const current = selectEl.value;
-  const defaultLabel = includeAll ? 'All Pools' : 'Select pool';
+  const defaultLabel = includeAll ? 'All Facilities' : 'Select facility';
   selectEl.innerHTML = `<option value="${includeAll ? 'all' : ''}">${defaultLabel}</option>`;
 
   const pools = (market === 'all' || !market)
@@ -2379,16 +2406,29 @@ function populateResourcePoolOptions(selectEl, market = 'all', includeAll = fals
       return markets.includes(market);
     });
 
-  pools
-    .map((pool) => getPoolName(pool))
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b))
-    .forEach((poolName) => {
-      const option = document.createElement('option');
-      option.value = poolName;
-      option.textContent = poolName;
-      selectEl.appendChild(option);
-    });
+  const groups = {};
+  pools.forEach((pool) => {
+    const poolName = getPoolName(pool);
+    if (!poolName) return;
+    const markets = Array.isArray(pool.markets) ? pool.markets : (pool.market ? [pool.market] : []);
+    const groupName = markets[0] || 'Other';
+    if (!groups[groupName]) groups[groupName] = [];
+    groups[groupName].push(poolName);
+  });
+
+  Object.keys(groups).sort((a, b) => a.localeCompare(b)).forEach((marketName) => {
+    const group = document.createElement('optgroup');
+    group.label = marketName;
+    groups[marketName]
+      .sort((a, b) => a.localeCompare(b))
+      .forEach((poolName) => {
+        const option = document.createElement('option');
+        option.value = poolName;
+        option.textContent = poolName;
+        group.appendChild(option);
+      });
+    selectEl.appendChild(group);
+  });
 
   if (current && Array.from(selectEl.options).some((option) => option.value === current)) {
     selectEl.value = current;
@@ -2412,11 +2452,10 @@ function populateResourceMarketOptions(selectEl, includeAll = false) {
 }
 
 function refreshResourceControls() {
-  populateResourceMarketOptions(document.getElementById('resourceMarketInput'), false);
   populateResourceMarketOptions(document.getElementById('resourceMarketFilter'), true);
   populateResourceMarketOptions(document.getElementById('resourcesMarketFilter'), true);
 
-  populateResourcePoolOptions(document.getElementById('resourcePoolInput'), document.getElementById('resourceMarketInput')?.value || 'all', false);
+  populateResourcePoolOptions(document.getElementById('resourcePoolInput'), 'all', false);
   populateResourcePoolOptions(document.getElementById('resourcePoolFilter'), document.getElementById('resourceMarketFilter')?.value || 'all', true);
   populateResourcePoolOptions(document.getElementById('resourcesPoolFilter'), document.getElementById('resourcesMarketFilter')?.value || 'all', true);
 }
@@ -2430,7 +2469,7 @@ function buildResourceRowCells(item, includeActions = false) {
     <td>${nameHtml}</td>
     <td>${formatResourceDate(item.uploadDate, item.uploadedAt)}</td>
     <td>${item.description || '—'}</td>
-    <td>${item.market || '—'}</td>
+    <td>${getResourceMarket(item) || '—'}</td>
     <td>${item.pool || '—'}</td>
     ${includeActions ? '<td class="actions-cell"></td>' : ''}
   `;
@@ -2495,8 +2534,7 @@ function renderResourcesSettingsTable() {
       if (fileInput) fileInput.value = '';
       document.getElementById('resourceDocumentNameInput').value = item.documentName || '';
       document.getElementById('resourceDescriptionInput').value = item.description || '';
-      document.getElementById('resourceMarketInput').value = item.market || '';
-      populateResourcePoolOptions(document.getElementById('resourcePoolInput'), item.market || 'all', false);
+      populateResourcePoolOptions(document.getElementById('resourcePoolInput'), 'all', false);
       document.getElementById('resourcePoolInput').value = item.pool || '';
       const actionBtn = document.getElementById('resourceAddBtn');
       if (actionBtn) actionBtn.textContent = 'Save';
@@ -2530,13 +2568,26 @@ function clearResourceForm() {
   });
   const fileInput = document.getElementById('resourceFileInput');
   if (fileInput) fileInput.value = '';
-  const marketInput = document.getElementById('resourceMarketInput');
   const poolInput = document.getElementById('resourcePoolInput');
-  if (marketInput) marketInput.value = '';
   if (poolInput) poolInput.value = '';
   const actionBtn = document.getElementById('resourceAddBtn');
   if (actionBtn) actionBtn.textContent = 'Add';
   document.getElementById('resourceTableSection')?.classList.add('overlay-disabled');
+}
+
+function timeoutAfter(ms, label) {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+  });
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file.'));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function uploadResourceFile(file) {
@@ -2544,13 +2595,31 @@ async function uploadResourceFile(file) {
   const path = `resources/${safeName}`;
   const storage = getResourceStorage();
   const refObj = storageRef(storage, path);
-  await uploadBytes(refObj, file);
-  const fileUrl = await getDownloadURL(refObj);
-  return {
-    storagePath: path,
-    fileUrl,
-    fileName: file.name || safeName,
-  };
+  try {
+    await Promise.race([
+      uploadBytes(refObj, file),
+      timeoutAfter(12000, 'Firebase Storage upload'),
+    ]);
+    const fileUrl = await Promise.race([
+      getDownloadURL(refObj),
+      timeoutAfter(12000, 'Firebase Storage download URL'),
+    ]);
+    return {
+      storagePath: path,
+      fileUrl,
+      fileName: file.name || safeName,
+    };
+  } catch (err) {
+    console.warn('[PoolPro] Storage upload failed for resource.', err);
+    if (file.size > 450 * 1024) {
+      throw new Error('Firebase Storage upload is blocked. Configure Storage CORS for poolpro1.vercel.app, then try this file again.');
+    }
+    return {
+      storagePath: '',
+      fileUrl: await readFileAsDataURL(file),
+      fileName: file.name || safeName,
+    };
+  }
 }
 
 async function deleteResourceRecord(item) {
@@ -2605,24 +2674,18 @@ function setupResourcesPageFilters() {
 
 function setupResourcesSettingsUI() {
   const fileInput = document.getElementById('resourceFileInput');
-  const marketInput = document.getElementById('resourceMarketInput');
   const poolInput = document.getElementById('resourcePoolInput');
   const addBtn = document.getElementById('resourceAddBtn');
   const marketFilter = document.getElementById('resourceMarketFilter');
   const poolFilter = document.getElementById('resourcePoolFilter');
   const deleteAllBtn = document.getElementById('resourceDeleteAllBtn');
 
-  if (!fileInput || !marketInput || !poolInput || !addBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
+  if (!fileInput || !poolInput || !addBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
   if (addBtn.dataset.bound === 'true') return;
   addBtn.dataset.bound = 'true';
 
   fileInput.addEventListener('change', () => {
     pendingResourceFile = fileInput.files?.[0] || null;
-  });
-
-  marketInput.addEventListener('change', () => {
-    populateResourcePoolOptions(poolInput, marketInput.value || 'all', false);
-    poolInput.value = '';
   });
 
   marketFilter.value = 'all';
@@ -2644,11 +2707,11 @@ function setupResourcesSettingsUI() {
   addBtn.addEventListener('click', async () => {
     const documentName = document.getElementById('resourceDocumentNameInput')?.value.trim() || '';
     const description = document.getElementById('resourceDescriptionInput')?.value.trim() || '';
-    const market = marketInput.value || '';
     const pool = poolInput.value || '';
+    const market = getPoolMarket(pool);
 
-    if (!documentName || !description || !market || !pool) {
-      alert('Document Name, Description, Market, and Pool are required.');
+    if (!documentName || !description || !pool) {
+      alert('Document Name, Description, and Facility are required.');
       return;
     }
 
@@ -2719,7 +2782,7 @@ function setupResourcesSettingsUI() {
       await loadResourcesDocuments();
     } catch (err) {
       console.error('[PoolPro] Unable to save resource:', err);
-      alert('Unable to save this document right now.');
+      alert(err?.message || 'Unable to save this document right now.');
     }
   });
 

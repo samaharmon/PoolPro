@@ -787,12 +787,14 @@ button:active,
 
 /* Scrollable settings modal */
 #settingsModal {
-    overflow-y: auto;
+    overflow: hidden;
     max-height: 90vh;
 }
 
 #settingsModal .modal-header {
-    position: static;
+    position: sticky;
+    top: 0;
+    z-index: 30;
     background: var(--poolpro-accent-gradient);
     border-bottom: 2px solid #fff;
 }
@@ -854,6 +856,9 @@ button:active,
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 30;
     padding: 20px;
     margin: 0 -20px 20px;
     border-bottom: 2px solid #fff;
@@ -3597,6 +3602,33 @@ body.dark-mode .dashboard-tab-panel {
   box-shadow: 0 4px 10px rgba(0,0,0,0.2);
   line-height: 1.6;
   min-width: 180px;
+}
+
+.dash-phone-line {
+  margin-top: 2px;
+}
+
+.dash-phone-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dash-phone-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  padding: 4px 10px;
+  background: #69140e;
+  color: #fff !important;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 12px;
+}
+
+.dash-phone-actions a:hover {
+  background: #8b1f12;
 }
 
 .dash-respondent-cell:hover .dash-respondent-tooltip {
