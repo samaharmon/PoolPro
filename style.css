@@ -371,6 +371,20 @@ body.dark-mode .dropdown-item.logout:hover {
     border-top: 1px solid #ccc;
 }
 
+.account-management-section .form-message {
+    min-height: 1.2em;
+    margin-top: 10px;
+    color: #e6e6e6;
+}
+
+.account-management-section .form-message.error {
+    color: #ff9a9a;
+}
+
+.account-management-section .form-message.success {
+    color: #93d68f;
+}
+
 .danger-button {
     background-color: #ff4d4d;
     border-color: #ff4d4d;

@@ -19,6 +19,7 @@ import {
   listenPools,
   signInWithEmailAndPassword,
   signOut,
+  deleteUser,
   onAuthStateChanged,
   EmailAuthProvider,
   reauthenticateWithCredential
@@ -52,6 +53,7 @@ let securitySettings = {
 let securityIdleTimer = null;
 let securityEventsBound = false;
 let agreementGatePromise = null;
+let accountDeletionInProgress = false;
 let sanitationEditing = false;
 let sanitationMarketFilter = 'all';
 window.trainingSchedule = trainingSchedule;
@@ -108,6 +110,28 @@ function injectResourcesMenuLinks() {
     link.dataset.nav = 'resources';
     link.textContent = 'Resources';
     dutiesLink.insertAdjacentElement('afterend', link);
+  });
+}
+
+function injectLifeguardSettingsMenuLinks() {
+  document.querySelectorAll('.dropdown-menu').forEach((menu) => {
+    if (menu.querySelector('[data-nav="lifeguard-settings"]')) return;
+
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = 'dropdown-item lifeguard-only';
+    link.dataset.nav = 'lifeguard-settings';
+    link.textContent = 'Settings';
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      window.openSettings();
+    });
+
+    const logoutLink = menu.querySelector('[data-nav="logout"]');
+    const supervisorStart = menu.querySelector('.supervisor-only');
+    const anchor = logoutLink || supervisorStart;
+    if (anchor) anchor.insertAdjacentElement('beforebegin', link);
+    else menu.appendChild(link);
   });
 }
 
@@ -232,6 +256,8 @@ function observeResponsiveTables() {
 // ============================================================
 
 window.openSettings = function () {
+  ensureAccountManagementSection();
+  updateSettingsModalForRole();
   const modal = document.getElementById('settingsModal');
   const overlay = document.getElementById('settingsOverlay');
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
@@ -244,6 +270,160 @@ window.openSettings = function () {
     requestAnimationFrame(() => modal.classList.add('visible'));
   }
 };
+
+function getAgreementDocIdForContext(context) {
+  const role = (context?.role || 'user').toString().trim().toLowerCase();
+  const email = (context?.email || '').toString().trim().toLowerCase();
+  const username = (context?.username || '').toString().trim().toLowerCase();
+  const employeeId = (context?.employeeId || email || username || '').toString().trim();
+  return email ? `email:${email}` : `${role}:${username || employeeId || 'unknown-user'}`;
+}
+
+function setAccountManagementMessage(text, isError = false) {
+  const msg = document.getElementById('accountManagementMessage');
+  if (!msg) return;
+  msg.textContent = text || '';
+  msg.classList.toggle('error', !!text && isError);
+  msg.classList.toggle('success', !!text && !isError);
+}
+
+function ensureAccountManagementSection() {
+  const modalContent = document.querySelector('#settingsModal .settings-modal-content');
+  if (!modalContent || document.getElementById('accountManagementSection')) return;
+
+  const section = document.createElement('section');
+  section.className = 'settings-section settings-group account-management-section';
+  section.id = 'accountManagementSection';
+  section.innerHTML = `
+    <h3>Account Management</h3>
+    <p class="section-subtitle" id="accountManagementDescription">
+      Permanently delete the currently signed-in PoolPro account.
+    </p>
+    <button type="button" class="submit-btn danger-button" id="deleteCurrentAccountBtn">Delete Account</button>
+    <p class="form-message" id="accountManagementMessage"></p>
+  `;
+
+  const header = modalContent.querySelector('.modal-header');
+  if (header) header.insertAdjacentElement('afterend', section);
+  else modalContent.prepend(section);
+}
+
+function updateSettingsModalForRole() {
+  const modal = document.getElementById('settingsModal');
+  if (!modal) return;
+
+  const lifeguard = isLifeguardSession() && !isSupervisor();
+  modal.classList.toggle('lifeguard-settings-view', lifeguard);
+  modal.querySelectorAll('.settings-section').forEach((section) => {
+    section.style.display = lifeguard && section.id !== 'accountManagementSection' ? 'none' : '';
+  });
+  if (lifeguard) {
+    document.getElementById('accountManagementSection')?.classList.remove('collapsed');
+  }
+
+  const description = document.getElementById('accountManagementDescription');
+  if (description) {
+    description.textContent = lifeguard
+      ? 'Permanently delete your lifeguard PoolPro account. This removes your login record and employee profile, then signs you out.'
+      : 'Permanently delete the currently signed-in PoolPro account, then sign out.';
+  }
+}
+
+async function reauthenticateAccountForDeletion(email, password) {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (!normalizedEmail || !password) throw new Error('Email and password are required.');
+
+  if (auth.currentUser && (auth.currentUser.email || '').trim().toLowerCase() === normalizedEmail) {
+    const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+    await reauthenticateWithCredential(auth.currentUser, credential);
+    return auth.currentUser;
+  }
+
+  const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+  return credential.user;
+}
+
+async function removeEmployeeRecordForAccount(email) {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (!normalizedEmail) return;
+
+  await loadEmployees();
+  const before = employeesData.length;
+  employeesData = employeesData.filter((employee) => normalizeEmployeeRecord(employee).email !== normalizedEmail);
+  if (employeesData.length !== before) {
+    await saveEmployees();
+    renderEmployeesTable();
+  }
+}
+
+async function handleDeleteCurrentAccount() {
+  const btn = document.getElementById('deleteCurrentAccountBtn');
+  const context = getCurrentAgreementContext();
+  const role = context?.role || '';
+  const email = (context?.email || '').trim().toLowerCase();
+  const username = (context?.username || '').trim().toLowerCase();
+
+  setAccountManagementMessage('');
+  if (!context || !email) {
+    setAccountManagementMessage('Sign in before deleting an account.', true);
+    return;
+  }
+
+  const confirmation = prompt(`Type DELETE to permanently delete the ${role} account for ${email}.`);
+  if (confirmation !== 'DELETE') return;
+
+  const password = prompt('Enter your password to confirm account deletion:');
+  if (!password) return;
+
+  if (role === 'lifeguard' && !username) {
+    setAccountManagementMessage('This lifeguard session is missing its username. Sign out and sign in again before deleting the account.', true);
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  accountDeletionInProgress = true;
+  setAccountManagementMessage('Deleting account...');
+
+  try {
+    await reauthenticateAccountForDeletion(email, password);
+
+    if (role === 'lifeguard') {
+      await deleteDoc(doc(db, 'lifeguardAccounts', username));
+      await removeEmployeeRecordForAccount(email);
+    }
+
+    await deleteDoc(doc(db, 'userAgreements', getAgreementDocIdForContext(context))).catch(() => {});
+
+    if (auth.currentUser) {
+      await deleteUser(auth.currentUser);
+    }
+
+    setAccountManagementMessage('Account deleted. Signing out...');
+    setTimeout(() => {
+      window.logout();
+    }, 500);
+  } catch (err) {
+    console.error('[PoolPro] Unable to delete account:', err);
+    accountDeletionInProgress = false;
+    if (btn) btn.disabled = false;
+    const code = err?.code || '';
+    const friendly = code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+      ? 'Incorrect password. Account deletion cancelled.'
+      : code === 'auth/requires-recent-login'
+        ? 'Please sign out, sign back in, and try deleting the account again.'
+        : (err?.message || 'Unable to delete this account right now.');
+    setAccountManagementMessage(friendly, true);
+  }
+}
+
+function setupAccountManagement() {
+  ensureAccountManagementSection();
+  updateSettingsModalForRole();
+  const btn = document.getElementById('deleteCurrentAccountBtn');
+  if (!btn || btn.dataset.accountDeleteBound === 'true') return;
+  btn.dataset.accountDeleteBound = 'true';
+  btn.addEventListener('click', handleDeleteCurrentAccount);
+}
 
 window.closeSettings = function () {
   const modal = document.getElementById('settingsModal');
@@ -739,6 +919,17 @@ function populatePoolSelects(pools) {
 // AUTH HELPERS
 // ============================================================
 
+function isLifeguardSession() {
+  try {
+    const role = sessionStorage.getItem('chemlogRole');
+    const email = sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId');
+    const username = sessionStorage.getItem('chemlogEmployeeUsername');
+    return role === 'lifeguard' && !!(email || username);
+  } catch (_) {
+    return false;
+  }
+}
+
 function isSupervisor() {
   try {
     const storedRole = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
@@ -762,13 +953,18 @@ function isSupervisor() {
 // Called on DOMContentLoaded and exported so training.js can re-call after login.
 window.setupDropdownVisibility = function () {
   const sup = isSupervisor();
+  const lifeguard = isLifeguardSession() && !sup;
   ['dashboard', 'training-setup', 'employees', 'testing', 'settings'].forEach(nav => {
     document.querySelectorAll(`[data-nav="${nav}"]`).forEach(el => {
       el.style.display = sup ? '' : 'none';
     });
   });
+  document.querySelectorAll('.lifeguard-only').forEach((item) => {
+    item.style.display = lifeguard ? '' : 'none';
+  });
   document.querySelectorAll('.dropdown-menu').forEach((m) => {
     m.classList.toggle('supervisor-active', sup);
+    m.classList.toggle('lifeguard-active', lifeguard);
     m.querySelectorAll('.supervisor-only').forEach((item) => {
       item.classList.remove('supervisor-group-start', 'supervisor-group-end');
     });
@@ -2966,7 +3162,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
   normalizeSharedHeaderCopy();
   injectResourcesMenuLinks();
+  injectLifeguardSettingsMenuLinks();
   ensureResourcesSettingsSection();
+  setupAccountManagement();
   setupSettingsAccordions();
   wrapResponsiveTables();
   observeResponsiveTables();
@@ -2980,6 +3178,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   // Firebase Auth state listener — keeps localStorage flags in sync and updates nav
   onAuthStateChanged(auth, async (user) => {
+    if (accountDeletionInProgress) return;
     const role = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
     if (user) {
       if (role === 'lifeguard') {

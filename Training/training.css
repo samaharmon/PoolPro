@@ -2691,6 +2691,10 @@ body.dark-mode .help-text {
   transform: translateY(0);
 }
 
+.floating-header .header-content {
+  width: 100%;
+}
+
 .floating-header .training-header-left.header-left--compact {
   display: flex;
   align-items: center;
@@ -2702,4 +2706,23 @@ body.dark-mode .help-text {
 .floating-header #logo,
 .floating-header img[alt*="logo" i] {
   height: 62px !important;
+  margin-left: auto;
+}
+
+.floating-header .menu-container {
+  grid-area: auto;
+}
+
+.training-schedule-table thead,
+.training-schedule-table thead tr,
+body.dark-mode .training-schedule-table thead,
+body.dark-mode .training-schedule-table thead tr {
+  background: var(--poolpro-accent-gradient) !important;
+}
+
+.training-schedule-table thead th,
+body.dark-mode .training-schedule-table thead th {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: #ffffff !important;
 }
