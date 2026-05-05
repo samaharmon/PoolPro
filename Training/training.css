@@ -331,6 +331,10 @@ select {
   color: #b32020;
 }
 
+.account-management-section .form-message {
+  min-height: 1.2em;
+}
+
 .help-text {
   font-size: 12px;
   color: grey;

@@ -1,7 +1,7 @@
 import { db, doc, getDoc, setDoc, serverTimestamp } from './firebase.js';
 
-export const AGREEMENT_VERSION = 'poolpro-user-agreement-v2-2025-07-01';
-export const AGREEMENT_EFFECTIVE_DATE = 'July 1, 2025';
+export const AGREEMENT_VERSION = 'poolpro-user-agreement-v3-2026-05-05';
+export const AGREEMENT_EFFECTIVE_DATE = 'May 5, 2026';
 
 const AGREEMENT_TITLE = 'PoolPro User Agreement';
 const AGREEMENT_TEXT = String.raw`POOLPRO
@@ -9,10 +9,18 @@ Daily Operations Portal
 User Agreement, Terms of Use & Data Privacy Notice
 Upstate Pool Management Group | Capital City Aquatics
 
-Effective Date: July 1, 2025
+Effective Date: May 5, 2026
 Review Cycle: Annually (each July 1) or upon material update
 
 IMPORTANT: Please read this entire agreement before using PoolPro. By checking the acknowledgment box during your first login, you confirm that you have read, understood, and agree to be bound by these terms. If you are under 18 years of age, parental or guardian consent may be required as described herein.
+
+SUMMARY OF IMPORTANT TERMS
+This summary is provided to make the most important terms easier to review. It does not replace the full agreement below.
+• Data collected: PoolPro collects only the data needed to operate the Portal, including first and last name, username, email address, phone number, home pool/facility, Employee ID if assigned, training enrollment and attendance records, form submission timestamps, performance and audit results, facility/equipment inspection photographs that must not show any person, supply inventory records, water quality and condition measurements, and agreement acceptance records including timestamp, version, and method of acceptance.
+• Age requirement: No person under fifteen (15) years old may use PoolPro. Employees ages fifteen (15) through seventeen (17) may use the Portal only with the minor employee protections described in this Agreement and with parental or guardian consent where required by law or Company policy.
+• Authentication: PoolPro uses Firebase Email Authentication. New accounts must verify their email address, and existing accounts may be required to complete a fresh email authentication link on new devices or every ten (10) calendar days. Firebase processes your email address only for authentication and security, not marketing.
+• Data sharing: Your data will NEVER be sold, rented, leased, used for marketing, or shared outside the Company. The only outside service provider used to operate the Portal is Google Firebase as the secure cloud infrastructure and authentication host, and information is disclosed outside the Company only if required by valid legal process.
+• Developer contact: PoolPro was developed by Samuel Harmon. For Developer questions, technical concerns, suspected security issues, or questions about this Agreement, contact your direct supervisor or designated Portal administrator so the request can be routed to Samuel Harmon through the Company's internal reporting channel.
 
 1. Introduction & Purpose
 PoolPro (the "Portal") is a proprietary web application independently designed, developed, and owned by Samuel Harmon (the "Developer"). PoolPro is licensed for internal operational use by Upstate Pool Management Group and Capital City Aquatics (collectively referred to herein as "the Company"). The Portal is deployed to support day-to-day aquatics workforce management and is used exclusively for internal employment-related functions, including but not limited to:
@@ -63,7 +71,7 @@ As part of facility inspection and operational reporting functions, the Portal c
 IMAGE SUBMISSION POLICY: Employees are strictly prohibited from submitting any photograph or image that depicts any person, including co-workers, supervisors, patrons, minors, or any other individual, whether intentionally or incidentally. Images must depict only physical facility components, aquatic equipment, environmental conditions, or supply items. Video submissions are not supported and will not be accepted by the Portal. Submission of non-compliant images violates this Agreement and may result in immediate account suspension and disciplinary action up to and including termination of employment. If you have any doubt about whether an image complies with this policy, do not submit it. Consult your supervisor first.
 
 4.4 Authentication Data
-PoolPro uses Firebase Email Authentication to manage user access. When signing in, your email address is submitted to Google Firebase, which sends a secure, one-time sign-in link to that address. Upon clicking the link, Firebase issues an authenticated session token that persists for ten (10) calendar days, after which re-authentication is required. Your email address is processed through Google Firebase’s secure authentication infrastructure solely to verify your identity and is not used for any other purpose, including marketing or external communication.
+PoolPro uses Firebase Authentication to manage user access. When signing in, your username or email address and password are used to authenticate your account through Google Firebase. New accounts must verify their email address before access is completed. Existing accounts may be required to complete a secure email authentication link on new devices or every ten (10) calendar days, after which re-authentication is required. Your email address is processed through Google Firebase’s secure authentication infrastructure solely to verify your identity and is not used for any other purpose, including marketing or external communication.
 
 4.5 No Additional Data Collection
 Beyond what is described in Sections 4.1 through 4.4, the Company does not collect financial information, Social Security numbers, health or medical records, biometric data, precise geolocation data, or any other sensitive personal information through the Portal. No browsing habits, device identifiers, or tracking cookies are collected beyond what is technically necessary to maintain your authenticated session. Email addresses are used solely for authentication and are not used for marketing, newsletters, or any non-operational communication.
@@ -189,7 +197,7 @@ If you have questions about this Agreement, your data, or the Portal, please con
 Organization: Upstate Pool Management Group | Capital City Aquatics
 Contact Method: Please contact your direct supervisor or a designated Portal administrator.
 Developer: Samuel Harmon
-Developer Contact: [Developer contact method or designated reporting channel]
+Developer Contact: Contact your direct supervisor or designated Portal administrator so the request can be routed to Samuel Harmon through the Company's internal reporting channel.
 
 EMPLOYEE ACKNOWLEDGMENT & CONSENT
 By selecting the acknowledgment checkbox on the Portal during your first login, or upon any re-acceptance required under Section 13, you confirm and agree that:
@@ -467,7 +475,7 @@ function ensureModal() {
       </div>
       <div class="agreement-body">
         <div class="agreement-scroll">
-          <p class="agreement-kicker">This copy reflects <strong>PoolPro_User_Agreement_v2</strong> with an effective date of <strong>${AGREEMENT_EFFECTIVE_DATE}</strong>.</p>
+          <p class="agreement-kicker">This copy reflects <strong>PoolPro_User_Agreement_v3</strong> with an effective date of <strong>${AGREEMENT_EFFECTIVE_DATE}</strong>.</p>
           <div class="agreement-document" id="agreementDocument"></div>
         </div>
         <div class="agreement-actions">
