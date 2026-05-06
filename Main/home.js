@@ -6,10 +6,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   sendEmailVerification,
-  applyActionCode,
-  sendSignInLinkToEmail,
-  isSignInWithEmailLink,
-  signInWithEmailLink
+  applyActionCode
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 
 const DESTINATIONS = {
@@ -21,14 +18,12 @@ const DESTINATIONS = {
 };
 
 const ROLE_STORAGE_KEY = 'chemlogRole';
-const DEVICE_ID_KEY = 'poolproDeviceId';
 const VERIFY_CONTEXT_KEY = 'poolproPendingLifeguardVerification';
 const VERIFY_WINDOW_MS = 5 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 const VERIFY_EMAIL_RESEND_MS = 30 * 1000;
 const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
-const EMAIL_AUTH_MODE_SIGN_IN_LINK = 'signInLink';
 
 let pendingTarget = null;
 let currentRole = 'lifeguard';
@@ -159,40 +154,6 @@ function buildEmployeeFromAccount(account) {
     homePool: account?.homePool || '',
     phone: account?.phone || '',
   });
-}
-
-function getOrCreateDeviceId() {
-  try {
-    let deviceId = localStorage.getItem(DEVICE_ID_KEY);
-    if (!deviceId) {
-      deviceId = `device_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-      localStorage.setItem(DEVICE_ID_KEY, deviceId);
-    }
-    return deviceId;
-  } catch (_) {
-    return 'device_fallback';
-  }
-}
-
-function getVerificationStorageKey(username) {
-  return `poolproAuthVerified:${normalizeUsername(username)}:${getOrCreateDeviceId()}`;
-}
-
-function shouldRequireStepUp(username, force = false) {
-  if (force) return true;
-  try {
-    const lastVerified = Number(localStorage.getItem(getVerificationStorageKey(username)) || '0');
-    if (!lastVerified) return true;
-    return (Date.now() - lastVerified) >= VERIFY_WINDOW_MS;
-  } catch (_) {
-    return true;
-  }
-}
-
-function markVerificationComplete(username) {
-  try {
-    localStorage.setItem(getVerificationStorageKey(username), Date.now().toString());
-  } catch (_) { /* ignore */ }
 }
 
 function savePendingVerificationContext(context) {
@@ -631,7 +592,6 @@ async function upsertEmployeeRecord(employee) {
 }
 
 async function finalizeLifeguardAccess({ username, account, target, method }) {
-  markVerificationComplete(username);
   stopVerifyStatusPoller();
   clearPendingVerificationContext();
 
@@ -705,14 +665,12 @@ function openVerificationView({
     verifyHintEl.textContent = 'Check your junk/spam folders if you do not see the email within 60 seconds. Otherwise, click below to resend the verification email.';
   }
   if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification';
-  const usesSignInLink = emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK;
   setMessage(
     verifyMessageEl,
     ''
   );
   setModalView('verify');
-  if (usesSignInLink) stopVerifyStatusPoller();
-  else startVerificationStatusPolling();
+  startVerificationStatusPolling();
 
   const existingContext = loadPendingVerificationContext();
   const existingEmail = (existingContext?.email || '').trim().toLowerCase();
@@ -733,7 +691,7 @@ function openVerificationView({
     return;
   }
 
-  if (auth.currentUser?.emailVerified && !usesSignInLink) {
+  if (auth.currentUser?.emailVerified) {
     confirmVerifiedEmail().catch((err) => {
       setMessage(verifyMessageEl, err.message || 'Your email is verified, but PoolPro could not finish sign-in yet.', true);
     });
@@ -744,9 +702,7 @@ function openVerificationView({
     console.error('Unable to send initial verification email:', err);
     const code = err.code || '';
     const friendly = code === 'auth/operation-not-allowed'
-      ? (usesSignInLink
-        ? 'Enable Email link sign-in in Firebase Authentication, then try again.'
-        : 'Enable Email/Password sign-in and Email Verification in Firebase Authentication, then try again.')
+      ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
       : code === 'auth/invalid-email'
         ? 'This account email is invalid in Firebase. Update the employee email and try again.'
       : (err.message || 'Unable to send the verification email.');
@@ -804,23 +760,11 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
     return { requiresVerification: true };
   }
 
-  if (shouldRequireStepUp(username)) {
-    openVerificationView({
-      username,
-      account,
-      target: getDestinationPath(),
-      origin: 'login',
-      force: true,
-      emailAuthMode: EMAIL_AUTH_MODE_SIGN_IN_LINK,
-    });
-    return { requiresVerification: true };
-  }
-
   await finalizeLifeguardAccess({
     username,
     account,
     target: getDestinationPath(),
-    method: 'recent',
+    method: 'password-login',
   });
   return { requiresVerification: false };
 }
@@ -828,46 +772,30 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
 async function sendVerificationEmail({ isResend = false } = {}) {
   if (!pendingVerification) throw new Error('No verification session is active.');
   const email = pendingVerification.account.employeeEmail || getAuthEmail(pendingVerification.account);
-  const emailAuthMode = pendingVerification.emailAuthMode || EMAIL_AUTH_MODE_VERIFY;
-  const usesSignInLink = emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK;
   if (!email) throw new Error('This account does not have an email address on file.');
-  if (!usesSignInLink && !auth.currentUser) throw new Error('Please sign in again before requesting a verification email.');
-  if (!usesSignInLink && auth.currentUser.emailVerified) throw new Error('This email is already verified. PoolPro should finish sign-in automatically.');
-  if (usesSignInLink && auth.currentUser?.email && auth.currentUser.email.toLowerCase() !== email.toLowerCase()) {
-    throw new Error('The signed-in email does not match this lifeguard account.');
-  }
+  if (!auth.currentUser) throw new Error('Please sign in again before requesting a verification email.');
+  if (auth.currentUser.emailVerified) throw new Error('This email is already verified. PoolPro should finish sign-in automatically.');
   if (isResend && Date.now() < verifyCooldownUntil) {
     const remainingSeconds = Math.ceil((verifyCooldownUntil - Date.now()) / 1000);
-    throw new Error(`Please wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending the ${usesSignInLink ? 'authentication' : 'verification'} email.`);
+    throw new Error(`Please wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending the verification email.`);
   }
 
   auth.useDeviceLanguage();
-  if (usesSignInLink) {
-    await sendSignInLinkToEmail(auth, email, {
-      url: buildVerificationActionUrl({
-        username: pendingVerification.username,
-        target: pendingVerification.target,
-        emailAuthMode,
-      }),
-      handleCodeInApp: true,
-    });
-  } else {
-    await sendEmailVerification(auth.currentUser, {
-      url: buildVerificationActionUrl({
-        username: pendingVerification.username,
-        target: pendingVerification.target,
-        emailAuthMode,
-      }),
-      handleCodeInApp: false,
-    });
-  }
+  await sendEmailVerification(auth.currentUser, {
+    url: buildVerificationActionUrl({
+      username: pendingVerification.username,
+      target: pendingVerification.target,
+      emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
+    }),
+    handleCodeInApp: false,
+  });
 
   savePendingVerificationContext({
     username: pendingVerification.username,
     email,
     target: pendingVerification.target,
     sentAt: Date.now(),
-    emailAuthMode,
+    emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
   });
 
   startVerifyCooldown();
@@ -879,9 +807,6 @@ async function sendVerificationEmail({ isResend = false } = {}) {
 
 async function confirmVerifiedEmail() {
   if (!pendingVerification) throw new Error('No verification session is active.');
-  if (pendingVerification.emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK) {
-    throw new Error('Open the authentication email link to finish sign-in.');
-  }
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('Please sign in again to finish verification.');
 
@@ -902,7 +827,7 @@ async function confirmVerifiedEmail() {
 function startVerificationStatusPolling() {
   stopVerifyStatusPoller();
   verifyStatusPoller = window.setInterval(async () => {
-    if (!pendingVerification || pendingVerification.emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK || !auth.currentUser) return;
+    if (!pendingVerification || !auth.currentUser) return;
     try {
       await auth.currentUser.reload();
       if (auth.currentUser.emailVerified) {
@@ -912,56 +837,6 @@ function startVerificationStatusPolling() {
       // Keep polling quietly while the verify view is open.
     }
   }, 2500);
-}
-
-async function handleEmailSignInRedirect() {
-  if (!isSignInWithEmailLink(auth, window.location.href)) return false;
-
-  const url = new URL(window.location.href);
-  const context = loadPendingVerificationContext();
-  const username = normalizeUsername(url.searchParams.get('username') || context?.username || '');
-  const target = sanitizeTarget(url.searchParams.get('target') || context?.target || DESTINATIONS.chem);
-
-  try {
-    if (!username) {
-      throw new Error('This authentication link is missing the account username. Sign in again to get a new email.');
-    }
-
-    const account = await getLifeguardAccount(username);
-    const contextEmail = context?.username === username ? context.email : '';
-    const email = (contextEmail || account.employeeEmail || getAuthEmail(account) || '').trim().toLowerCase();
-    if (!email) throw new Error('This account does not have an email address on file.');
-
-    const credential = await signInWithEmailLink(auth, email, window.location.href);
-    const signedInEmail = (credential.user?.email || '').trim().toLowerCase();
-    if (signedInEmail && signedInEmail !== email) {
-      await signOut(auth).catch(() => {});
-      throw new Error('That authentication link does not match this lifeguard account.');
-    }
-
-    pendingVerification = {
-      username,
-      account,
-      target,
-      origin: 'email-link',
-      force: false,
-      emailAuthMode: EMAIL_AUTH_MODE_SIGN_IN_LINK,
-    };
-
-    window.history.replaceState({}, document.title, window.location.pathname);
-    await finalizeLifeguardAccess({
-      username,
-      account,
-      target,
-      method: 'email-sign-in-link',
-    });
-  } catch (err) {
-    console.error('Email authentication redirect failed:', err);
-    window.history.replaceState({}, document.title, window.location.pathname);
-    setMessage(messageEl, err.message || 'That authentication link is invalid or expired. Sign in again to get a new email.', true);
-  }
-
-  return true;
 }
 
 async function handleEmailVerificationRedirect() {
@@ -1182,8 +1057,7 @@ function wireRoleToggle() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
-  const handledEmailLinkRedirect = await handleEmailSignInRedirect();
-  const handledVerificationRedirect = handledEmailLinkRedirect || (await handleEmailVerificationRedirect());
+  const handledVerificationRedirect = await handleEmailVerificationRedirect();
   await Promise.all([loadEmployees(), loadPools()]);
   populatePoolOptions();
   wireMenu();
@@ -1215,12 +1089,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       await sendVerificationEmail({ isResend: true });
     } catch (err) {
       const code = err.code || '';
-      const usesSignInLink = pendingVerification?.emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK;
       const friendly = code === 'auth/operation-not-allowed'
-        ? (usesSignInLink
-          ? 'Enable Email link sign-in in Firebase Authentication, then try again.'
-          : 'Enable Email/Password sign-in and Email Verification in Firebase Authentication, then try again.')
-        : (err.message || `Unable to resend the ${usesSignInLink ? 'authentication' : 'verification'} email.`);
+        ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
+        : (err.message || 'Unable to resend the verification email.');
       setMessage(verifyMessageEl, friendly, true);
     }
   });
@@ -1236,7 +1107,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (pendingContext?.username && auth.currentUser) {
     const pendingMode = pendingContext.emailAuthMode || EMAIL_AUTH_MODE_VERIFY;
     const account = await getLifeguardAccount(pendingContext.username);
-    if (auth.currentUser.emailVerified && pendingMode !== EMAIL_AUTH_MODE_SIGN_IN_LINK) {
+    if (auth.currentUser.emailVerified) {
       await finalizeLifeguardAccess({
         username: pendingContext.username,
         account,
@@ -1269,7 +1140,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.addEventListener('focus', async () => {
   if (!pendingVerification || !auth.currentUser) return;
-  if (pendingVerification.emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK) return;
   try {
     await auth.currentUser.reload();
     if (auth.currentUser.emailVerified) {
@@ -1283,7 +1153,6 @@ window.addEventListener('focus', async () => {
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible') return;
   if (!pendingVerification || !auth.currentUser) return;
-  if (pendingVerification.emailAuthMode === EMAIL_AUTH_MODE_SIGN_IN_LINK) return;
   try {
     await auth.currentUser.reload();
     if (auth.currentUser.emailVerified) {

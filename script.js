@@ -14,6 +14,7 @@ import {
   orderBy,
   query,
   Timestamp,
+  serverTimestamp,
   writeBatch,
   deleteDoc,
   listenPools,
@@ -330,9 +331,13 @@ function ensureAccountManagementSection() {
     <p class="form-message" id="accountManagementMessage"></p>
   `;
 
-  const header = modalContent.querySelector('.modal-header');
-  if (header) header.insertAdjacentElement('afterend', section);
-  else modalContent.prepend(section);
+  const scrollBody = modalContent.querySelector(':scope > .settings-modal-scroll');
+  if (scrollBody) scrollBody.prepend(section);
+  else {
+    const header = modalContent.querySelector('.modal-header');
+    if (header) header.insertAdjacentElement('afterend', section);
+    else modalContent.prepend(section);
+  }
 }
 
 function updateSettingsModalForRole() {
@@ -1105,6 +1110,21 @@ function removeSiteAppearanceSections() {
       section.remove();
     }
   });
+}
+
+function ensureSettingsModalScrollBody() {
+  const modalContent = document.querySelector('#settingsModal .settings-modal-content');
+  if (!modalContent || modalContent.querySelector(':scope > .settings-modal-scroll')) return;
+
+  const header = modalContent.querySelector(':scope > .modal-header');
+  const scrollBody = document.createElement('div');
+  scrollBody.className = 'settings-modal-scroll';
+
+  Array.from(modalContent.children).forEach((child) => {
+    if (child !== header) scrollBody.appendChild(child);
+  });
+
+  modalContent.appendChild(scrollBody);
 }
 
 // ============================================================
@@ -2268,7 +2288,8 @@ function ensureResourcesSettingsSection() {
     <h3>Resources</h3>
     <p class="section-subtitle">Upload and manage the documents available on the Resources page.</p>
     <div class="settings-row employee-file-row" style="margin-top: 20px;">
-      <input type="file" id="resourceFileInput" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.jpg,.jpeg,.png" />
+      <label for="resourceFileInput" class="settings-field-label">Resource File</label>
+      <input type="file" id="resourceFileInput" aria-label="Resource file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.jpg,.jpeg,.png" />
       <button type="button" id="resourceDeleteAllBtn" class="submit-btn danger-button employee-delete-inline-btn">Delete All Files</button>
     </div>
     <div class="settings-row resource-add-row">
@@ -2292,10 +2313,10 @@ function ensureResourcesSettingsSection() {
     </div>
     <div class="training-filter-bar employee-filter-bar" id="resourceFilterBar" style="margin: 20px 0 4px;">
       <span class="filter-by-label">Filter By:</span>
-      <select id="resourceMarketFilter" class="training-filter-select">
+      <select id="resourceMarketFilter" class="training-filter-select" aria-label="Filter resources by market">
         <option value="all">All Markets</option>
       </select>
-      <select id="resourcePoolFilter" class="training-filter-select">
+      <select id="resourcePoolFilter" class="training-filter-select" aria-label="Filter resources by facility">
         <option value="all">All Facilities</option>
       </select>
     </div>
@@ -2724,6 +2745,8 @@ function setupResourcesSettingsUI() {
     }
 
     try {
+      addBtn.disabled = true;
+      addBtn.textContent = resourceEditingId ? 'Saving...' : 'Adding...';
       let fileMeta = existing ? {
         fileUrl: existing.fileUrl,
         fileName: existing.fileName,
@@ -2783,6 +2806,9 @@ function setupResourcesSettingsUI() {
     } catch (err) {
       console.error('[PoolPro] Unable to save resource:', err);
       alert(err?.message || 'Unable to save this document right now.');
+    } finally {
+      addBtn.disabled = false;
+      addBtn.textContent = resourceEditingId ? 'Save' : 'Add';
     }
   });
 
@@ -3349,6 +3375,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   injectResourcesMenuLinks();
   injectLifeguardSettingsMenuLinks();
   ensureResourcesSettingsSection();
+  ensureSettingsModalScrollBody();
   setupAccountManagement();
   setupSettingsAccordions();
   wrapResponsiveTables();

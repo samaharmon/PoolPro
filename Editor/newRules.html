@@ -103,7 +103,7 @@
                         </div>
 
                         <div class="form-group">
-                            <label>Market</label>
+                            <div class="form-label">Market</div>
                             <div class="market-options">
                                 <label class="market-option">
                                     <input
@@ -162,7 +162,7 @@
                     <div id="poolRuleBlocks">
                         <div class="pool-rule-block" data-pool-index="1">
                             <div class="pool-rule-header">
-                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 1:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 1:</span> <input type="text" id="pool1_name" class="pool-name-input" placeholder="Pool name" aria-label="Pool 1 name" /></h4>
                                 <h4>Pool 1 — Main Pool</h4>
                                 <div class="sanitation-tabs">
                                     <button
@@ -190,11 +190,11 @@
                                 </div>
                             </div>
                             <div class="copy-rules-row">
-                                <label class="copy-rules-label">Copy from:</label>
-                                <select class="copy-rules-location" data-pool-index="1">
+                                <span class="copy-rules-label">Copy from:</span>
+                                <select id="pool1_copy_location" class="copy-rules-location" data-pool-index="1" aria-label="Pool 1 copy from facility">
                                     <option value="">— Pool location —</option>
                                 </select>
-                                <select class="copy-rules-block" data-pool-index="1" disabled>
+                                <select id="pool1_copy_block" class="copy-rules-block" data-pool-index="1" aria-label="Pool 1 copy from rule block" disabled>
                                     <option value="">— Rule block —</option>
                                 </select>
                                 <button type="button" class="editAndSave copy-rules-btn" data-pool-index="1" disabled>Copy</button>
@@ -401,7 +401,7 @@
                             </div>
                         <div class="pool-rule-block" data-pool-index="2">
                             <div class="pool-rule-header">
-                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 2:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 2:</span> <input type="text" id="pool2_name" class="pool-name-input" placeholder="Pool name" aria-label="Pool 2 name" /></h4>
                                 <h4>Pool 2</h4>
                                 <div class="sanitation-tabs">
                                     <button
@@ -428,11 +428,11 @@
                                 </div>
                             </div>
                             <div class="copy-rules-row">
-                                <label class="copy-rules-label">Copy from:</label>
-                                <select class="copy-rules-location" data-pool-index="2">
+                                <span class="copy-rules-label">Copy from:</span>
+                                <select id="pool2_copy_location" class="copy-rules-location" data-pool-index="2" aria-label="Pool 2 copy from facility">
                                     <option value="">— Pool location —</option>
                                 </select>
-                                <select class="copy-rules-block" data-pool-index="2" disabled>
+                                <select id="pool2_copy_block" class="copy-rules-block" data-pool-index="2" aria-label="Pool 2 copy from rule block" disabled>
                                     <option value="">— Rule block —</option>
                                 </select>
                                 <button type="button" class="editAndSave copy-rules-btn" data-pool-index="2" disabled>Copy</button>
@@ -639,18 +639,18 @@
                             </div>
                         <div class="pool-rule-block" data-pool-index="3">
                             <div class="pool-rule-header">
-                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 3:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                <h4 class="pool-rule-title"><span class="pool-number-label">Pool 3:</span> <input type="text" id="pool3_name" class="pool-name-input" placeholder="Pool name" aria-label="Pool 3 name" /></h4>
                                 <div class="rule-buttons">
                                     <button type="button" class="editAndSave pool-edit-btn">Edit</button>
                                     <button type="button" class="editAndSave pool-save-btn">Save</button>
                                 </div>
                             </div>
                             <div class="copy-rules-row">
-                                <label class="copy-rules-label">Copy from:</label>
-                                <select class="copy-rules-location" data-pool-index="3">
+                                <span class="copy-rules-label">Copy from:</span>
+                                <select id="pool3_copy_location" class="copy-rules-location" data-pool-index="3" aria-label="Pool 3 copy from facility">
                                     <option value="">— Pool location —</option>
                                 </select>
-                                <select class="copy-rules-block" data-pool-index="3" disabled>
+                                <select id="pool3_copy_block" class="copy-rules-block" data-pool-index="3" aria-label="Pool 3 copy from rule block" disabled>
                                     <option value="">— Rule block —</option>
                                 </select>
                                 <button type="button" class="editAndSave copy-rules-btn" data-pool-index="3" disabled>Copy</button>
@@ -668,9 +668,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">&lt; 7.0</div>
-                                            <div class="table-cell"><textarea id="pool2_ph_lt_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_ph_lt_7_0" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_ph_lt_7_0_level" class="concernLevel" disabled>
+                                                <select id="pool3_ph_lt_7_0_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -679,9 +679,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">7.0</div>
-                                            <div class="table-cell"><textarea id="pool2_ph_7_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_ph_7_0" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_ph_7_0_level" class="concernLevel" disabled>
+                                                <select id="pool3_ph_7_0_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -690,9 +690,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">7.2</div>
-                                            <div class="table-cell"><textarea id="pool2_ph_7_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_ph_7_2" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_ph_7_2_level" class="concernLevel" disabled>
+                                                <select id="pool3_ph_7_2_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -701,9 +701,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">7.4</div>
-                                            <div class="table-cell"><textarea id="pool2_ph_7_4" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_ph_7_4" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_ph_7_4_level" class="concernLevel" disabled>
+                                                <select id="pool3_ph_7_4_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -712,9 +712,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">7.6</div>
-                                            <div class="table-cell"><textarea id="pool2_ph_7_6" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_ph_7_6" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_ph_7_6_level" class="concernLevel" disabled>
+                                                <select id="pool3_ph_7_6_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -723,9 +723,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">7.8</div>
-                                            <div class="table-cell"><textarea id="pool2_ph_7_8" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_ph_7_8" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_ph_7_8_level" class="concernLevel" disabled>
+                                                <select id="pool3_ph_7_8_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -734,9 +734,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">8.0</div>
-                                            <div class="table-cell"><textarea id="pool2_ph_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_ph_8_0" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_ph_8_0_level" class="concernLevel" disabled>
+                                                <select id="pool3_ph_8_0_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -745,9 +745,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">&gt; 8.0</div>
-                                            <div class="table-cell"><textarea id="pool2_ph_gt_8_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_ph_gt_8_0" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_ph_gt_8_0_level" class="concernLevel" disabled>
+                                                <select id="pool3_ph_gt_8_0_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -766,9 +766,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">0</div>
-                                            <div class="table-cell"><textarea id="pool2_cl_0" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_cl_0" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_cl_0_level" class="concernLevel" disabled>
+                                                <select id="pool3_cl_0_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -777,9 +777,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">1</div>
-                                            <div class="table-cell"><textarea id="pool2_cl_1" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_cl_1" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_cl_1_level" class="concernLevel" disabled>
+                                                <select id="pool3_cl_1_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -788,9 +788,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">2</div>
-                                            <div class="table-cell"><textarea id="pool2_cl_2" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_cl_2" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_cl_2_level" class="concernLevel" disabled>
+                                                <select id="pool3_cl_2_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -799,9 +799,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">3</div>
-                                            <div class="table-cell"><textarea id="pool2_cl_3" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_cl_3" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_cl_3_level" class="concernLevel" disabled>
+                                                <select id="pool3_cl_3_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -810,9 +810,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">5</div>
-                                            <div class="table-cell"><textarea id="pool2_cl_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_cl_5" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_cl_5_level" class="concernLevel" disabled>
+                                                <select id="pool3_cl_5_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -821,9 +821,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">7.5</div>
-                                            <div class="table-cell"><textarea id="pool2_cl_7_5" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_cl_7_5" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_cl_7_5_level" class="concernLevel" disabled>
+                                                <select id="pool3_cl_7_5_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -832,9 +832,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">10</div>
-                                            <div class="table-cell"><textarea id="pool2_cl_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_cl_10" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_cl_10_level" class="concernLevel" disabled>
+                                                <select id="pool3_cl_10_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -843,9 +843,9 @@
                                         </div>
                                         <div class="table-row">
                                             <div class="table-cell">&gt; 10</div>
-                                            <div class="table-cell"><textarea id="pool2_cl_gt_10" class="ruleResponse" disabled></textarea></div>
+                                            <div class="table-cell"><textarea id="pool3_cl_gt_10" class="ruleResponse" disabled></textarea></div>
                                             <div class="table-cell">
-                                                <select id="pool2_cl_gt_10_level" class="concernLevel" disabled>
+                                                <select id="pool3_cl_gt_10_level" class="concernLevel" disabled>
                                                     <option value="none">None</option>
                                                     <option value="yellow">Minor</option>
                                                     <option value="red">Major</option>
@@ -857,7 +857,7 @@
                             </div>
                             <div class="pool-rule-block" data-pool-index="4">
                                 <div class="pool-rule-header">
-                                    <h4 class="pool-rule-title"><span class="pool-number-label">Pool 4:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                    <h4 class="pool-rule-title"><span class="pool-number-label">Pool 4:</span> <input type="text" id="pool4_name" class="pool-name-input" placeholder="Pool name" aria-label="Pool 4 name" /></h4>
                                     <h4>Pool 4</h4>
                                     <div class="sanitation-tabs">
                                         <button
@@ -885,11 +885,11 @@
                                     </div>
                                 </div>
                                 <div class="copy-rules-row">
-                                    <label class="copy-rules-label">Copy from:</label>
-                                    <select class="copy-rules-location" data-pool-index="4">
+                                    <span class="copy-rules-label">Copy from:</span>
+                                    <select id="pool4_copy_location" class="copy-rules-location" data-pool-index="4" aria-label="Pool 4 copy from facility">
                                         <option value="">— Pool location —</option>
                                     </select>
-                                    <select class="copy-rules-block" data-pool-index="4" disabled>
+                                    <select id="pool4_copy_block" class="copy-rules-block" data-pool-index="4" aria-label="Pool 4 copy from rule block" disabled>
                                         <option value="">— Rule block —</option>
                                     </select>
                                     <button type="button" class="editAndSave copy-rules-btn" data-pool-index="4" disabled>Copy</button>
@@ -1096,7 +1096,7 @@
                             </div>
                             <div class="pool-rule-block" data-pool-index="5">
                                 <div class="pool-rule-header">
-                                    <h4 class="pool-rule-title"><span class="pool-number-label">Pool 5:</span> <input type="text" class="pool-name-input" placeholder="Pool name" /></h4>
+                                    <h4 class="pool-rule-title"><span class="pool-number-label">Pool 5:</span> <input type="text" id="pool5_name" class="pool-name-input" placeholder="Pool name" aria-label="Pool 5 name" /></h4>
                                     <h4>Pool 5</h4>
                                     <div class="sanitation-tabs">
                                         <button
@@ -1124,11 +1124,11 @@
                                     </div>
                                 </div>
                                 <div class="copy-rules-row">
-                                    <label class="copy-rules-label">Copy from:</label>
-                                    <select class="copy-rules-location" data-pool-index="5">
+                                    <span class="copy-rules-label">Copy from:</span>
+                                    <select id="pool5_copy_location" class="copy-rules-location" data-pool-index="5" aria-label="Pool 5 copy from facility">
                                         <option value="">— Pool location —</option>
                                     </select>
-                                    <select class="copy-rules-block" data-pool-index="5" disabled>
+                                    <select id="pool5_copy_block" class="copy-rules-block" data-pool-index="5" aria-label="Pool 5 copy from rule block" disabled>
                                         <option value="">— Rule block —</option>
                                     </select>
                                     <button type="button" class="editAndSave copy-rules-btn" data-pool-index="5" disabled>Copy</button>
@@ -1340,12 +1340,10 @@
             </div>
         </div>
     </div>
-</div>
 <!-- end of form-container / sections -->
 <div class="footer" style="margin-top: auto;">
     <em>Developed by Sam Harmon | 2025<br>v2.1</em>
 </div>
-</div> <!-- #mainForm -->
 
 <!-- Dark overlay behind the Settings modal -->
 <div class="modal-overlay" id="settingsOverlay"></div>
@@ -1413,8 +1411,6 @@
                 </div>
                 </div>
             <!-- ===== Employees section ===== -->
-
-            <!-- ===== Employees section ===== -->
             <section class="settings-section settings-group" id="employeeSettings">
             <h3>Employees</h3>
             <p class="section-subtitle">
@@ -1422,12 +1418,11 @@
             </p>
 
             <div class="settings-row employee-file-row" style="margin-top: 20px;">
-
-            <!-- ✅ FIX #10/11/12: Excel accepted + flex row + consistent button -->
-            <div class="settings-row employee-file-row">
+                <label for="employeeFileInput">Employee File</label>
                 <input
                 type="file"
                 id="employeeFileInput"
+                aria-label="Employee file"
                 accept=".csv,.xlsx,.xls"
                 />
             </div>
@@ -1473,14 +1468,14 @@
 
             <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
               <span class="filter-by-label">Filter By:</span>
-              <select id="employeeMarketFilter" class="training-filter-select">
+              <select id="employeeMarketFilter" class="training-filter-select" aria-label="Filter employees by market">
                 <option value="all">Market</option>
                 <option value="Charleston">Charleston</option>
                 <option value="Charlotte">Charlotte</option>
                 <option value="Columbia">Columbia</option>
                 <option value="Greenville">Greenville</option>
               </select>
-              <select id="employeePoolFilter" class="training-filter-select">
+              <select id="employeePoolFilter" class="training-filter-select" aria-label="Filter employees by home pool">
                 <option value="all">Home Pool</option>
               </select>
             </div>
@@ -1550,16 +1545,16 @@
                     <div class="settings-section">
                     <h3>Site Appearance</h3>
                     <br>
-                    <label class="theme-toggle">
+                    <div class="theme-toggle" role="group" aria-label="Site appearance">
                         <div class="theme-switch">
-                            <input type="checkbox" id="darkModeToggle" />
+                            <input type="checkbox" id="darkModeToggle" aria-label="Toggle dark mode" />
                             <div class="theme-switch-track">
                                 <span class="theme-switch-text theme-light-text">Light</span>
                                 <span class="theme-switch-text theme-dark-text">Dark</span>
                                 <div class="theme-switch-thumb"></div>
                             </div>
                         </div>
-                    </label>
+                    </div>
                 </div>
             </div>
         </div>

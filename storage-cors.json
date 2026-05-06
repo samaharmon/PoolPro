@@ -1,0 +1,12 @@
+[
+  {
+    "origin": [
+      "https://poolpro1.vercel.app",
+      "http://localhost:8000",
+      "http://127.0.0.1:8000"
+    ],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
+    "responseHeader": ["Content-Type", "Authorization", "x-goog-resumable"],
+    "maxAgeSeconds": 3600
+  }
+]

@@ -3956,3 +3956,48 @@ body.dark-mode .dash-respondent-tooltip {
     max-width: none;
   }
 }
+
+/* Settings modal: fixed shell/border with independently scrollable content */
+#settingsModal {
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+#settingsModal .settings-modal-content {
+  display: flex !important;
+  flex-direction: column;
+  box-sizing: border-box;
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  border: 4px solid #69140e;
+}
+
+#settingsModal .modal-header {
+  flex: 0 0 auto;
+  margin: 0 !important;
+  position: relative;
+  top: auto;
+}
+
+#settingsModal .settings-modal-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+#settingsModal .settings-field-label {
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+@media (max-width: 768px) {
+  #settingsModal .settings-modal-content {
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  #settingsModal .settings-modal-scroll {
+    padding: 14px;
+  }
+}

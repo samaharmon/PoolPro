@@ -936,28 +936,48 @@ function wireMetadataButtons() {
 
   if (!editBtn || !saveBtn || !ruleButtons) return;
 
-  // Wire underlying buttons (hidden)
-  editBtn.addEventListener('click', () => {
-    setMetadataEnabled(true);
-    editBtn.disabled = true;
-    saveBtn.disabled = false;
-  });
+  const syncToggle = () => {
+    const toggle = ruleButtons.querySelector('.edit-save-toggle-input');
+    if (toggle) toggle.checked = saveBtn.disabled;
+  };
 
-  saveBtn.addEventListener('click', async () => {
+  const setMetadataEditing = (isEditing) => {
+    setMetadataEnabled(isEditing);
+    editBtn.disabled = isEditing;
+    saveBtn.disabled = !isEditing;
+    syncToggle();
+  };
+
+  const saveMetadata = async () => {
     const success = await attemptSave();
     if (success) {
-      setMetadataEnabled(false);
-      editBtn.disabled = false;
-      saveBtn.disabled = true;
+      setMetadataEditing(false);
+    } else {
+      setMetadataEditing(true);
     }
-  });
+    return success;
+  };
+
+  if (editBtn.dataset.metadataBound !== 'true') {
+    editBtn.dataset.metadataBound = 'true';
+    editBtn.addEventListener('click', () => setMetadataEditing(true));
+  }
+
+  if (saveBtn.dataset.metadataBound !== 'true') {
+    saveBtn.dataset.metadataBound = 'true';
+    saveBtn.addEventListener('click', saveMetadata);
+  }
 
   // Skip if already converted to toggle
-  if (ruleButtons.querySelector('.theme-switch')) return;
+  if (ruleButtons.querySelector('.theme-switch')) {
+    syncToggle();
+    return;
+  }
 
   // Build theme-switch style toggle matching rule block headers
   const label = document.createElement('label');
   label.className = 'theme-toggle rule-edit-save-toggle';
+  label.setAttribute('aria-label', 'Pool metadata edit and save mode');
 
   const switchDiv = document.createElement('div');
   switchDiv.className = 'theme-switch';
@@ -965,6 +985,7 @@ function wireMetadataButtons() {
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.className = 'edit-save-toggle-input';
+  cb.setAttribute('aria-label', 'Toggle pool metadata edit and save mode');
   cb.checked = !!saveBtn.disabled; // checked = saved/read-only, unchecked = editing
 
   const track = document.createElement('div');
@@ -986,23 +1007,25 @@ function wireMetadataButtons() {
   label.append(switchDiv);
   ruleButtons.appendChild(label);
 
-  cb.addEventListener('change', () => {
+  cb.addEventListener('change', async () => {
     if (!cb.checked) {
       // Switch to Edit mode
-      editBtn.click();
+      setMetadataEditing(true);
     } else {
       // Switch to Save mode
-      saveBtn.click();
-      // If save failed, revert toggle
-      if (!saveBtn.disabled) cb.checked = false;
+      cb.disabled = true;
+      const success = await saveMetadata();
+      cb.disabled = false;
+      if (!success) cb.checked = false;
     }
   });
 
   // Keep toggle in sync with external button state changes
   const observer = new MutationObserver(() => {
-    cb.checked = saveBtn.disabled; // checked = saved mode; unchecked = edit mode
+    syncToggle();
   });
   observer.observe(saveBtn, { attributes: true, attributeFilter: ['disabled'] });
+  syncToggle();
 }
 
 // Rename concern level options (values stay the same)
@@ -1582,6 +1605,74 @@ function dedupeRuleFieldIds() {
   });
 }
 
+function formatRuleValueLabel(valueKey) {
+  return String(valueKey || '')
+    .replace(/^lt_/, 'less than ')
+    .replace(/^gt_/, 'greater than ')
+    .replace(/_/g, '.');
+}
+
+function labelRuleControl(el) {
+  const id = el.id || '';
+  const match = id.match(/^pool(\d+)_(ph|cl)_(.+?)(?:_level)?(?:__\d+)?$/);
+  if (!match) return;
+
+  const [, poolIndex, metricKey, valueKey] = match;
+  const metricLabel = metricKey === 'ph' ? 'pH' : 'chlorine';
+  const valueLabel = formatRuleValueLabel(valueKey);
+  const fieldType = el.matches('select') ? 'concern level' : 'response';
+  el.setAttribute('aria-label', `Pool ${poolIndex} ${metricLabel} ${valueLabel} ${fieldType}`);
+}
+
+function ensureEditorAccessibility() {
+  document.querySelectorAll('.pool-rule-block').forEach((block) => {
+    const poolIndex = block.dataset.poolIndex || '';
+    if (!poolIndex) return;
+
+    const poolNameInput = block.querySelector('.pool-name-input');
+    if (poolNameInput) {
+      if (!poolNameInput.id) poolNameInput.id = `pool${poolIndex}_name`;
+      poolNameInput.setAttribute('aria-label', `Pool ${poolIndex} name`);
+    }
+
+    const copyLocation = block.querySelector('.copy-rules-location');
+    if (copyLocation) {
+      if (!copyLocation.id) copyLocation.id = `pool${poolIndex}_copy_location`;
+      copyLocation.setAttribute('aria-label', `Pool ${poolIndex} copy from facility`);
+    }
+
+    const copyBlock = block.querySelector('.copy-rules-block');
+    if (copyBlock) {
+      if (!copyBlock.id) copyBlock.id = `pool${poolIndex}_copy_block`;
+      copyBlock.setAttribute('aria-label', `Pool ${poolIndex} copy from rule block`);
+    }
+
+    const copyBtn = block.querySelector('.copy-rules-btn');
+    if (copyBtn) copyBtn.setAttribute('aria-label', `Copy rules into Pool ${poolIndex}`);
+
+    block.querySelectorAll('.sanitation-tab').forEach((tab) => {
+      const method = tab.dataset.method || tab.textContent.trim() || 'sanitation';
+      tab.setAttribute('aria-label', `Pool ${poolIndex} ${method} rules`);
+    });
+  });
+
+  document.querySelectorAll(`#poolRuleBlocks ${RULE_RESPONSE_SELECTOR}[id], #poolRuleBlocks select.concernLevel[id]`).forEach(labelRuleControl);
+
+  const marketOptions = document.querySelector('#poolMetadataSection .market-options');
+  if (marketOptions) {
+    marketOptions.setAttribute('role', 'group');
+    marketOptions.setAttribute('aria-label', 'Markets');
+    marketOptions.querySelectorAll('input[name="editorMarket"]').forEach((input) => {
+      input.setAttribute('aria-label', `${input.value} market`);
+    });
+  }
+
+  document.getElementById('employeeFileInput')?.setAttribute('aria-label', 'Employee file');
+  document.getElementById('employeeMarketFilter')?.setAttribute('aria-label', 'Filter employees by market');
+  document.getElementById('employeePoolFilter')?.setAttribute('aria-label', 'Filter employees by home pool');
+  document.getElementById('darkModeToggle')?.setAttribute('aria-label', 'Toggle dark mode');
+}
+
 // ---- Copy Existing Rules ----
 
 function populateCopyRulesLocationSelects() {
@@ -1703,6 +1794,7 @@ async function initEditor() {
   if (typeof dedupeRuleFieldIds === 'function') {
     dedupeRuleFieldIds();
   }
+  ensureEditorAccessibility();
 
   wireMetadataButtons();
   wireBlockButtons();
