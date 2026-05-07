@@ -11,7 +11,7 @@ window.currentEditorMode = currentEditorMode;
 window.CurrentEditorMide = window.currentEditorMode;
 
 // ---- Per‑sanitation rule state ----
-const SANITATION_METHODS = ['bleach', 'granular'];
+const SANITATION_METHODS = ['bleach', 'granular', 'tablet'];
 
 // ruleStateByPool[poolIndex] = { bleach: { ph:{}, cl:{} }, granular: { ph:{}, cl:{} } }
 const ruleStateByPool = {};
@@ -208,6 +208,7 @@ function getOrCreatePoolRuleState(poolIndex) {
     ruleStateByPool[poolIndex] = {
       bleach: createEmptyMethodRules(),
       granular: createEmptyMethodRules(),
+      tablet: createEmptyMethodRules(),
     };
   }
   return ruleStateByPool[poolIndex];
@@ -254,24 +255,23 @@ function showRulesForMethod(block, method) {
   const poolIndex = block.dataset.poolIndex;
   const state = getOrCreatePoolRuleState(poolIndex);
 
-  // If we switch to Granular and its Cl rules are empty
-  // but Bleach has Cl rules, clone them so the user
-  // never sees a blank granular Cl section by default.
-  if (method === 'granular') {
-    const bleach   = state.bleach   || createEmptyMethodRules();
-    const granular = state.granular || createEmptyMethodRules();
+  // If switching to granular or tablet and their Cl rules are empty,
+  // clone bleach Cl rules so the user never sees a blank Cl section by default.
+  if (method === 'granular' || method === 'tablet') {
+    const bleach     = state.bleach   || createEmptyMethodRules();
+    const methodData = state[method]  || createEmptyMethodRules();
 
-    const granularCl = granular.cl || {};
-    const hasAnyGranularCl = Object.values(granularCl).some(
+    const methodCl = methodData.cl || {};
+    const hasAnyCl = Object.values(methodCl).some(
       (rule) =>
         rule &&
         typeof rule.response === 'string' &&
         rule.response.trim() !== ''
     );
 
-    if (!hasAnyGranularCl && bleach.cl) {
-      granular.cl = JSON.parse(JSON.stringify(bleach.cl));
-      state.granular = granular;
+    if (!hasAnyCl && bleach.cl) {
+      methodData.cl = JSON.parse(JSON.stringify(bleach.cl));
+      state[method] = methodData;
     }
   }
 
@@ -606,10 +606,11 @@ async function loadPoolIntoEditor(poolDoc) {
     const state = getOrCreatePoolRuleState(poolIndex);
     const fromDoc = rulesForPools[idx] || {};
 
-    if (fromDoc.bleach || fromDoc.granular) {
+    if (fromDoc.bleach || fromDoc.granular || fromDoc.tablet) {
       const sharedPh = {
         ...(fromDoc.bleach?.ph || {}),
         ...(fromDoc.granular?.ph || {}),
+        ...(fromDoc.tablet?.ph || {}),
       };
 
       state.bleach = {
@@ -619,6 +620,10 @@ async function loadPoolIntoEditor(poolDoc) {
       state.granular = {
         ph: sharedPh,
         cl: fromDoc.granular?.cl || {},
+      };
+      state.tablet = {
+        ph: sharedPh,
+        cl: fromDoc.tablet?.cl || fromDoc.granular?.cl || {},
       };
     }
 
@@ -705,6 +710,7 @@ function readEditorToObject() {
     pools.push({
       bleach: state.bleach || createEmptyMethodRules(),
       granular: state.granular || createEmptyMethodRules(),
+      tablet: state.tablet || createEmptyMethodRules(),
       poolName,
     });
   });
@@ -1229,6 +1235,11 @@ async function cloneRockbridgePresets() {
     };
 
     state.granular = {
+      ph: JSON.parse(JSON.stringify(sharedPh)),
+      cl: JSON.parse(JSON.stringify(granularClSource)),
+    };
+
+    state.tablet = {
       ph: JSON.parse(JSON.stringify(sharedPh)),
       cl: JSON.parse(JSON.stringify(granularClSource)),
     };
@@ -1761,6 +1772,7 @@ function wireCopyRulesDropdowns() {
       const sharedPh = {
         ...(sourcePoolRules.bleach?.ph || {}),
         ...(sourcePoolRules.granular?.ph || {}),
+        ...(sourcePoolRules.tablet?.ph || {}),
       };
 
       state.bleach = {
@@ -1770,6 +1782,10 @@ function wireCopyRulesDropdowns() {
       state.granular = {
         ph: JSON.parse(JSON.stringify(sharedPh)),
         cl: JSON.parse(JSON.stringify(sourcePoolRules.granular?.cl || {})),
+      };
+      state.tablet = {
+        ph: JSON.parse(JSON.stringify(sharedPh)),
+        cl: JSON.parse(JSON.stringify(sourcePoolRules.tablet?.cl || sourcePoolRules.granular?.cl || {})),
       };
 
       const activeMethod = targetBlock.dataset.activeMethod || 'bleach';

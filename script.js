@@ -280,6 +280,11 @@ function bindTableScrollShadow(wrapper) {
   wrapper.addEventListener('scroll', refresh, { passive: true });
   window.addEventListener('resize', refresh, { passive: true });
   requestAnimationFrame(refresh);
+  setTimeout(refresh, 100);
+  setTimeout(refresh, 500);
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(refresh).observe(wrapper);
+  }
 }
 
 function observeResponsiveTables() {
@@ -1282,7 +1287,6 @@ function setupChemForm() {
       if (feedbackModal && modalContent) {
         const submitterName = [firstName, lastName].filter(Boolean).join(' ') || 'Unknown';
         const poolDoc = poolsCache.find(p => p.id === poolId);
-        const method = sanitationSelections[poolId] || 'bleach';
         const poolRules = poolDoc ? normalizePoolRules(poolDoc) : [];
         const numPools = poolDoc?.numPools || poolDoc?.poolCount || 2;
 
@@ -1299,6 +1303,7 @@ function setupChemForm() {
           const fields = poolFieldNames(i);
           const phVal = entry[fields.ph];
           const clVal = entry[fields.cl];
+          const method = sanitationSelections[`${poolId}::${i}`] || sanitationSelections[poolId] || 'bleach';
           const rules = poolRules[i]?.[method];
           const poolLabel = i === 0 ? 'Main Pool' : i === 1 ? 'Secondary Pool' : `Pool ${i + 1}`;
 
@@ -1437,7 +1442,7 @@ function normalizePoolRules(poolDoc) {
         cl[rk] = { response: poolDoc[key], concernLevel: poolDoc[`${key}_level`] || 'none' };
       }
     });
-    pools.push({ bleach: { ph, cl }, granular: { ph, cl } });
+    pools.push({ bleach: { ph, cl }, granular: { ph, cl }, tablet: { ph, cl } });
   }
   return pools;
 }
@@ -1446,7 +1451,7 @@ function normalizePoolRules(poolDoc) {
 function getPhConcernLevel(poolName, poolIdx, phValue) {
   const poolDoc = poolsCache.find(p => (p.name || p.id) === poolName);
   if (!poolDoc) return 'none';
-  const method = sanitationSelections[poolDoc.id] || 'bleach';
+  const method = sanitationSelections[`${poolDoc.id}::${poolIdx}`] || sanitationSelections[poolDoc.id] || 'bleach';
   const poolRules = normalizePoolRules(poolDoc);
   const rules = poolRules[poolIdx]?.[method];
   if (!rules) return 'none';
@@ -1458,7 +1463,7 @@ function getPhConcernLevel(poolName, poolIdx, phValue) {
 function getClConcernLevel(poolName, poolIdx, clValue) {
   const poolDoc = poolsCache.find(p => (p.name || p.id) === poolName);
   if (!poolDoc) return 'none';
-  const method = sanitationSelections[poolDoc.id] || 'bleach';
+  const method = sanitationSelections[`${poolDoc.id}::${poolIdx}`] || sanitationSelections[poolDoc.id] || 'bleach';
   const poolRules = normalizePoolRules(poolDoc);
   const rules = poolRules[poolIdx]?.[method];
   if (!rules) return 'none';
@@ -2311,14 +2316,14 @@ function ensureResourcesSettingsSection() {
   section.className = 'settings-section settings-group';
   section.id = 'resourceSettings';
   section.innerHTML = `
+    <h3>Resources</h3>
     <div class="resource-section-header">
-      <h3>Resources</h3>
       <button type="button" id="resourceDeleteAllBtn" class="submit-btn danger-button resource-delete-all-btn">Delete All Resources</button>
     </div>
-    <p class="section-subtitle">Upload and manage the documents available on the Resources page.</p>
+    <p class="section-subtitle">Upload and manage the documents and videos available on the Resources page.</p>
     <div class="settings-row resource-file-row" style="margin-top: 20px;">
       <label for="resourceFileInput" class="settings-field-label">Resource File</label>
-      <input type="file" id="resourceFileInput" aria-label="Resource file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.jpg,.jpeg,.png" />
+      <input type="file" id="resourceFileInput" aria-label="Resource file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.jpg,.jpeg,.png,.mp4,.mov,.webm,.avi,.mkv,.m4v" />
     </div>
     <div class="settings-row resource-add-row">
       <div class="settings-field">
@@ -2507,6 +2512,13 @@ function refreshResourceControls() {
   populateResourcePoolOptions(document.getElementById('resourcePoolInput'), 'all', false);
   populateResourcePoolOptions(document.getElementById('resourcePoolFilter'), document.getElementById('resourceMarketFilter')?.value || 'all', true);
   populateResourcePoolOptions(document.getElementById('resourcesPoolFilter'), document.getElementById('resourcesMarketFilter')?.value || 'all', true);
+}
+
+function isVideoUrl(url) {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  if (lower.startsWith('data:video/')) return true;
+  return /\.(mp4|mov|webm|avi|mkv|m4v)(\?|$)/i.test(lower);
 }
 
 function buildResourceRowCells(item, includeActions = false) {
@@ -3000,47 +3012,59 @@ function renderSanitationTables(container) {
 
   const table = document.createElement('table');
   table.className = 'sanitation-table sanitation-table--settings';
-  table.innerHTML = '<thead><tr><th>Market</th><th>Pool</th><th>Bleach</th><th>Granular</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>Facility</th><th>Pool</th><th>Bleach</th><th>Granular</th><th>Tablet</th></tr></thead>';
   const tbody = document.createElement('tbody');
 
-  rows
-    .filter(({ market }) => sanitationMarketFilter === 'all' || market === sanitationMarketFilter)
-    .forEach(({ market, pool }) => {
-      const saved = sanitationData[pool.id] || 'bleach';
+  const filteredRows = rows.filter(({ market }) => sanitationMarketFilter === 'all' || market === sanitationMarketFilter);
+
+  filteredRows.forEach(({ market, pool }) => {
+    const numPools = Math.max(1, Number(pool.numPools || pool.poolCount || 1));
+    const poolLabels = Array.from({ length: numPools }, (_, i) =>
+      i === 0 ? 'Pool 1 (Main)' : i === 1 ? 'Pool 2' : `Pool ${i + 1}`
+    );
+
+    poolLabels.forEach((poolLabel, poolIdx) => {
+      const key = `${pool.id}::${poolIdx}`;
+      const saved = sanitationData[key] || sanitationData[pool.id] || 'bleach';
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${market}</td><td>${pool.name || pool.id}</td>`;
 
-      const bleachCb = document.createElement('input');
-      bleachCb.type = 'checkbox';
-      bleachCb.className = 'market-filter-checkbox';
-      bleachCb.checked = saved === 'bleach';
-      bleachCb.disabled = !sanitationEditing;
+      if (poolIdx === 0) {
+        const facilityTd = document.createElement('td');
+        facilityTd.textContent = pool.name || pool.id;
+        if (numPools > 1) facilityTd.rowSpan = numPools;
+        tr.appendChild(facilityTd);
+      }
 
-      const granularCb = document.createElement('input');
-      granularCb.type = 'checkbox';
-      granularCb.className = 'market-filter-checkbox';
-      granularCb.checked = saved === 'granular';
-      granularCb.disabled = !sanitationEditing;
+      const poolTd = document.createElement('td');
+      poolTd.textContent = poolLabel;
+      tr.appendChild(poolTd);
+
+      const methods = ['bleach', 'granular', 'tablet'];
+      const cbs = methods.map((method) => {
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'market-filter-checkbox';
+        cb.checked = saved === method;
+        cb.disabled = !sanitationEditing;
+        return cb;
+      });
 
       const updateSelection = (method) => {
-        sanitationData[pool.id] = method;
-        bleachCb.checked = method === 'bleach';
-        granularCb.checked = method === 'granular';
+        sanitationData[key] = method;
+        cbs.forEach((cb, i) => { cb.checked = methods[i] === method; });
       };
 
-      bleachCb.addEventListener('change', () => updateSelection('bleach'));
-      granularCb.addEventListener('change', () => updateSelection('granular'));
+      cbs.forEach((cb, i) => {
+        cb.addEventListener('change', () => { if (cb.checked) updateSelection(methods[i]); });
+        const td = document.createElement('td');
+        td.style.textAlign = 'center';
+        td.appendChild(cb);
+        tr.appendChild(td);
+      });
 
-      const bleachTd = document.createElement('td');
-      bleachTd.style.textAlign = 'center';
-      bleachTd.appendChild(bleachCb);
-      const granularTd = document.createElement('td');
-      granularTd.style.textAlign = 'center';
-      granularTd.appendChild(granularCb);
-      tr.appendChild(bleachTd);
-      tr.appendChild(granularTd);
       tbody.appendChild(tr);
     });
+  });
 
   table.appendChild(tbody);
   tableWrap.appendChild(table);
