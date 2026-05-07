@@ -777,8 +777,8 @@ button:active,
     margin-top: 0 !important;
     max-width: 100% !important;
     width: 100% !important;
-    max-height: calc(100dvh - 24px);
-    overflow-y: auto;
+    max-height: none;
+    overflow-y: visible;
     padding: 0 20px 20px;
     border: 4px solid #69140e; /* Add red border */
     border-radius: 0px;
@@ -787,7 +787,7 @@ button:active,
 
 /* Scrollable settings modal */
 #settingsModal {
-    overflow: hidden;
+    overflow-y: auto;
     max-height: 90vh;
 }
 
@@ -3180,28 +3180,34 @@ textarea,
 
 .resource-add-row {
   display: grid !important;
-  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px 16px;
   margin: 10px 0 0;
-  justify-content: flex-start;
 }
 
 .resource-add-row .settings-field-full {
   grid-column: auto;
 }
 
+.resource-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.resource-section-header h3 {
+  margin: 0;
+}
+
 .resource-delete-all-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
   padding: 6px 14px !important;
   font-size: 13px !important;
   width: auto;
   margin: 0;
-}
-
-#resourceSettings {
-  position: relative;
+  flex-shrink: 0;
 }
 
 .resource-file-row {
@@ -3269,12 +3275,29 @@ textarea,
   width: 14%;
 }
 
+/* Resource table: cell-level dimming only (no full overlay) */
+.settings-modal-content #resourceTableSection::before {
+  display: none !important;
+  content: none !important;
+}
+
+.settings-modal-content #resourceTableSection.overlay-disabled {
+  pointer-events: auto;
+}
+
 .resource-table-section.overlay-disabled tbody td:not(:last-child) {
   opacity: 0.5;
 }
 
 .resource-table-section.overlay-disabled tbody td:last-child {
   opacity: 1;
+}
+
+/* Resource doc links */
+.resource-table a,
+#resourcesTableBody a {
+  color: #f0c9b6;
+  text-decoration: underline;
 }
 
 .resource-table-page-wrap {

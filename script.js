@@ -90,6 +90,28 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Open data-URL resources as blob URLs (direct data: links are blocked in modern browsers)
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('.resource-doc-link');
+  if (!link) return;
+  e.preventDefault();
+  const key = link.dataset.resourceKey;
+  const dataUrl = resourceDataUrlMap.get(key) || '';
+  if (!dataUrl) return;
+  try {
+    const [header, b64] = dataUrl.split(',');
+    const mime = header.split(':')[1].split(';')[0];
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const blob = new Blob([bytes], { type: mime });
+    const blobUrl = URL.createObjectURL(blob);
+    const win = window.open(blobUrl, '_blank');
+    if (!win) { URL.revokeObjectURL(blobUrl); }
+    else { setTimeout(() => URL.revokeObjectURL(blobUrl), 60000); }
+  } catch (err) {
+    console.error('[PoolPro] Could not open resource file:', err);
+  }
+});
+
 function getPagePrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   parts.pop();
@@ -2274,6 +2296,7 @@ let resourcePageMarketFilter = 'all';
 let resourcePagePoolFilter = 'all';
 let resourceSettingsMarketFilter = 'all';
 let resourceSettingsPoolFilter = 'all';
+const resourceDataUrlMap = new Map();
 
 function getResourceStorage() {
   return getStorage(getApp());
@@ -2288,8 +2311,10 @@ function ensureResourcesSettingsSection() {
   section.className = 'settings-section settings-group';
   section.id = 'resourceSettings';
   section.innerHTML = `
-    <h3>Resources</h3>
-    <button type="button" id="resourceDeleteAllBtn" class="submit-btn danger-button resource-delete-all-btn">Delete All Resources</button>
+    <div class="resource-section-header">
+      <h3>Resources</h3>
+      <button type="button" id="resourceDeleteAllBtn" class="submit-btn danger-button resource-delete-all-btn">Delete All Resources</button>
+    </div>
     <p class="section-subtitle">Upload and manage the documents available on the Resources page.</p>
     <div class="settings-row resource-file-row" style="margin-top: 20px;">
       <label for="resourceFileInput" class="settings-field-label">Resource File</label>
@@ -2485,9 +2510,18 @@ function refreshResourceControls() {
 }
 
 function buildResourceRowCells(item, includeActions = false) {
-  const nameHtml = item.fileUrl
-    ? `<a href="${item.fileUrl}" target="_blank" rel="noopener">${item.documentName || item.fileName || 'Untitled document'}</a>`
-    : (item.documentName || item.fileName || 'Untitled document');
+  const nameText = item.documentName || item.fileName || 'Untitled document';
+  let nameHtml;
+  if (item.fileUrl) {
+    if (item.fileUrl.startsWith('data:')) {
+      resourceDataUrlMap.set(item.id, item.fileUrl);
+      nameHtml = `<a href="#" class="resource-doc-link" data-resource-key="${item.id}" rel="noopener">${nameText}</a>`;
+    } else {
+      nameHtml = `<a href="${item.fileUrl}" target="_blank" rel="noopener">${nameText}</a>`;
+    }
+  } else {
+    nameHtml = nameText;
+  }
 
   const row = `
     <td>${nameHtml}</td>
@@ -3586,9 +3620,13 @@ function renderJobFormSubmissions(submissions, container) {
       section.appendChild(h2);
 
       const poolsToRender = pFilter === 'all' ? pools : pools.filter(p => p === pFilter);
+      let poolsRendered = 0;
       poolsToRender.forEach(poolName => {
         const poolSubs = submissions.filter(s => s.pool === poolName);
         if (!poolSubs.length) return;
+
+        const mostRecent = poolSubs[0]; // already sorted desc by timestamp
+        poolsRendered++;
 
         const h3 = document.createElement('h3');
         h3.style.cssText = 'font-size:1rem;color:#69140e;margin:16px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px;';
@@ -3598,42 +3636,42 @@ function renderJobFormSubmissions(submissions, container) {
         const table = document.createElement('table');
         table.className = 'data-table dashboard-pool-table';
         table.style.width = '100%';
-        table.innerHTML = `<thead><tr>
-          <th>Submitted By</th>
-          <th>Photos</th>
-          <th>Notes</th>
-          <th>Submitted</th>
-        </tr></thead>`;
+        table.innerHTML = `<thead><tr><th>Form</th><th>Respondent</th><th>Timestamp</th></tr></thead>`;
         const tbody = document.createElement('tbody');
 
-        poolSubs.forEach(sub => {
-          const tr = document.createElement('tr');
-          const ts = sub.timestamp?.toDate ? sub.timestamp.toDate() : null;
-          const timeStr = ts ? ts.toLocaleString() : '—';
-          const photoGroups = sub.photos && typeof sub.photos === 'object'
-            ? Object.values(sub.photos).flat()
-            : [];
-          const photoCells = photoGroups.map((p) =>
-            `<a href="${p.url}" target="_blank" rel="noopener">
-               <img src="${p.url}" alt="Photo" style="width:60px;height:60px;object-fit:cover;cursor:pointer;border:1px solid #ccc;margin:2px;"
-                 onclick="event.preventDefault();openPhotoModal('${p.url}')" />
-             </a>`
-          ).join('');
-          const noteParts = [
-            sub.damagedNotes,
-            sub.otherNotes
-          ].filter(Boolean);
-          tr.innerHTML = `<td>${sub.submitterEmail || '—'}</td>
-            <td style="white-space:nowrap;">${photoCells || '—'}</td>
-            <td>${noteParts.join('<br><br>') || '—'}</td>
-            <td style="white-space:nowrap;">${timeStr}</td>`;
-          tbody.appendChild(tr);
-        });
+        const tr = document.createElement('tr');
+        const ts = mostRecent.timestamp?.toDate ? mostRecent.timestamp.toDate() : null;
+        const timeStr = ts ? ts.toLocaleString() : '—';
+
+        const tdForm = document.createElement('td');
+        const formLink = document.createElement('a');
+        formLink.href = '#';
+        formLink.textContent = 'Cleanliness Report';
+        formLink.style.cssText = 'color:#69140e;text-decoration:underline;cursor:pointer;font-weight:bold;';
+        formLink.addEventListener('click', (e) => { e.preventDefault(); openDutyFormModal(mostRecent); });
+        tdForm.appendChild(formLink);
+
+        const tdResp = document.createElement('td');
+        tdResp.textContent = mostRecent.submitterEmail || '—';
+
+        const tdTime = document.createElement('td');
+        tdTime.style.whiteSpace = 'nowrap';
+        tdTime.textContent = timeStr;
+
+        tr.appendChild(tdForm);
+        tr.appendChild(tdResp);
+        tr.appendChild(tdTime);
+        tbody.appendChild(tr);
         table.appendChild(tbody);
         section.appendChild(table);
       });
-      tablesWrap.appendChild(section);
+
+      if (poolsRendered > 0) tablesWrap.appendChild(section);
     });
+
+    if (!tablesWrap.children.length) {
+      tablesWrap.innerHTML = '<p style="padding:8px 0;color:#666;">No submissions match the selected filters.</p>';
+    }
   }
 
   renderTables();
@@ -3644,6 +3682,78 @@ function renderJobFormSubmissions(submissions, container) {
     renderTables();
   });
   poolSel.addEventListener('change', renderTables);
+}
+
+function openDutyFormModal(sub) {
+  let modal = document.getElementById('dutyFormModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'dutyFormModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;overflow-y:auto;display:none;align-items:flex-start;justify-content:center;padding:24px 16px;box-sizing:border-box;';
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    document.body.appendChild(modal);
+  }
+
+  const ts = sub.timestamp?.toDate ? sub.timestamp.toDate() : null;
+  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  const photoSectionHtml = (label, photos) => {
+    if (!photos?.length) return '';
+    const imgs = photos.map(p =>
+      `<img src="${esc(p.url)}" alt="photo" style="width:100px;height:100px;object-fit:cover;cursor:pointer;border:1px solid #ccc;border-radius:2px;"
+           onclick="window.openPhotoModal('${esc(p.url)}')" />`
+    ).join('');
+    return `<div style="margin-bottom:18px;">
+      <h4 style="margin:0 0 8px;font-size:14px;color:#555;text-transform:uppercase;letter-spacing:.04em;">${esc(label)}</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;">${imgs}</div>
+    </div>`;
+  };
+
+  const photos = sub.photos || {};
+  const hasManagerData = sub.bleachVolume != null || sub.muriaticAcid != null ||
+    sub.shockGranular != null || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
+    photos.bleach?.length;
+
+  let cyaHtml = '';
+  if (sub.cyaReadings && Object.keys(sub.cyaReadings).length) {
+    const rows = Object.entries(sub.cyaReadings).map(([k, v]) =>
+      `<tr><td style="padding:3px 10px 3px 0;color:#555;">${esc(k.replace('pool', 'Pool '))}</td><td style="padding:3px 0;font-weight:bold;">${esc(v)}</td></tr>`
+    ).join('');
+    cyaHtml = `<div style="margin-top:8px;"><strong>CYA Levels:</strong><table style="margin-top:4px;border-collapse:collapse;">${rows}</table></div>`;
+  }
+
+  modal.innerHTML = `
+    <div style="background:#fff;max-width:680px;width:100%;padding:28px 24px;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
+      <button onclick="document.getElementById('dutyFormModal').style.display='none'"
+        style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:26px;line-height:1;cursor:pointer;color:#666;">&times;</button>
+      <h2 style="font-family:'Franklin Gothic Medium',Arial,sans-serif;color:#69140e;margin:0 0 6px;font-size:20px;">Cleanliness Report</h2>
+      <p style="margin:2px 0;font-size:14px;color:#555;"><strong>Pool:</strong> ${esc(sub.pool)}</p>
+      <p style="margin:2px 0;font-size:14px;color:#555;"><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
+      <p style="margin:2px 0 20px;font-size:14px;color:#555;"><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
+
+      <hr style="border:none;border-top:1px solid #ddd;margin-bottom:18px;" />
+
+      ${photoSectionHtml('Deck', photos.deck)}
+      ${photoSectionHtml('Pool', photos.pool)}
+      ${photoSectionHtml('Skimmers', photos.skimmers)}
+      ${photoSectionHtml('Damaged Equipment', photos.damaged)}
+
+      ${sub.damagedNotes ? `<div style="margin-bottom:14px;font-size:14px;"><strong>Damaged Equipment Notes:</strong><br><span style="color:#444;">${esc(sub.damagedNotes)}</span></div>` : ''}
+      ${sub.otherNotes ? `<div style="margin-bottom:14px;font-size:14px;"><strong>Other Notes:</strong><br><span style="color:#444;">${esc(sub.otherNotes)}</span></div>` : ''}
+
+      ${hasManagerData ? `
+        <hr style="border:none;border-top:1px solid #ddd;margin:18px 0;" />
+        <div style="background:#fff5f5;border:1px solid #69140e;padding:16px;border-radius:2px;">
+          <h3 style="font-family:'Franklin Gothic Medium',Arial,sans-serif;color:#69140e;margin:0 0 12px;font-size:15px;">Managers Only</h3>
+          ${photoSectionHtml('Bleach Barrels', photos.bleach)}
+          ${sub.bleachVolume != null ? `<p style="margin:4px 0;font-size:14px;"><strong>Bleach Volume:</strong> ${esc(sub.bleachVolume)}%</p>` : ''}
+          ${sub.muriaticAcid != null ? `<p style="margin:4px 0;font-size:14px;"><strong>Muriatic Acid:</strong> ${esc(sub.muriaticAcid)} gal</p>` : ''}
+          ${sub.shockGranular != null ? `<p style="margin:4px 0;font-size:14px;"><strong>Shock / Granular:</strong> ${esc(sub.shockGranular)}%</p>` : ''}
+          ${cyaHtml}
+        </div>` : ''}
+    </div>`;
+
+  modal.style.display = 'flex';
 }
 
 // Photo modal for job form submissions

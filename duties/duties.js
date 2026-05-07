@@ -179,11 +179,26 @@ function addPhotoSlotToGroup(group) {
     if (!files.length) return;
     setPhotoSlotFile({ slot, fileInput, preview, placeholder, removeBtn }, files[0]);
 
-    const remainingCapacity = Math.max(0, max - getSlotCount(group));
-    files.slice(1, remainingCapacity + 1).forEach((file) => {
-      const nextSlot = addPhotoSlotToGroup(group);
-      if (!nextSlot) return;
-      setPhotoSlotFile(nextSlot, file);
+    files.slice(1).forEach((file) => {
+      if (getSlotCount(group) >= max) return;
+      // Fill an existing empty slot before creating a new one
+      let filled = false;
+      for (const s of group.querySelectorAll('.duties-photo-slot')) {
+        const inp = s.querySelector('input[type="file"]');
+        if (!inp || inp.files?.[0] || inp._selectedFile) continue;
+        const prev = s.querySelector('.duties-preview');
+        const ph = s.querySelector('.duties-upload-placeholder');
+        const rb = s.querySelector('.duties-clear-btn');
+        if (prev && ph && rb) {
+          setPhotoSlotFile({ fileInput: inp, preview: prev, placeholder: ph, removeBtn: rb }, file);
+          filled = true;
+          break;
+        }
+      }
+      if (!filled) {
+        const nextSlot = addPhotoSlotToGroup(group);
+        if (nextSlot) setPhotoSlotFile(nextSlot, file);
+      }
     });
     updateAddBtn(groupId);
   });
@@ -318,11 +333,11 @@ async function uploadDutyPhoto({ storage, pool, category, file, index }) {
   try {
     await Promise.race([
       uploadBytes(storageRef, file),
-      timeoutAfter(12000, 'Firebase Storage upload'),
+      timeoutAfter(5000, 'Firebase Storage upload'),
     ]);
     const url = await Promise.race([
       getDownloadURL(storageRef),
-      timeoutAfter(12000, 'Firebase Storage download URL'),
+      timeoutAfter(5000, 'Firebase Storage download URL'),
     ]);
     return { index, url, name: file.name, storagePath: path, source: 'storage' };
   } catch (err) {
@@ -368,13 +383,11 @@ window.submitDutiesForm = async function () {
   try {
     const storage = getStorage(getApp());
 
-    async function uploadGroup(groupId, category) {
+    function uploadGroup(groupId, category) {
       const files = collectPhotosFromGroup(groupId);
-      const urls = [];
-      for (let i = 0; i < files.length; i++) {
-        urls.push(await uploadDutyPhoto({ storage, pool, category, file: files[i], index: i }));
-      }
-      return urls;
+      return Promise.all(
+        files.map((file, i) => uploadDutyPhoto({ storage, pool, category, file, index: i }))
+      );
     }
 
     const [deckPhotos, poolPhotos, skimmersPhotos, damagedPhotos, bleachPhotos] = await Promise.all([
