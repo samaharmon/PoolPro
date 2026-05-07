@@ -189,7 +189,7 @@ body.dark-mode .page-content-title {
     pointer-events: none;
     transform: translateY(-8px);
     transition: opacity 0.36s ease, transform 0.36s ease, visibility 0s linear 0.36s;
-    z-index: 800;
+    z-index: 1100;
     padding-top: calc(10px + env(safe-area-inset-top, 0px));
     padding-bottom: 10px;
 }
@@ -1044,7 +1044,7 @@ button:active,
     position: absolute;
     top: 0;
     height: var(--table-scroll-shadow-height, calc(100% - 8px));
-    width: 28px;
+    width: 40px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.18s ease;
@@ -1053,12 +1053,12 @@ button:active,
 
 .table-scroll-shell::before {
     left: 0;
-    background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.28));
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.45), transparent);
 }
 
 .table-scroll-shell::after {
     right: 0;
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.28), transparent);
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.45), transparent);
 }
 
 .table-scroll-shell.has-overflow-left::before,
@@ -1076,7 +1076,7 @@ button:active,
     padding-bottom: 8px;
     margin: 0;
     background-repeat: no-repeat;
-    background-size: 28px calc(100% - 8px);
+    background-size: 40px calc(100% - 8px);
     scrollbar-width: auto;
     scrollbar-color: rgba(255, 255, 255, 0.45) rgba(255, 255, 255, 0.12);
 }
@@ -1093,21 +1093,21 @@ button:active,
 }
 
 .table-scroll-wrap.has-overflow-left {
-    background-image: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.28));
+    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.45), transparent);
     background-position: left top;
 }
 
 .table-scroll-wrap.has-overflow-right {
-    background-image: linear-gradient(to right, rgba(0, 0, 0, 0.28), transparent);
+    background-image: linear-gradient(to left, rgba(0, 0, 0, 0.45), transparent);
     background-position: right top;
 }
 
 .table-scroll-wrap.has-overflow-left.has-overflow-right {
     background-image:
-        linear-gradient(to right, transparent, rgba(0, 0, 0, 0.28)),
-        linear-gradient(to right, rgba(0, 0, 0, 0.28), transparent);
+        linear-gradient(to right, rgba(0, 0, 0, 0.45), transparent),
+        linear-gradient(to left, rgba(0, 0, 0, 0.45), transparent);
     background-position: left top, right top;
-    background-size: 28px calc(100% - 8px), 28px calc(100% - 8px);
+    background-size: 40px calc(100% - 8px), 40px calc(100% - 8px);
 }
 
 .table-scroll-wrap::-webkit-scrollbar {
@@ -3180,7 +3180,7 @@ textarea,
 
 .resource-add-row {
   display: grid !important;
-  grid-template-columns: repeat(2, minmax(180px, 220px));
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
   gap: 8px 16px;
   margin: 10px 0 0;
   justify-content: flex-start;
@@ -3188,6 +3188,27 @@ textarea,
 
 .resource-add-row .settings-field-full {
   grid-column: auto;
+}
+
+.resource-delete-all-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 6px 14px !important;
+  font-size: 13px !important;
+  width: auto;
+  margin: 0;
+}
+
+#resourceSettings {
+  position: relative;
+}
+
+.resource-file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .resource-add-row .settings-field label {

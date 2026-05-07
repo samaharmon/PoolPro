@@ -176,6 +176,9 @@ function createFloatingHeader(sourceHeader) {
   const updateFloatingHeader = () => {
     const rect = sourceHeader.getBoundingClientRect();
     const visible = sourceHeader.offsetParent !== null && rect.bottom <= 0;
+    if (visible && !floating.classList.contains('visible')) {
+      sourceHeader.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+    }
     floating.classList.toggle('visible', visible);
   };
 
@@ -2286,18 +2289,18 @@ function ensureResourcesSettingsSection() {
   section.id = 'resourceSettings';
   section.innerHTML = `
     <h3>Resources</h3>
+    <button type="button" id="resourceDeleteAllBtn" class="submit-btn danger-button resource-delete-all-btn">Delete All Resources</button>
     <p class="section-subtitle">Upload and manage the documents available on the Resources page.</p>
-    <div class="settings-row employee-file-row" style="margin-top: 20px;">
+    <div class="settings-row resource-file-row" style="margin-top: 20px;">
       <label for="resourceFileInput" class="settings-field-label">Resource File</label>
       <input type="file" id="resourceFileInput" aria-label="Resource file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.jpg,.jpeg,.png" />
-      <button type="button" id="resourceDeleteAllBtn" class="submit-btn danger-button employee-delete-inline-btn">Delete All Files</button>
     </div>
     <div class="settings-row resource-add-row">
       <div class="settings-field">
         <label for="resourceDocumentNameInput">Document Name</label>
         <input type="text" id="resourceDocumentNameInput" />
       </div>
-      <div class="settings-field settings-field-full">
+      <div class="settings-field">
         <label for="resourceDescriptionInput">Description</label>
         <input type="text" id="resourceDescriptionInput" />
       </div>
