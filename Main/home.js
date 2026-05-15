@@ -1,10 +1,11 @@
 // home.js – landing page login logic
-import { db, auth, functions, httpsCallable, doc, getDoc, setDoc, getDocs, collection } from '../firebase.js';
+import { db, auth, doc, getDoc, setDoc, getDocs, collection } from '../firebase.js';
 import { requireUserAgreement } from '../agreement.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  sendEmailVerification,
   sendPasswordResetEmail,
   applyActionCode
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
@@ -830,14 +831,15 @@ async function sendVerificationEmail({ isResend = false } = {}) {
     throw new Error(`Please wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending the verification email.`);
   }
 
-  const continueUrl = buildVerificationActionUrl({
-    username: pendingVerification.username,
-    target: pendingVerification.target,
-    emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
+  auth.useDeviceLanguage();
+  await sendEmailVerification(auth.currentUser, {
+    url: buildVerificationActionUrl({
+      username: pendingVerification.username,
+      target: pendingVerification.target,
+      emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
+    }),
+    handleCodeInApp: false,
   });
-  const callSendVerification = httpsCallable(functions, 'sendVerificationEmail');
-  const result = await callSendVerification({ email, continueUrl });
-  if (!result.data?.success) throw new Error('Verification email could not be sent.');
 
   savePendingVerificationContext({
     username: pendingVerification.username,

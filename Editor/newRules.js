@@ -37,13 +37,13 @@ function getResponseFields(block, poolIndex) {
 
 function getRuleContent(field) {
   if (!field) return '';
-  if (field.isContentEditable) return field.innerHTML.trim();
+  if (field.getAttribute('contenteditable') !== null) return field.innerHTML.trim();
   return (field.value || '').trim();
 }
 
 function setRuleContent(field, html) {
   const safeHtml = sanitizeRuleMarkup(html);
-  if (field.isContentEditable) {
+  if (field.getAttribute('contenteditable') !== null) {
     field.innerHTML = safeHtml;
   } else {
     field.value = safeHtml;
