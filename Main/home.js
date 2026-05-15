@@ -1012,14 +1012,6 @@ async function handleCreateAccountSubmit(event) {
   const existingAccount = await getDoc(accountRef);
   if (existingAccount.exists()) return setMessage(createMessageEl, 'That username is already taken. Please choose another one.', true);
 
-  const duplicateEmail = employeesCache.find((employee) => {
-    const normalizedEmployee = normalizeEmployeeRecord(employee);
-    return normalizedEmployee.email === email && normalizedEmployee.username && normalizedEmployee.username !== username;
-  });
-  if (duplicateEmail) {
-    return setMessage(createMessageEl, 'That email is already linked to another username. Please contact your supervisor.', true);
-  }
-
   try {
     await createUserWithEmailAndPassword(auth, email, password);
 
@@ -1063,7 +1055,7 @@ async function handleCreateAccountSubmit(event) {
     console.error('Create account failed:', err);
     const code = err.code || '';
     const friendly = code === 'auth/email-already-in-use'
-      ? 'That email address is already attached to a Firebase account.'
+      ? 'That email is already registered. If you previously had an account, use "Forgot Password?" to reset your password and sign in.'
       : code === 'auth/operation-not-allowed'
         ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
         : code === 'permission-denied'

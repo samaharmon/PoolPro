@@ -271,6 +271,10 @@ body {
   opacity: 0.9;
 }
 
+#homeForgotPasswordBtn {
+  color: #ffffff;
+}
+
 .secondary-btn {
   background-color: transparent;
   border: 1px solid #69140e;
