@@ -57,6 +57,7 @@
         </div>
 
         <button type="button" class="home-create-link-btn" id="homeShowCreateAccountBtn">Create Account</button>
+        <button type="button" class="home-create-link-btn" id="homeForgotPasswordBtn">Forgot Password?</button>
 
         <p class="form-message" id="homeLoginMessage"></p>
 
@@ -108,6 +109,19 @@
         <div class="home-form-actions">
           <button type="submit" class="submit-btn" id="homeCreateAccountSubmit">Save Info</button>
           <button type="button" class="submit-btn secondary-btn" id="homeBackToLoginBtn">Back to Sign In</button>
+        </div>
+      </form>
+
+      <form id="homeResetPasswordForm" class="hidden">
+        <p class="home-verify-copy" id="homeResetCopy"></p>
+        <div class="form-group">
+          <label id="homeResetFieldLabel" for="homeResetFieldInput">Email</label>
+          <input type="text" id="homeResetFieldInput" autocomplete="email">
+        </div>
+        <p class="form-message" id="homeResetMessage"></p>
+        <div class="home-form-actions">
+          <button type="submit" class="submit-btn" id="homeResetSubmit">Send Reset Email</button>
+          <button type="button" class="submit-btn secondary-btn" id="homeResetBackBtn">Back to Sign In</button>
         </div>
       </form>
 

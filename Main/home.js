@@ -1,11 +1,11 @@
 // home.js – landing page login logic
-import { db, auth, doc, getDoc, setDoc, getDocs, collection } from '../firebase.js';
+import { db, auth, functions, httpsCallable, doc, getDoc, setDoc, getDocs, collection } from '../firebase.js';
 import { requireUserAgreement } from '../agreement.js';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  sendEmailVerification,
+  sendPasswordResetEmail,
   applyActionCode
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 
@@ -24,6 +24,7 @@ const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 const VERIFY_EMAIL_RESEND_MS = 30 * 1000;
 const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
+const DEVICE_VERIFIED_KEY = 'poolproDeviceVerified';
 
 let pendingTarget = null;
 let currentRole = 'lifeguard';
@@ -56,7 +57,14 @@ const verifyCooldownText = document.getElementById('homeVerifyCooldownText');
 const verifyBackBtn = document.getElementById('homeVerifyBackBtn');
 const roleToggle = document.getElementById('roleToggle');
 const showCreateAccountBtn = document.getElementById('homeShowCreateAccountBtn');
+const forgotPasswordBtn = document.getElementById('homeForgotPasswordBtn');
 const backToLoginBtn = document.getElementById('homeBackToLoginBtn');
+const resetPasswordForm = document.getElementById('homeResetPasswordForm');
+const resetMessageEl = document.getElementById('homeResetMessage');
+const resetFieldInput = document.getElementById('homeResetFieldInput');
+const resetFieldLabel = document.getElementById('homeResetFieldLabel');
+const resetCopyEl = document.getElementById('homeResetCopy');
+const resetBackBtn = document.getElementById('homeResetBackBtn');
 const createUsernameInput = document.getElementById('homeCreateUsernameInput');
 const createFirstNameInput = document.getElementById('homeCreateFirstNameInput');
 const createLastNameInput = document.getElementById('homeCreateLastNameInput');
@@ -65,6 +73,29 @@ const createPhoneInput = document.getElementById('homeCreatePhoneInput');
 const createPoolInput = document.getElementById('homeCreatePoolInput');
 const createPasswordInput = document.getElementById('homeCreatePasswordInput');
 const createConfirmPasswordInput = document.getElementById('homeCreateConfirmPasswordInput');
+
+function markDeviceVerified(email) {
+  if (!email) return;
+  try {
+    const key = DEVICE_VERIFIED_KEY;
+    const list = JSON.parse(localStorage.getItem(key) || '[]');
+    const normalized = email.trim().toLowerCase();
+    if (!list.includes(normalized)) {
+      list.push(normalized);
+      localStorage.setItem(key, JSON.stringify(list));
+    }
+  } catch (_) {}
+}
+
+function isDeviceVerified(email) {
+  if (!email) return false;
+  try {
+    const list = JSON.parse(localStorage.getItem(DEVICE_VERIFIED_KEY) || '[]');
+    return list.includes(email.trim().toLowerCase());
+  } catch (_) {
+    return false;
+  }
+}
 
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -270,13 +301,30 @@ function setModalView(view) {
   form?.classList.toggle('hidden', view !== 'login');
   createAccountForm?.classList.toggle('hidden', view !== 'create');
   verifyForm?.classList.toggle('hidden', view !== 'verify');
+  resetPasswordForm?.classList.toggle('hidden', view !== 'reset');
 
   if (modalTitle) {
     modalTitle.textContent = view === 'create'
       ? 'Create Account'
       : view === 'verify'
         ? 'Verify Identity'
-        : 'Sign in';
+        : view === 'reset'
+          ? 'Reset Password'
+          : 'Sign in';
+  }
+
+  if (view === 'reset') {
+    const isLifeguard = currentRole === 'lifeguard';
+    if (resetFieldLabel) resetFieldLabel.textContent = isLifeguard ? 'Username' : 'Email';
+    if (resetCopyEl) resetCopyEl.textContent = isLifeguard
+      ? 'Enter your username and we\'ll send a password reset link to your registered email.'
+      : 'Enter your email address and we\'ll send you a link to reset your password.';
+    if (resetFieldInput) {
+      resetFieldInput.type = isLifeguard ? 'text' : 'email';
+      resetFieldInput.autocomplete = isLifeguard ? 'username' : 'email';
+      resetFieldInput.focus();
+    }
+    setMessage(resetMessageEl, '');
   }
 
   if (view === 'create') createUsernameInput?.focus();
@@ -605,6 +653,7 @@ async function finalizeLifeguardAccess({ username, account, target, method }) {
     console.warn('Could not update verification metadata:', err);
   }
 
+  markDeviceVerified(account.employeeEmail || account.authEmail || '');
   persistLifeguardSession(buildEmployeeFromAccount(account), username);
   await signOut(auth).catch(() => {});
   resetVerificationState();
@@ -719,6 +768,7 @@ function markSupervisorLoggedIn(email) {
     localStorage.setItem('loginToken', JSON.stringify({ username: email || 'supervisor', expires }));
     localStorage.setItem(ROLE_STORAGE_KEY, 'supervisor');
     localStorage.removeItem(LIFEGUARD_SESSION_KEY);
+    markDeviceVerified(email);
   } catch (err) {
     console.warn('Could not persist supervisor login flags', err);
   }
@@ -749,7 +799,7 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
   await signInWithEmailAndPassword(auth, authEmail, password);
   const user = auth.currentUser;
 
-  if (!user?.emailVerified) {
+  if (!user?.emailVerified && !isDeviceVerified(authEmail)) {
     openVerificationView({
       username,
       account,
@@ -780,15 +830,14 @@ async function sendVerificationEmail({ isResend = false } = {}) {
     throw new Error(`Please wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending the verification email.`);
   }
 
-  auth.useDeviceLanguage();
-  await sendEmailVerification(auth.currentUser, {
-    url: buildVerificationActionUrl({
-      username: pendingVerification.username,
-      target: pendingVerification.target,
-      emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
-    }),
-    handleCodeInApp: false,
+  const continueUrl = buildVerificationActionUrl({
+    username: pendingVerification.username,
+    target: pendingVerification.target,
+    emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
   });
+  const callSendVerification = httpsCallable(functions, 'sendVerificationEmail');
+  const result = await callSendVerification({ email, continueUrl });
+  if (!result.data?.success) throw new Error('Verification email could not be sent.');
 
   savePendingVerificationContext({
     username: pendingVerification.username,
@@ -1022,6 +1071,34 @@ async function handleCreateAccountSubmit(event) {
   }
 }
 
+async function handleResetPasswordSubmit(event) {
+  event.preventDefault();
+  setMessage(resetMessageEl, '');
+  const value = (resetFieldInput?.value || '').trim();
+  if (!value) {
+    setMessage(resetMessageEl, currentRole === 'lifeguard' ? 'Please enter your username.' : 'Please enter your email.', true);
+    return;
+  }
+
+  try {
+    let resetEmail = value;
+    if (currentRole === 'lifeguard') {
+      const account = await getLifeguardAccount(normalizeUsername(value));
+      resetEmail = account.authEmail || account.employeeEmail || '';
+      if (!resetEmail) throw new Error('No email address found for this username. Contact your supervisor.');
+    }
+    await sendPasswordResetEmail(auth, resetEmail);
+    setMessage(resetMessageEl, 'Password reset email sent. Check your inbox and follow the link to set a new password.', false);
+    if (resetFieldInput) resetFieldInput.value = '';
+  } catch (err) {
+    const code = err.code || '';
+    const friendly = code === 'auth/user-not-found' || code === 'auth/invalid-email'
+      ? (currentRole === 'lifeguard' ? 'Username not found.' : 'No account found for that email.')
+      : (err.message || 'Could not send reset email. Please try again.');
+    setMessage(resetMessageEl, friendly, true);
+  }
+}
+
 function wireMenu() {
   document.querySelectorAll('.home-menu-item').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1072,6 +1149,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     closeModal();
   });
   showCreateAccountBtn?.addEventListener('click', () => setModalView('create'));
+  forgotPasswordBtn?.addEventListener('click', () => setModalView('reset'));
+  resetPasswordForm?.addEventListener('submit', handleResetPasswordSubmit);
+  resetBackBtn?.addEventListener('click', () => {
+    setMessage(resetMessageEl, '');
+    if (resetFieldInput) resetFieldInput.value = '';
+    setModalView('login');
+  });
   backToLoginBtn?.addEventListener('click', async () => {
     await signOut(auth).catch(() => {});
     resetVerificationState();

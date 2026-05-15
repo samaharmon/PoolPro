@@ -31,6 +31,11 @@ import {
   reauthenticateWithCredential
 } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 
+import {
+  getFunctions,
+  httpsCallable
+} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-functions.js';
+
 // ✅ REAL project config from your previous firebaseInit.js
 const firebaseConfig = {
   apiKey: "AIzaSyCRxSL2uuH6O5MFvbq0FS02zF2K_lXGvqI",
@@ -45,6 +50,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const functions = getFunctions(app);
 
 console.log('[Firebase] Initialized project:', firebaseConfig.projectId);
 
@@ -152,5 +158,7 @@ export {
   signOut,
   deleteUser,
   EmailAuthProvider,
-  reauthenticateWithCredential
+  reauthenticateWithCredential,
+  functions,
+  httpsCallable
 };
