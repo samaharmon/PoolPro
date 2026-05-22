@@ -1234,6 +1234,13 @@ button:active,
     margin-bottom: 6px;
 }
 
+.feedback-modal .modal-rule-method {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 0.88em;
+    font-weight: normal;
+    text-decoration: none;
+}
+
 /* Individual rule item */
 .feedback-modal .modal-rule-item {
     margin-bottom: 8px;
@@ -4118,10 +4125,20 @@ body.dark-mode .dash-respondent-tooltip {
 }
 
 .sanitation-settings-scroll > .sanitation-table--settings thead th {
+  position: static;
+  z-index: 6;
+  background: transparent !important;
+}
+
+.sanitation-settings-scroll > .sanitation-table--settings thead {
   position: sticky;
   top: 0;
-  z-index: 6;
+  z-index: 7;
   background: var(--poolpro-accent-gradient) !important;
+}
+
+.sanitation-settings-scroll > .sanitation-table--settings thead tr {
+  background: transparent !important;
 }
 
 .sanitation-settings-scroll > .sanitation-table--settings th:nth-child(1),
@@ -4151,7 +4168,12 @@ body.dark-mode .dash-respondent-tooltip {
 }
 
 .sanitation-settings-scroll .market-filter-checkbox {
-  margin-right: 0;
+  display: block;
+  margin: 0 auto;
+}
+
+.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(3) {
+  text-align: center !important;
 }
 
 /* ============================================================

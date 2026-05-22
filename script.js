@@ -1401,15 +1401,22 @@ function setupChemForm() {
       submitBtn.textContent = 'Submitting…';
       await addDoc(collection(db, 'poolSubmissions'), entry);
 
+      await refreshSanitationSelections();
+      const poolDoc = await getFreshPoolDoc(poolId, pool);
+      const poolRules = poolDoc ? normalizePoolRules(poolDoc) : [];
+
       // Check concern levels for all submitted pools
-      const numPools = pool?.numPools || pool?.poolCount || 2;
+      const numPools = poolDoc?.numPools || poolDoc?.poolCount || pool?.numPools || pool?.poolCount || 2;
       let allClear = true;
       for (let i = 0; i < numPools; i++) {
         const fields = poolFieldNames(i);
         const phVal = entry[fields.ph];
         const clVal = entry[fields.cl];
-        if (phVal && getPhConcernLevel(poolName, i, phVal) !== 'none') { allClear = false; break; }
-        if (clVal && getClConcernLevel(poolName, i, clVal) !== 'none') { allClear = false; break; }
+        const method = getSanitationMethodForPool(poolDoc || pool, i);
+        const phRule = getRuleForReading(poolRules, i, method, 'ph', phVal);
+        const clRule = getRuleForReading(poolRules, i, method, 'cl', clVal);
+        if (phVal && getRuleConcernLevel(phRule) !== 'none') { allClear = false; break; }
+        if (clVal && getRuleConcernLevel(clRule) !== 'none') { allClear = false; break; }
       }
 
       // Show feedback modal with rule responses
@@ -1417,9 +1424,6 @@ function setupChemForm() {
       const modalContent = document.getElementById('modalContent');
       if (feedbackModal && modalContent) {
         const submitterName = [firstName, lastName].filter(Boolean).join(' ') || 'Unknown';
-        const poolDoc = poolsCache.find(p => p.id === poolId);
-        const poolRules = poolDoc ? normalizePoolRules(poolDoc) : [];
-        const numPools = poolDoc?.numPools || poolDoc?.poolCount || 2;
 
         // Store submission data on modal for notify function
         feedbackModal.dataset.submitterName = submitterName;
@@ -1434,45 +1438,46 @@ function setupChemForm() {
           const fields = poolFieldNames(i);
           const phVal = entry[fields.ph];
           const clVal = entry[fields.cl];
-          const method = sanitationSelections[`${poolId}::${i}`] || sanitationSelections[poolId] || 'bleach';
-          const rules = poolRules[i]?.[method];
-          const poolLabel = i === 0 ? 'Main Pool' : i === 1 ? 'Secondary Pool' : `Pool ${i + 1}`;
+          if (!phVal && !clVal) continue;
 
-          const phKey = phVal ? phToRuleKey(phVal) : null;
-          const clKey = clVal ? clToRuleKey(clVal) : null;
-          const phRule = phKey ? rules?.ph?.[phKey] : null;
-          const clRule = clKey ? rules?.cl?.[clKey] : null;
+          const method = getSanitationMethodForPool(poolDoc || pool, i);
+          const methodLabel = getSanitationMethodLabel(method);
+          const poolLabel = getFacilityPoolLabel(poolDoc || pool, i);
+          const phRule = getRuleForReading(poolRules, i, method, 'ph', phVal);
+          const clRule = getRuleForReading(poolRules, i, method, 'cl', clVal);
+          const phResponse = getRuleResponse(phRule);
+          const clResponse = getRuleResponse(clRule);
 
-          if (phRule?.response || clRule?.response) {
+          if (phResponse || clResponse) {
             html += `<div class="modal-pool-section">`;
-            html += `<h4 class="modal-pool-label">${poolLabel}</h4>`;
+            html += `<h4 class="modal-pool-label">${escapeHtml(poolLabel)} <span class="modal-rule-method">(${escapeHtml(methodLabel)} rules)</span></h4>`;
 
-            if (phRule?.response) {
-              const isMajor = phRule.concernLevel === 'major' || phRule.concernLevel === 'red';
+            if (phResponse) {
+              const isMajor = getRuleConcernLevel(phRule) === 'major';
               checkboxIdx++;
               html += `<div class="modal-rule-item${isMajor ? ' modal-rule-major' : ''}">`;
               html += `<label class="checkbox-item">`;
               html += `<input type="checkbox" class="modal-rule-checkbox" id="rule_cb_${checkboxIdx}">`;
-              html += `<span><strong>pH ${phVal}:</strong> ${phRule.response}</span>`;
+              html += `<span><strong>pH ${escapeHtml(phVal)}:</strong> ${phResponse}</span>`;
               html += `</label>`;
               if (isMajor) {
                 html += `<button type="button" class="notify-supervisor-btn" onclick="showSupervisorNotify()">Notify Supervisor</button>`;
-                majorLines.push(`pH ${phVal}: ${phRule.response.replace(/<[^>]+>/g, '')}`);
+                majorLines.push(`${poolLabel} (${methodLabel}) pH ${phVal}: ${stripHtml(phResponse)}`);
               }
               html += `</div>`;
             }
 
-            if (clRule?.response) {
-              const isMajor = clRule.concernLevel === 'major' || clRule.concernLevel === 'red';
+            if (clResponse) {
+              const isMajor = getRuleConcernLevel(clRule) === 'major';
               checkboxIdx++;
               html += `<div class="modal-rule-item${isMajor ? ' modal-rule-major' : ''}">`;
               html += `<label class="checkbox-item">`;
               html += `<input type="checkbox" class="modal-rule-checkbox" id="rule_cb_${checkboxIdx}">`;
-              html += `<span><strong>Cl ${clVal}:</strong> ${clRule.response}</span>`;
+              html += `<span><strong>Cl ${escapeHtml(clVal)}:</strong> ${clResponse}</span>`;
               html += `</label>`;
               if (isMajor) {
                 html += `<button type="button" class="notify-supervisor-btn" onclick="showSupervisorNotify()">Notify Supervisor</button>`;
-                majorLines.push(`Cl ${clVal}: ${clRule.response.replace(/<[^>]+>/g, '')}`);
+                majorLines.push(`${poolLabel} (${methodLabel}) Cl ${clVal}: ${stripHtml(clResponse)}`);
               }
               html += `</div>`;
             }
@@ -1527,12 +1532,65 @@ function setupChemForm() {
 // ============================================================
 
 let allLogs = [];
-let sanitationSelections = {}; // poolId → 'bleach' | 'granular'
+let sanitationSelections = {}; // poolId::poolIdx -> 'bleach' | 'granular' | 'tablet'
 let dashboardPoolFilter = 'all';
 let dashboardDateFilter = getTodayDateValue();
 let dashboardChemPage = 1;
 let dashboardJobPage = 1;
 const DASHBOARD_PAGE_SIZE = 10;
+
+async function refreshSanitationSelections() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'sanitation'));
+    sanitationSelections = snap.exists() ? (snap.data().pools || {}) : {};
+  } catch (err) {
+    console.warn('[ChemLog] Unable to refresh sanitation methods; using cached selections.', err);
+  }
+  return sanitationSelections;
+}
+
+async function getFreshPoolDoc(poolId, fallbackPool) {
+  if (!poolId) return fallbackPool || null;
+  try {
+    const snap = await getDoc(doc(db, 'pools', poolId));
+    if (!snap.exists()) return fallbackPool || null;
+    const freshPool = { id: snap.id, ...snap.data() };
+    const idx = poolsCache.findIndex((pool) => pool.id === freshPool.id);
+    if (idx >= 0) poolsCache[idx] = freshPool;
+    else poolsCache.push(freshPool);
+    return freshPool;
+  } catch (err) {
+    console.warn('[ChemLog] Unable to fetch latest pool rules; using cached pool rules.', err);
+    return fallbackPool || null;
+  }
+}
+
+function getSanitationMethodForPool(poolDoc, poolIdx) {
+  if (!poolDoc) return 'bleach';
+  const poolId = poolDoc.id || '';
+  const primaryName = (poolDoc.name || '').trim();
+  return sanitationSelections[`${poolId}::${poolIdx}`] ||
+    sanitationSelections[`${primaryName}::${poolIdx}`] ||
+    sanitationSelections[poolId] ||
+    sanitationSelections[primaryName] ||
+    'bleach';
+}
+
+function getSanitationMethodLabel(method) {
+  return {
+    bleach: 'Bleach',
+    granular: 'Granular',
+    tablet: 'Tablet',
+  }[method] || 'Bleach';
+}
+
+function getFacilityPoolLabel(poolDoc, poolIdx) {
+  const rulesPool = poolDoc?.rules?.pools?.[poolIdx];
+  const customName = (rulesPool?.poolName || '').trim();
+  if (customName) return `Pool ${poolIdx + 1}: ${customName}`;
+  if (poolIdx === 0) return 'Pool 1 (Main)';
+  return `Pool ${poolIdx + 1}`;
+}
 
 // Map submitted pH select value → rule key used in pool docs
 function phToRuleKey(val) {
@@ -1584,28 +1642,48 @@ function normalizePoolRules(poolDoc) {
   return pools;
 }
 
+function getRuleForReading(poolRules, poolIdx, method, type, submittedValue) {
+  if (!submittedValue) return null;
+  const key = type === 'ph' ? phToRuleKey(submittedValue) : clToRuleKey(submittedValue);
+  if (!key) return null;
+  const poolRuleSet = poolRules?.[poolIdx] || {};
+  const selectedRules = poolRuleSet[method] || {};
+  return selectedRules?.[type]?.[key] || null;
+}
+
+function getRuleResponse(rule) {
+  return (rule?.response || '').toString().trim();
+}
+
+function getRuleConcernLevel(rule) {
+  const raw = (rule?.concernLevel || rule?.concern || rule?.level || 'none').toString().toLowerCase();
+  if (raw === 'major' || raw === 'red') return 'major';
+  if (raw === 'minor' || raw === 'yellow') return 'minor';
+  return 'none';
+}
+
+function stripHtml(html) {
+  const div = document.createElement('div');
+  div.innerHTML = String(html || '');
+  return (div.textContent || div.innerText || '').trim();
+}
+
 // Look up concern level for a pH value at a given pool facility + pool index (0-based)
 function getPhConcernLevel(poolName, poolIdx, phValue) {
   const poolDoc = poolsCache.find(p => (p.name || p.id) === poolName);
   if (!poolDoc) return 'none';
-  const method = sanitationSelections[`${poolDoc.id}::${poolIdx}`] || sanitationSelections[poolDoc.id] || 'bleach';
+  const method = getSanitationMethodForPool(poolDoc, poolIdx);
   const poolRules = normalizePoolRules(poolDoc);
-  const rules = poolRules[poolIdx]?.[method];
-  if (!rules) return 'none';
-  const key = phToRuleKey(phValue);
-  return key ? (rules.ph?.[key]?.concernLevel || 'none') : 'none';
+  return getRuleConcernLevel(getRuleForReading(poolRules, poolIdx, method, 'ph', phValue));
 }
 
 // Look up concern level for a Cl value at a given pool facility + pool index (0-based)
 function getClConcernLevel(poolName, poolIdx, clValue) {
   const poolDoc = poolsCache.find(p => (p.name || p.id) === poolName);
   if (!poolDoc) return 'none';
-  const method = sanitationSelections[`${poolDoc.id}::${poolIdx}`] || sanitationSelections[poolDoc.id] || 'bleach';
+  const method = getSanitationMethodForPool(poolDoc, poolIdx);
   const poolRules = normalizePoolRules(poolDoc);
-  const rules = poolRules[poolIdx]?.[method];
-  if (!rules) return 'none';
-  const key = clToRuleKey(clValue);
-  return key ? (rules.cl?.[key]?.concernLevel || 'none') : 'none';
+  return getRuleConcernLevel(getRuleForReading(poolRules, poolIdx, method, 'cl', clValue));
 }
 
 // Pool submission field names for each pool index (0-based)
