@@ -297,6 +297,7 @@ body.dark-mode .page-content-title {
 
     /* animation pieces */
     opacity: 0;
+    visibility: hidden;
     transform-origin: top;
     transform: translateY(-8px) scaleY(0.9);
     max-height: 0;
@@ -305,14 +306,17 @@ body.dark-mode .page-content-title {
     transition:
         opacity 0.2s ease,
         transform 0.2s ease,
-        max-height 0.25s ease;
+        max-height 0.25s ease,
+        visibility 0s linear 0.25s;
 }
 
 .dropdown-menu.show {
     opacity: 1;
+    visibility: visible;
     transform: translateY(0) scaleY(1);
     max-height: 400px; /* big enough for all items */
     pointer-events: auto;
+    transition-delay: 0s;
 }
 
 .dropdown-item {

@@ -955,6 +955,11 @@ function wireMetadataButtons() {
   };
 
   const saveMetadata = async () => {
+    setMetadataEnabled(false);
+    editBtn.disabled = true;
+    saveBtn.disabled = true;
+    syncToggle();
+
     const success = await attemptSave();
     if (success) {
       setMetadataEditing(false);
@@ -1493,6 +1498,27 @@ function wireConcernDropdowns() {
   });
 }
 
+function showEditorModalOverlay() {
+  const overlay = document.getElementById('settingsOverlay');
+  if (!overlay) return null;
+  overlay.style.display = 'block';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+  return overlay;
+}
+
+function hideEditorModalOverlay() {
+  const overlay = document.getElementById('settingsOverlay');
+  const settingsModal = document.getElementById('settingsModal');
+  const deleteModal = document.getElementById('deletePoolModal');
+  const deleteOpen = deleteModal && deleteModal.style.display !== 'none' && deleteModal.classList.contains('visible');
+  const settingsOpen = settingsModal && settingsModal.classList.contains('visible');
+  if (!overlay || deleteOpen || settingsOpen) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => {
+    if (!overlay.classList.contains('visible')) overlay.style.display = 'none';
+  }, 250);
+}
+
 function setupDeletePool() {
   const deleteBtn = document.getElementById('deletePoolBtn');
   const modal = document.getElementById('deletePoolModal');
@@ -1504,9 +1530,15 @@ function setupDeletePool() {
     return;
   }
 
+  if (deleteBtn.dataset.deletePoolBound === 'true') return;
+  deleteBtn.dataset.deletePoolBound = 'true';
+
   const closeModal = () => {
-    modal.style.display = 'none';
-    removeOverlay?.();
+    modal.classList.remove('visible');
+    setTimeout(() => {
+      if (!modal.classList.contains('visible')) modal.style.display = 'none';
+      hideEditorModalOverlay();
+    }, 250);
   };
 
   const onDocClick = (evt) => {
@@ -1515,13 +1547,17 @@ function setupDeletePool() {
     }
   };
 
+  modal.addEventListener('click', (evt) => evt.stopPropagation());
+
   deleteBtn.addEventListener('click', () => {
     if (!currentPoolId) {
       showMessage('You can only delete an existing saved pool.', 'warning');
       return;
     }
-    createOrShowOverlay?.();
+    const overlay = showEditorModalOverlay();
     modal.style.display = 'block';
+    requestAnimationFrame(() => modal.classList.add('visible'));
+    overlay?.addEventListener('click', closeModal, { once: true });
     setTimeout(() => document.addEventListener('click', onDocClick, { once: true }), 0);
   });
 
@@ -1551,7 +1587,6 @@ confirmBtn.addEventListener('click', async () => {
     // Close modal & remove overlay if those functions exist
     try {
       if (typeof closeModal === 'function') closeModal();
-      if (typeof removeOverlay === 'function') removeOverlay();
     } catch (e) {
       // non-fatal: log and continue
       console.warn('Error closing modal / removing overlay after delete:', e);

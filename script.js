@@ -4378,6 +4378,8 @@ function openDutyFormModal(sub) {
         ${photoSectionHtml('Pool', photos.pool)}
         ${photoSectionHtml('Skimmers', photos.skimmers)}
         ${photoSectionHtml('Damaged Equipment', photos.damaged)}
+        ${photoSectionHtml('Bleach Feeders', photos.bleachFeeders)}
+        ${photoSectionHtml('Fill Lines', photos.fillLines)}
 
         ${sub.damagedNotes ? `<div class="duty-report-notes"><strong>Damaged Equipment Notes:</strong><span>${esc(sub.damagedNotes)}</span></div>` : ''}
         ${sub.otherNotes ? `<div class="duty-report-notes"><strong>Other Notes:</strong><span>${esc(sub.otherNotes)}</span></div>` : ''}

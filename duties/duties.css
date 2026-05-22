@@ -78,6 +78,10 @@ body.dark-mode .duties-group-desc {
   margin-top: 36px;
 }
 
+.duties-photo-group.hidden {
+  display: none !important;
+}
+
 .duties-manager-section.duties-section:last-of-type {
   border-bottom: 2px solid #69140e;
 }
@@ -93,6 +97,76 @@ body.dark-mode .duties-manager-section.duties-section:last-of-type {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
+}
+
+.duties-manager-toggle {
+  width: 100%;
+  border: none;
+  border-bottom: 2px solid #69140e;
+  background: transparent;
+  color: #69140e;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 6px;
+  margin: 0 0 16px;
+  text-align: left;
+  box-shadow: none;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.duties-manager-toggle:hover,
+.duties-manager-toggle:focus-visible {
+  background: transparent;
+  color: #8b2020;
+}
+
+.duties-manager-title-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.duties-manager-caret {
+  flex: 0 0 auto;
+  font-size: 28px;
+  line-height: 1;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+.duties-manager-toggle[aria-expanded="false"] .duties-manager-caret {
+  transform: rotate(-90deg);
+}
+
+.duties-manager-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  overflow: hidden;
+  transition: grid-template-rows 0.32s ease, opacity 0.24s ease, transform 0.32s ease;
+}
+
+.duties-manager-body.collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.duties-manager-body-inner {
+  min-height: 0;
+  overflow: hidden;
+  transition: opacity 0.24s ease, transform 0.32s ease;
+}
+
+.duties-manager-body.collapsed .duties-manager-body-inner {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .duties-manager-badge {
@@ -337,6 +411,16 @@ body.dark-mode .duties-upload-placeholder {
 body.dark-mode .duties-manager-section {
   background-color: #2a1010;
   border-color: #ff8080;
+}
+
+body.dark-mode .duties-manager-toggle {
+  color: #ff8080;
+  border-color: #ff8080;
+}
+
+body.dark-mode .duties-manager-toggle:hover,
+body.dark-mode .duties-manager-toggle:focus-visible {
+  color: #f0c9b6;
 }
 
 body.dark-mode .duties-note-group textarea,

@@ -775,6 +775,7 @@ button:active,
   flex-direction: column;
 
   opacity: 0;
+  visibility: hidden;
   transform-origin: top;
   transform: translateY(-8px) scaleY(0.9);
   max-height: 0;
@@ -783,14 +784,17 @@ button:active,
   transition:
     opacity 0.2s ease,
     transform 0.2s ease,
-    max-height 0.25s ease;
+    max-height 0.25s ease,
+    visibility 0s linear 0.25s;
 }
 
 .dropdown-menu.show {
   opacity: 1;
+  visibility: visible;
   transform: translateY(0) scaleY(1);
   max-height: 400px;
   pointer-events: auto;
+  transition-delay: 0s;
 }
 
 

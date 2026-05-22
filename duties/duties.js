@@ -10,10 +10,17 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstati
 document.addEventListener('DOMContentLoaded', () => {
   initSubmitterInfo();
   initPhotoGroups();
+  initManagerSectionToggle();
   setTimeout(populatePools, 800);
   // Wire main pool selector to update CYA fields
   const poolSel = document.getElementById('dutiesPool');
-  if (poolSel) poolSel.addEventListener('change', () => populateCYAFields(poolSel.value));
+  if (poolSel) {
+    poolSel.addEventListener('change', () => {
+      populateCYAFields(poolSel.value);
+      updateFillLinesFields(poolSel.value);
+    });
+    updateFillLinesFields(poolSel.value);
+  }
 });
 
 // ============================================================
@@ -62,6 +69,70 @@ function populatePools() {
     });
     sel.appendChild(group);
   });
+}
+
+function getSelectedPoolDoc(poolValue) {
+  const pools = window._poolsForDuties || [];
+  return pools.find(p => p.id === poolValue || p.name === poolValue || (p.name || p.id) === poolValue) || null;
+}
+
+function normalizeFacilityName(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+function resetPhotoGroup(groupId, options = {}) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+
+  if (options.min !== undefined) group.dataset.min = String(options.min);
+  if (options.max !== undefined) group.dataset.max = String(options.max);
+
+  group.innerHTML = '';
+  slotCounters[groupId] = 0;
+
+  const min = parseInt(group.dataset.min || '0', 10);
+  const initialSlots = options.empty ? 0 : Math.max(min, 1);
+  for (let i = 0; i < initialSlots; i++) {
+    addPhotoSlotToGroup(group);
+  }
+  updateAddBtn(groupId);
+}
+
+function updateFillLinesFields(poolValue) {
+  const groupWrap = document.getElementById('fillLinesGroup');
+  const group = document.getElementById('fillLinesUpload');
+  const desc = document.getElementById('fillLinesDesc');
+  const badge = document.getElementById('fillLinesBadge');
+  if (!groupWrap || !group || !desc || !badge) return;
+
+  const poolDoc = getSelectedPoolDoc(poolValue);
+  const poolName = normalizeFacilityName(poolDoc?.name || poolValue);
+  const isWildewood = poolName.includes('wildewood');
+  const needsValvePhotos =
+    poolName.includes('rockbridge') ||
+    poolName.includes('forest lake') ||
+    poolName.includes('camden cc') ||
+    poolName.includes('camden country club') ||
+    poolName.includes('camden');
+
+  if (!isWildewood && !needsValvePhotos) {
+    groupWrap.classList.add('hidden');
+    desc.textContent = '';
+    badge.textContent = '1 required';
+    resetPhotoGroup('fillLinesUpload', { min: 0, max: 2, empty: true });
+    return;
+  }
+
+  groupWrap.classList.remove('hidden');
+  if (isWildewood) {
+    desc.textContent = 'ENSURE THAT THE FILL LINE IS COMPLETELY OFF. Then, submit a photo of the spout by the diving board.';
+    badge.textContent = '1 required';
+    resetPhotoGroup('fillLinesUpload', { min: 1, max: 1 });
+  } else {
+    desc.textContent = 'ENSURE THAT THE FILL LINE IS COMPLETELY OFF! Then, submit a photo of the valve for each fill line.';
+    badge.textContent = '1 required, 2 max';
+    resetPhotoGroup('fillLinesUpload', { min: 1, max: 2 });
+  }
 }
 
 // ============================================================
@@ -128,6 +199,22 @@ function initPhotoGroups() {
       addPhotoSlotToGroup(group);
     }
     updateAddBtn(group.id);
+  });
+}
+
+function initManagerSectionToggle() {
+  const toggle = document.getElementById('dutiesManagerToggle');
+  const body = document.getElementById('dutiesManagerBody');
+  if (!toggle || !body) return;
+
+  const setExpanded = (expanded) => {
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    body.classList.toggle('collapsed', !expanded);
+  };
+
+  setExpanded(false);
+  toggle.addEventListener('click', () => {
+    setExpanded(toggle.getAttribute('aria-expanded') !== 'true');
   });
 }
 
@@ -366,7 +453,18 @@ window.submitDutiesForm = async function () {
     { id: 'deckUpload', label: 'Deck', min: 2 },
     { id: 'poolUpload', label: 'Pool', min: 2 },
     { id: 'skimmersUpload', label: 'Skimmers', min: 2 },
+    { id: 'bleachFeederUpload', label: 'Bleach Feeders', min: 1 },
   ];
+
+  const fillLinesGroup = document.getElementById('fillLinesGroup');
+  const fillLinesUpload = document.getElementById('fillLinesUpload');
+  if (fillLinesGroup && fillLinesUpload && !fillLinesGroup.classList.contains('hidden')) {
+    requiredGroups.push({
+      id: 'fillLinesUpload',
+      label: 'Fill Lines',
+      min: parseInt(fillLinesUpload.dataset.min || '1', 10),
+    });
+  }
 
   for (const g of requiredGroups) {
     const photos = collectPhotosFromGroup(g.id);
@@ -390,11 +488,13 @@ window.submitDutiesForm = async function () {
       );
     }
 
-    const [deckPhotos, poolPhotos, skimmersPhotos, damagedPhotos, bleachPhotos] = await Promise.all([
+    const [deckPhotos, poolPhotos, skimmersPhotos, damagedPhotos, bleachFeederPhotos, fillLinePhotos, bleachPhotos] = await Promise.all([
       uploadGroup('deckUpload', 'deck'),
       uploadGroup('poolUpload', 'pool'),
       uploadGroup('skimmersUpload', 'skimmers'),
       uploadGroup('damagedUpload', 'damaged'),
+      uploadGroup('bleachFeederUpload', 'bleachFeeders'),
+      uploadGroup('fillLinesUpload', 'fillLines'),
       uploadGroup('bleachUpload', 'bleach'),
     ]);
 
@@ -414,6 +514,8 @@ window.submitDutiesForm = async function () {
         pool: poolPhotos,
         skimmers: skimmersPhotos,
         damaged: damagedPhotos,
+        bleachFeeders: bleachFeederPhotos,
+        fillLines: fillLinePhotos,
         bleach: bleachPhotos,
       },
       damagedNotes: document.getElementById('damagedNotes')?.value?.trim() || '',
@@ -448,7 +550,7 @@ function resetForm() {
   document.querySelectorAll('.cya-input').forEach(el => { el.value = ''; });
 
   // Reset all photo groups
-  ['deckUpload', 'poolUpload', 'skimmersUpload', 'damagedUpload', 'bleachUpload'].forEach(groupId => {
+  ['deckUpload', 'poolUpload', 'skimmersUpload', 'damagedUpload', 'bleachFeederUpload', 'bleachUpload'].forEach(groupId => {
     const group = document.getElementById(groupId);
     if (!group) return;
     group.innerHTML = '';
@@ -458,4 +560,5 @@ function resetForm() {
     for (let i = 0; i < initialSlots; i++) addPhotoSlotToGroup(group);
     updateAddBtn(groupId);
   });
+  updateFillLinesFields('');
 }
