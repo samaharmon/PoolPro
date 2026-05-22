@@ -37,6 +37,7 @@ let pendingVerification = null;
 let verifyCooldownUntil = 0;
 let verifyCooldownTimer = null;
 let verifyStatusPoller = null;
+let createAccountSubmitting = false;
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
@@ -74,6 +75,7 @@ const createPhoneInput = document.getElementById('homeCreatePhoneInput');
 const createPoolInput = document.getElementById('homeCreatePoolInput');
 const createPasswordInput = document.getElementById('homeCreatePasswordInput');
 const createConfirmPasswordInput = document.getElementById('homeCreateConfirmPasswordInput');
+const createSubmitBtn = document.getElementById('homeCreateAccountSubmit');
 
 function markDeviceVerified(email) {
   if (!email) return;
@@ -86,16 +88,6 @@ function markDeviceVerified(email) {
       localStorage.setItem(key, JSON.stringify(list));
     }
   } catch (_) {}
-}
-
-function isDeviceVerified(email) {
-  if (!email) return false;
-  try {
-    const list = JSON.parse(localStorage.getItem(DEVICE_VERIFIED_KEY) || '[]');
-    return list.includes(email.trim().toLowerCase());
-  } catch (_) {
-    return false;
-  }
 }
 
 function footerLogoPrefix() {
@@ -267,6 +259,13 @@ function setMessage(el, text, isError = false) {
   if (!el) return;
   el.textContent = text || '';
   el.classList.toggle('error', !!text && isError);
+}
+
+function setCreateAccountSubmitting(isSubmitting) {
+  createAccountSubmitting = isSubmitting;
+  if (!createSubmitBtn) return;
+  createSubmitBtn.disabled = isSubmitting;
+  createSubmitBtn.textContent = isSubmitting ? 'Creating...' : 'Save Info';
 }
 
 function clearMessages() {
@@ -640,6 +639,95 @@ async function upsertEmployeeRecord(employee) {
   await setDoc(doc(db, 'settings', 'employees'), { employees }, { merge: true });
 }
 
+function buildSignupRecords({ username, firstName, lastName, email, phone, homePool }) {
+  const employeeRecord = {
+    email,
+    id: email,
+    username,
+    firstName,
+    lastName,
+    phone,
+    homePool,
+  };
+
+  const accountData = {
+    username,
+    authEmail: email,
+    employeeEmail: email,
+    firstName,
+    lastName,
+    phone,
+    homePool,
+    phoneLinked: false,
+    createdAt: new Date().toISOString(),
+  };
+
+  return { employeeRecord, accountData };
+}
+
+async function findLifeguardAccountByEmail(email) {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (!normalizedEmail) return null;
+
+  const snap = await getDocs(collection(db, 'lifeguardAccounts'));
+  let match = null;
+  snap.forEach((docSnap) => {
+    if (match) return;
+    const account = docSnap.data() || {};
+    if (getAuthEmail(account) === normalizedEmail) {
+      match = {
+        username: normalizeUsername(account.username || docSnap.id),
+        ...account,
+      };
+    }
+  });
+  return match;
+}
+
+async function saveSignupRecords(accountRef, accountData, employeeRecord) {
+  await Promise.all([
+    setDoc(accountRef, accountData, { merge: true }),
+    upsertEmployeeRecord(employeeRecord),
+  ]);
+}
+
+function showSignupVerification(username, accountData, message) {
+  openVerificationView({
+    username,
+    account: accountData,
+    target: getDestinationPath(),
+    force: true,
+    origin: 'create',
+  });
+  setMessage(verifyMessageEl, message);
+}
+
+async function resumeInterruptedSignup({ username, email, password, accountRef, accountData, employeeRecord }) {
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (signInError) {
+    const code = signInError.code || '';
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      throw new Error('That email is already registered. If this signup was interrupted, enter the same password you used earlier, or use "Forgot Password?" to reset it.');
+    }
+    throw signInError;
+  }
+
+  const existingEmailAccount = await findLifeguardAccountByEmail(email);
+  const existingUsername = normalizeUsername(existingEmailAccount?.username || '');
+  if (existingUsername && existingUsername !== username) {
+    await signOut(auth).catch(() => {});
+    throw new Error(`That email is already linked to username "${existingUsername}". Sign in with that username, or use "Forgot Password?" to reset the password.`);
+  }
+
+  await saveSignupRecords(accountRef, accountData, employeeRecord);
+  showSignupVerification(
+    username,
+    accountData,
+    'Your account setup was resumed. Check your email and click the verification link to finish.'
+  );
+}
+
 async function finalizeLifeguardAccess({ username, account, target, method }) {
   stopVerifyStatusPoller();
   clearPendingVerificationContext();
@@ -800,7 +888,7 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
   await signInWithEmailAndPassword(auth, authEmail, password);
   const user = auth.currentUser;
 
-  if (!user?.emailVerified && !isDeviceVerified(authEmail)) {
+  if (!user?.emailVerified) {
     openVerificationView({
       username,
       account,
@@ -985,83 +1073,96 @@ async function handleSubmit(event) {
 
 async function handleCreateAccountSubmit(event) {
   event.preventDefault();
+  if (createAccountSubmitting) return;
+  setCreateAccountSubmitting(true);
   setMessage(createMessageEl, '');
 
-  const username = normalizeUsername(createUsernameInput?.value);
-  const firstName = createFirstNameInput?.value.trim() || '';
-  const lastName = createLastNameInput?.value.trim() || '';
-  const email = (createEmailInput?.value.trim() || '').toLowerCase();
-  const phone = normalizePhoneDigits(createPhoneInput?.value);
-  const homePool = createPoolInput?.value || '';
-  const password = createPasswordInput?.value || '';
-  const confirmPassword = createConfirmPasswordInput?.value || '';
-
-  if (!username) return setMessage(createMessageEl, 'Please choose a username.', true);
-  if (username.length < 4) return setMessage(createMessageEl, 'Usernames must be at least 4 characters long.', true);
-  if (!firstName || !lastName || !email || !homePool || !password || !confirmPassword) {
-    return setMessage(createMessageEl, 'Please complete every field in the account form.', true);
-  }
-  if (!email.includes('@')) return setMessage(createMessageEl, 'Please enter a valid email address.', true);
-  if (!phone) return setMessage(createMessageEl, 'Please enter a phone number.', true);
-  if (password !== confirmPassword) return setMessage(createMessageEl, 'Passwords do not match.', true);
-
-  const passwordValidationMessage = validatePassword(password);
-  if (passwordValidationMessage) return setMessage(createMessageEl, passwordValidationMessage, true);
-
-  const accountRef = doc(db, 'lifeguardAccounts', username);
-  const existingAccount = await getDoc(accountRef);
-  if (existingAccount.exists()) return setMessage(createMessageEl, 'That username is already taken. Please choose another one.', true);
-
   try {
-    await createUserWithEmailAndPassword(auth, email, password);
+    const username = normalizeUsername(createUsernameInput?.value);
+    const firstName = createFirstNameInput?.value.trim() || '';
+    const lastName = createLastNameInput?.value.trim() || '';
+    const email = (createEmailInput?.value.trim() || '').toLowerCase();
+    const phone = normalizePhoneDigits(createPhoneInput?.value);
+    const homePool = createPoolInput?.value || '';
+    const password = createPasswordInput?.value || '';
+    const confirmPassword = createConfirmPasswordInput?.value || '';
 
-    const employeeRecord = {
+    if (!username) return setMessage(createMessageEl, 'Please choose a username.', true);
+    if (username.length < 4) return setMessage(createMessageEl, 'Usernames must be at least 4 characters long.', true);
+    if (!firstName || !lastName || !email || !homePool || !password || !confirmPassword) {
+      return setMessage(createMessageEl, 'Please complete every field in the account form.', true);
+    }
+    if (!email.includes('@')) return setMessage(createMessageEl, 'Please enter a valid email address.', true);
+    if (!phone) return setMessage(createMessageEl, 'Please enter a phone number.', true);
+    if (password !== confirmPassword) return setMessage(createMessageEl, 'Passwords do not match.', true);
+
+    const passwordValidationMessage = validatePassword(password);
+    if (passwordValidationMessage) return setMessage(createMessageEl, passwordValidationMessage, true);
+
+    const accountRef = doc(db, 'lifeguardAccounts', username);
+    const existingAccount = await getDoc(accountRef);
+    if (existingAccount.exists()) return setMessage(createMessageEl, 'That username is already taken. Please choose another one.', true);
+
+    const { employeeRecord, accountData } = buildSignupRecords({
+      username,
+      firstName,
+      lastName,
       email,
-      id: email,
-      username,
-      firstName,
-      lastName,
       phone,
       homePool,
-    };
-
-    const accountData = {
-      username,
-      authEmail: email,
-      employeeEmail: email,
-      firstName,
-      lastName,
-      phone,
-      homePool,
-      phoneLinked: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    await Promise.all([
-      setDoc(accountRef, accountData),
-      upsertEmployeeRecord(employeeRecord),
-    ]);
-
-    openVerificationView({
-      username,
-      account: accountData,
-      target: getDestinationPath(),
-      force: true,
-      origin: 'create',
     });
-    setMessage(verifyMessageEl, 'Check your email and click the verification link. PoolPro will finish creating your access automatically after the link is opened.');
+
+    await createUserWithEmailAndPassword(auth, email, password);
+    await saveSignupRecords(accountRef, accountData, employeeRecord);
+
+    showSignupVerification(
+      username,
+      accountData,
+      'Check your email and click the verification link. PoolPro will finish creating your access automatically after the link is opened.'
+    );
   } catch (err) {
-    await signOut(auth).catch(() => {});
     console.error('Create account failed:', err);
     const code = err.code || '';
-    const friendly = code === 'auth/email-already-in-use'
-      ? 'That email is already registered. If you previously had an account, use "Forgot Password?" to reset your password and sign in.'
-      : code === 'auth/operation-not-allowed'
-        ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
-        : code === 'permission-denied'
-          ? 'Firebase permissions blocked the account save. Publish the updated Firestore rules, then try again.'
+
+    if (code === 'auth/email-already-in-use') {
+      try {
+        const username = normalizeUsername(createUsernameInput?.value);
+        const firstName = createFirstNameInput?.value.trim() || '';
+        const lastName = createLastNameInput?.value.trim() || '';
+        const email = (createEmailInput?.value.trim() || '').toLowerCase();
+        const phone = normalizePhoneDigits(createPhoneInput?.value);
+        const homePool = createPoolInput?.value || '';
+        const password = createPasswordInput?.value || '';
+        const accountRef = doc(db, 'lifeguardAccounts', username);
+        const { employeeRecord, accountData } = buildSignupRecords({
+          username,
+          firstName,
+          lastName,
+          email,
+          phone,
+          homePool,
+        });
+        await resumeInterruptedSignup({ username, email, password, accountRef, accountData, employeeRecord });
+        return;
+      } catch (resumeError) {
+        await signOut(auth).catch(() => {});
+        console.error('Interrupted signup recovery failed:', resumeError);
+        setMessage(createMessageEl, resumeError.message || 'That email is already registered. Use "Forgot Password?" to reset the password and sign in.', true);
+        return;
+      }
+    }
+
+    await signOut(auth).catch(() => {});
+    const friendly = code === 'auth/operation-not-allowed'
+      ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
+      : code === 'permission-denied'
+        ? 'Firebase permissions blocked the account save. Publish the updated Firestore rules, then try again.'
+        : code === 'auth/invalid-email'
+          ? 'Please enter a valid email address.'
           : (err.message || 'Unable to create your account right now.');
     setMessage(createMessageEl, friendly, true);
+  } finally {
+    setCreateAccountSubmitting(false);
   }
 }
 

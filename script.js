@@ -48,7 +48,7 @@ let trainingSchedule = {
   sessions: []
 };
 let securitySettings = {
-  sessionTimeout: 'never',
+  sessionTimeout: '360',
   requirePasswordConfirm: true,
 };
 let securityIdleTimer = null;
@@ -216,10 +216,13 @@ function setupFloatingHeaders() {
 }
 
 function getResponsiveTableMinWidth(table) {
+  if (table.matches('.dashboard-cleanliness-table')) return '520px';
+  if (table.matches('.dashboard-detail-table')) return '760px';
   if (table.matches('.dashboard-pool-table, .pool-table')) return '1200px';
   if (table.matches('.training-schedule-table')) return '980px';
   if (table.matches('.attendance-table, .test-rubric-table')) return '900px';
   if (table.matches('.employee-table')) return '980px';
+  if (table.matches('.sanitation-table--settings')) return '420px';
   if (table.matches('.sanitation-table')) return '700px';
   if (table.matches('.resource-table')) return '980px';
   return '720px';
@@ -418,6 +421,94 @@ async function removeEmployeeRecordForAccount(email) {
   }
 }
 
+function isDeletedAccountMatch(value, identifiers) {
+  const normalized = (value || '').toString().trim().toLowerCase();
+  return !!normalized && identifiers.has(normalized);
+}
+
+function redactedIdentityPatch() {
+  return {
+    firstName: 'Redacted',
+    lastName: 'Redacted',
+    employeeId: 'Redacted',
+    email: 'Redacted',
+    submitterEmail: 'Redacted',
+    phone: 'Redacted',
+    username: 'Redacted',
+    submitterName: 'Redacted',
+  };
+}
+
+async function commitBatchChunks(batchUpdates) {
+  for (let i = 0; i < batchUpdates.length; i += 400) {
+    const batch = writeBatch(db);
+    batchUpdates.slice(i, i + 400).forEach(({ ref, data }) => {
+      batch.update(ref, data);
+    });
+    await batch.commit();
+  }
+}
+
+async function redactCollectionIdentity(collectionName, identifiers, fieldsToCheck) {
+  const snap = await getDocs(collection(db, collectionName));
+  const updates = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() || {};
+    const matched = fieldsToCheck.some((field) => isDeletedAccountMatch(data[field], identifiers));
+    if (matched) updates.push({ ref: docSnap.ref, data: redactedIdentityPatch() });
+  });
+  if (updates.length) await commitBatchChunks(updates);
+}
+
+async function redactTrainingScheduleIdentity(identifiers) {
+  const scheduleRef = doc(db, 'settings', 'trainingSchedule');
+  const snap = await getDoc(scheduleRef);
+  if (!snap.exists()) return;
+
+  const data = snap.data() || {};
+  const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+  let changed = false;
+  const redactedSessions = sessions.map((session) => {
+    if (!Array.isArray(session.attendees)) return session;
+    const attendees = session.attendees.map((attendee) => {
+      const matched = ['employeeId', 'email', 'phone', 'firstName', 'lastName', 'name'].some((field) =>
+        isDeletedAccountMatch(attendee?.[field], identifiers)
+      );
+      if (!matched) return attendee;
+      changed = true;
+      return {
+        ...attendee,
+        firstName: 'Redacted',
+        lastName: 'Redacted',
+        name: 'Redacted',
+        email: 'Redacted',
+        employeeId: 'Redacted',
+        phone: 'Redacted',
+      };
+    });
+    return { ...session, attendees };
+  });
+
+  if (changed) {
+    await setDoc(scheduleRef, { sessions: redactedSessions }, { merge: true });
+  }
+}
+
+async function redactDeletedAccountData(context) {
+  const email = (context?.email || '').trim().toLowerCase();
+  const username = (context?.username || '').trim().toLowerCase();
+  const employeeId = (context?.employeeId || '').trim().toLowerCase();
+  const identifiers = new Set([email, username, employeeId].filter(Boolean));
+  if (!identifiers.size) return;
+
+  await Promise.all([
+    redactCollectionIdentity('poolSubmissions', identifiers, ['employeeId', 'email', 'submitterEmail', 'username']),
+    redactCollectionIdentity('dutySubmissions', identifiers, ['submitterEmail', 'employeeId', 'email', 'username']),
+    redactCollectionIdentity('trainingSignups', identifiers, ['employeeId', 'email', 'username']),
+    redactTrainingScheduleIdentity(identifiers),
+  ]);
+}
+
 async function handleDeleteCurrentAccount() {
   const btn = document.getElementById('deleteCurrentAccountBtn');
   const context = getCurrentAgreementContext();
@@ -448,6 +539,7 @@ async function handleDeleteCurrentAccount() {
 
   try {
     await reauthenticateAccountForDeletion(email, password);
+    await redactDeletedAccountData(context);
 
     if (role === 'lifeguard') {
       await deleteDoc(doc(db, 'lifeguardAccounts', username));
@@ -1041,6 +1133,18 @@ function populatePoolSelects(pools) {
   refreshResourceControls();
   renderResourcesPageTable();
   renderResourcesSettingsTable();
+
+  const dashboard = document.getElementById('supervisorDashboard');
+  if (dashboard?.classList.contains('show') && isSupervisor()) {
+    const activeDashTab = document.querySelector('[data-dash-tab].active')?.dataset.dashTab || 'chemistry';
+    if (activeDashTab === 'jobforms') {
+      loadJobFormSubmissions();
+    } else if (allLogs.length) {
+      renderDashboard(allLogs);
+    } else {
+      loadDashboardData();
+    }
+  }
 }
 
 // ============================================================
@@ -1396,6 +1500,11 @@ function setupChemForm() {
 
 let allLogs = [];
 let sanitationSelections = {}; // poolId → 'bleach' | 'granular'
+let dashboardPoolFilter = 'all';
+let dashboardDateFilter = getTodayDateValue();
+let dashboardChemPage = 1;
+let dashboardJobPage = 1;
+const DASHBOARD_PAGE_SIZE = 10;
 
 // Map submitted pH select value → rule key used in pool docs
 function phToRuleKey(val) {
@@ -1478,6 +1587,188 @@ function poolFieldNames(idx) {
   return { ph: `pool${idx + 1}PH`, cl: `pool${idx + 1}Cl` };
 }
 
+function getTodayDateValue() {
+  return formatDateInputValue(new Date());
+}
+
+function formatDateInputValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function toDateObject(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function isDashboardDate(value, dateFilter) {
+  const date = toDateObject(value);
+  if (!date || !dateFilter) return false;
+  return formatDateInputValue(date) === dateFilter;
+}
+
+function getSelectedDashboardMarkets() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('chemlogMarkets') || '[]');
+    return saved.length ? saved : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function getDashboardMarketMap({ docs = true } = {}) {
+  const marketMap = {};
+  poolsCache.forEach((pool) => {
+    const markets = Array.isArray(pool.markets) ? pool.markets
+      : (pool.market ? [pool.market] : ['Other']);
+    const primary = markets[0] || 'Other';
+    if (!marketMap[primary]) marketMap[primary] = [];
+    marketMap[primary].push(docs ? pool : (pool.name || pool.id));
+  });
+
+  Object.values(marketMap).forEach((list) => {
+    list.sort((a, b) => {
+      const aName = docs ? (a.name || a.id || '') : String(a || '');
+      const bName = docs ? (b.name || b.id || '') : String(b || '');
+      return aName.localeCompare(bName);
+    });
+  });
+
+  return marketMap;
+}
+
+function getVisibleDashboardMarkets(marketMap) {
+  const selectedMarkets = getSelectedDashboardMarkets();
+  return selectedMarkets
+    ? selectedMarkets.filter((market) => marketMap[market])
+    : Object.keys(marketMap).sort();
+}
+
+function getPoolName(poolDoc) {
+  return poolDoc?.name || poolDoc?.id || '';
+}
+
+function getDashboardPoolOptions() {
+  return groupPoolsByMarket(poolsCache).map(({ market, pools }) => ({
+    market,
+    pools: pools.map((pool) => getPoolName(pool)).filter(Boolean),
+  }));
+}
+
+function renderDashboardFilterBar(container, onChange) {
+  const filterBar = document.createElement('div');
+  filterBar.className = 'training-filter-bar dashboard-filter-bar';
+
+  const label = document.createElement('span');
+  label.className = 'filter-by-label';
+  label.textContent = 'Filter By:';
+
+  const poolField = document.createElement('label');
+  poolField.className = 'dashboard-filter-field';
+  const poolLabel = document.createElement('span');
+  poolLabel.textContent = 'Pool';
+  const poolSelect = document.createElement('select');
+  poolSelect.className = 'training-filter-select';
+  poolSelect.setAttribute('aria-label', 'Filter dashboard by pool');
+  const allOption = document.createElement('option');
+  allOption.value = 'all';
+  allOption.textContent = 'All Pools';
+  poolSelect.appendChild(allOption);
+
+  getDashboardPoolOptions().forEach(({ market, pools }) => {
+    const group = document.createElement('optgroup');
+    group.label = market;
+    pools.forEach((poolName) => {
+      const option = document.createElement('option');
+      option.value = poolName;
+      option.textContent = poolName;
+      group.appendChild(option);
+    });
+    poolSelect.appendChild(group);
+  });
+  poolSelect.value = dashboardPoolFilter;
+  if (poolSelect.value !== dashboardPoolFilter) {
+    dashboardPoolFilter = 'all';
+    poolSelect.value = 'all';
+  }
+
+  const dateField = document.createElement('label');
+  dateField.className = 'dashboard-filter-field';
+  const dateLabel = document.createElement('span');
+  dateLabel.textContent = 'Date';
+  const dateInput = document.createElement('input');
+  dateInput.type = 'date';
+  dateInput.className = 'training-filter-select dashboard-date-filter';
+  dateInput.value = dashboardDateFilter || getTodayDateValue();
+  dateInput.setAttribute('aria-label', 'Filter dashboard by date');
+
+  poolField.appendChild(poolLabel);
+  poolField.appendChild(poolSelect);
+  dateField.appendChild(dateLabel);
+  dateField.appendChild(dateInput);
+  filterBar.appendChild(label);
+  filterBar.appendChild(poolField);
+  filterBar.appendChild(dateField);
+  container.appendChild(filterBar);
+
+  const handleChange = () => {
+    dashboardPoolFilter = poolSelect.value || 'all';
+    dashboardDateFilter = dateInput.value || getTodayDateValue();
+    dashboardChemPage = 1;
+    dashboardJobPage = 1;
+    onChange?.();
+  };
+
+  poolSelect.addEventListener('change', handleChange);
+  dateInput.addEventListener('change', handleChange);
+}
+
+function renderDashboardPagination(container, { page, totalRows, onPageChange }) {
+  const totalPages = Math.max(1, Math.ceil(totalRows / DASHBOARD_PAGE_SIZE));
+  if (totalPages <= 1) return;
+
+  const pagination = document.createElement('div');
+  pagination.className = 'pagination dashboard-pagination';
+
+  const prev = document.createElement('button');
+  prev.type = 'button';
+  prev.textContent = 'Previous';
+  prev.disabled = page <= 1;
+
+  const pageSelect = document.createElement('select');
+  pageSelect.className = 'training-filter-select dashboard-page-select';
+  for (let i = 1; i <= totalPages; i++) {
+    const option = document.createElement('option');
+    option.value = String(i);
+    option.textContent = `Page ${i} of ${totalPages}`;
+    pageSelect.appendChild(option);
+  }
+  pageSelect.value = String(page);
+
+  const next = document.createElement('button');
+  next.type = 'button';
+  next.textContent = 'Next';
+  next.disabled = page >= totalPages;
+
+  prev.addEventListener('click', () => onPageChange(Math.max(1, page - 1)));
+  next.addEventListener('click', () => onPageChange(Math.min(totalPages, page + 1)));
+  pageSelect.addEventListener('change', () => onPageChange(Number(pageSelect.value) || 1));
+
+  pagination.appendChild(prev);
+  pagination.appendChild(pageSelect);
+  pagination.appendChild(next);
+  container.appendChild(pagination);
+}
+
 async function loadDashboardData() {
   const container = document.getElementById('dashboardContent');
   if (!container) return;
@@ -1493,53 +1784,189 @@ async function loadDashboardData() {
     const snap = await getDocs(q);
     allLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Keep only the most recent submission per poolLocation
-    const seen = new Set();
-    const recentByLocation = [];
-    allLogs.forEach(log => {
-      if (!log.poolLocation) return;
-      if (seen.has(log.poolLocation)) return;
-      seen.add(log.poolLocation);
-      recentByLocation.push(log);
-    });
-
-    renderDashboard(recentByLocation);
+    renderDashboard(allLogs);
   } catch (err) {
     console.error('[ChemLog] Error loading dashboard data:', err);
     if (container) container.innerHTML = '<p style="color:red;padding:16px;">Error loading data. Check console.</p>';
   }
 }
 
-function renderDashboard(recentLogs) {
+function fillDashboardRespondentCell(cell, log) {
+  cell.innerHTML = '';
+  const firstName = log?.firstName || '';
+  const lastName = log?.lastName || '';
+  const fullName = [firstName, lastName].filter(Boolean).join(' ');
+  if (!fullName) {
+    cell.textContent = log?.submitterEmail || '—';
+    return;
+  }
+
+  const empId = log?.employeeId || '';
+  const empRecord = empId ? employeesData.find(e =>
+    String(e.id || '').toLowerCase() === String(empId).toLowerCase() ||
+    String(e.email || '').toLowerCase() === String(empId).toLowerCase()
+  ) : null;
+  const rawPhone = empRecord?.phone || '';
+  const homePool = empRecord?.homePool || '—';
+  const phoneDigits = getTenDigitPhone(rawPhone);
+  const displayPhone = phoneDigits ? formatPhoneDisplay(phoneDigits) : '—';
+  const phoneHref = phoneDigits ? `+1${phoneDigits}` : '';
+
+  const nameWrapper = document.createElement('span');
+  nameWrapper.className = 'dash-respondent-cell';
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'dash-respondent-name';
+  nameSpan.textContent = fullName;
+
+  const tooltip = document.createElement('div');
+  tooltip.className = 'dash-respondent-tooltip';
+  const tooltipName = document.createElement('strong');
+  tooltipName.textContent = fullName;
+  const idLine = document.createElement('div');
+  idLine.textContent = `ID: ${empId || '—'}`;
+  const homePoolLine = document.createElement('div');
+  homePoolLine.textContent = `Home Pool: ${homePool}`;
+  const phoneLine = document.createElement('div');
+  phoneLine.className = 'dash-phone-line';
+  phoneLine.textContent = `Phone: ${displayPhone}`;
+
+  tooltip.appendChild(tooltipName);
+  tooltip.appendChild(idLine);
+  tooltip.appendChild(homePoolLine);
+  tooltip.appendChild(phoneLine);
+
+  if (phoneHref) {
+    const actions = document.createElement('div');
+    actions.className = 'dash-phone-actions';
+
+    const textLink = document.createElement('a');
+    textLink.href = `sms:${phoneHref}`;
+    textLink.textContent = 'Text';
+    textLink.addEventListener('click', (event) => event.stopPropagation());
+
+    const callLink = document.createElement('a');
+    callLink.href = `tel:${phoneHref}`;
+    callLink.textContent = 'Call';
+    callLink.addEventListener('click', (event) => event.stopPropagation());
+
+    actions.appendChild(textLink);
+    actions.appendChild(callLink);
+    tooltip.appendChild(actions);
+  }
+
+  nameWrapper.appendChild(nameSpan);
+  nameWrapper.appendChild(tooltip);
+  cell.appendChild(nameWrapper);
+}
+
+function getChemistryDetailRows(logs, facilityName, poolDoc) {
+  const poolCount = Number(poolDoc?.numPools || poolDoc?.poolCount || 1);
+  const rows = [];
+  logs
+    .filter((log) => log.poolLocation === facilityName && isDashboardDate(log.timestamp, dashboardDateFilter))
+    .forEach((log) => {
+      for (let i = 0; i < poolCount; i++) {
+        const fields = poolFieldNames(i);
+        const phVal = log?.[fields.ph] || '';
+        const clVal = log?.[fields.cl] || '';
+        if (!phVal && !clVal) continue;
+        rows.push({ log, poolIdx: i, phVal, clVal });
+      }
+    });
+  return rows;
+}
+
+function renderChemistryPoolDetail(container, logs, poolDoc) {
+  const facilityName = getPoolName(poolDoc);
+  const rows = getChemistryDetailRows(logs, facilityName, poolDoc);
+  const totalPages = Math.max(1, Math.ceil(rows.length / DASHBOARD_PAGE_SIZE));
+  dashboardChemPage = Math.min(Math.max(1, dashboardChemPage), totalPages);
+  const pageRows = rows.slice((dashboardChemPage - 1) * DASHBOARD_PAGE_SIZE, dashboardChemPage * DASHBOARD_PAGE_SIZE);
+
+  const section = document.createElement('div');
+  section.className = 'dashboard-market-section dashboard-single-pool-section';
+
+  const heading = document.createElement('h2');
+  heading.className = 'dashboard-market-heading';
+  heading.textContent = facilityName || 'Selected Pool';
+  section.appendChild(heading);
+
+  const table = document.createElement('table');
+  table.className = 'data-table dashboard-pool-table dashboard-detail-table';
+  table.innerHTML = `
+    <thead><tr>
+      <th>Facility Name</th>
+      <th>Pool</th>
+      <th>pH</th>
+      <th>Cl</th>
+      <th>Timestamp</th>
+      <th>Respondent</th>
+    </tr></thead>
+  `;
+  const tbody = document.createElement('tbody');
+
+  if (!pageRows.length) {
+    tbody.innerHTML = '<tr><td colspan="6">No pool chemistry submissions match the selected filters.</td></tr>';
+  } else {
+    pageRows.forEach(({ log, poolIdx, phVal, clVal }) => {
+      const phConcern = phVal ? getPhConcernLevel(facilityName, poolIdx, phVal) : 'none';
+      const clConcern = clVal ? getClConcernLevel(facilityName, poolIdx, clVal) : 'none';
+      const tsDate = toDateObject(log?.timestamp);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(facilityName)}</td>
+        <td>Pool ${poolIdx + 1}</td>
+        <td class="${concernClass(phConcern)}">${escapeHtml(phVal || '—')}</td>
+        <td class="${concernClass(clConcern)}">${escapeHtml(clVal || '—')}</td>
+        <td>${tsDate ? tsDate.toLocaleString() : '—'}</td>
+        <td></td>
+      `;
+      fillDashboardRespondentCell(tr.querySelector('td:last-child'), log);
+      tbody.appendChild(tr);
+    });
+  }
+
+  table.appendChild(tbody);
+  section.appendChild(table);
+  renderDashboardPagination(section, {
+    page: dashboardChemPage,
+    totalRows: rows.length,
+    onPageChange: (nextPage) => {
+      dashboardChemPage = nextPage;
+      renderDashboard(logs);
+    },
+  });
+  container.appendChild(section);
+}
+
+function renderDashboard(logs) {
   const container = document.getElementById('dashboardContent');
   if (!container) return;
   container.innerHTML = '';
 
-  // Get selected markets from localStorage, fall back to all
-  let selectedMarkets;
-  try {
-    const saved = JSON.parse(localStorage.getItem('chemlogMarkets') || '[]');
-    selectedMarkets = saved.length ? saved : null;
-  } catch (_) { selectedMarkets = null; }
+  renderDashboardFilterBar(container, () => renderDashboard(logs));
 
-  // Group pool docs by market
-  const marketMap = {};
-  poolsCache.forEach(pool => {
-    const markets = Array.isArray(pool.markets) ? pool.markets
-      : (pool.market ? [pool.market] : ['Other']);
-    const primary = markets[0];
-    if (!marketMap[primary]) marketMap[primary] = [];
-    marketMap[primary].push(pool);
-  });
-
-  const marketsToShow = selectedMarkets
-    ? selectedMarkets.filter(m => marketMap[m])
-    : Object.keys(marketMap).sort();
+  const marketMap = getDashboardMarketMap({ docs: true });
+  const marketsToShow = getVisibleDashboardMarkets(marketMap);
 
   if (!marketsToShow.length) {
-    container.innerHTML = '<p style="padding:16px;color:#666;">No markets selected. Enable markets in Settings.</p>';
+    container.insertAdjacentHTML('beforeend', '<p style="padding:16px;color:#666;">No markets selected. Enable markets in Settings.</p>');
     return;
   }
+
+  if (dashboardPoolFilter !== 'all') {
+    const selectedPool = poolsCache.find((pool) => getPoolName(pool) === dashboardPoolFilter);
+    if (selectedPool) {
+      renderChemistryPoolDetail(container, logs, selectedPool);
+      wrapResponsiveTables(container);
+    } else {
+      container.insertAdjacentHTML('beforeend', '<p style="padding:16px;color:#666;">Selected pool was not found.</p>');
+    }
+    return;
+  }
+
+  const logsForDate = logs.filter((log) => isDashboardDate(log.timestamp, dashboardDateFilter));
 
   marketsToShow.forEach(market => {
     const marketPools = marketMap[market] || [];
@@ -1595,7 +2022,7 @@ function renderDashboard(recentLogs) {
         const poolCount = poolDoc.numPools || poolDoc.poolCount || 1;
         if (poolCount <= i) return; // skip pools that don't have a pool at this index
         const facilityName = poolDoc.name || poolDoc.id;
-        const log = recentLogs.find(l => l.poolLocation === facilityName);
+        const log = logsForDate.find(l => l.poolLocation === facilityName);
         const fields = poolFieldNames(i);
         const phVal = log?.[fields.ph] || '';
         const clVal = log?.[fields.cl] || '';
@@ -1604,7 +2031,7 @@ function renderDashboard(recentLogs) {
         const clConcern = clVal ? getClConcernLevel(facilityName, i, clVal) : 'none';
 
         // Item 7: Timestamp — flag if ≥3 hours old
-        const tsDate = log?.timestamp?.toDate?.() || null;
+        const tsDate = toDateObject(log?.timestamp);
         const tsStr = tsDate ? tsDate.toLocaleString() : '—';
         const isOld = tsDate && phVal && (Date.now() - tsDate.getTime() >= 3 * 60 * 60 * 1000);
 
@@ -1625,9 +2052,9 @@ function renderDashboard(recentLogs) {
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${facilityName}</td>
-          <td class="${concernClass(phConcern)}">${phVal || '—'}</td>
-          <td class="${concernClass(clConcern)}">${clVal || '—'}</td>
+          <td>${escapeHtml(facilityName)}</td>
+          <td class="${concernClass(phConcern)}">${escapeHtml(phVal || '—')}</td>
+          <td class="${concernClass(clConcern)}">${escapeHtml(clVal || '—')}</td>
           <td></td>
           <td></td>
         `;
@@ -1652,70 +2079,7 @@ function renderDashboard(recentLogs) {
 
         // Item 8: Respondent cell with tooltip
         const respondentTd = tr.querySelector('td:last-child');
-        const firstName = log?.firstName || '';
-        const lastName = log?.lastName || '';
-        const fullName = [firstName, lastName].filter(Boolean).join(' ');
-        if (fullName) {
-          const empId = log?.employeeId || '';
-          const empRecord = empId ? employeesData.find(e =>
-            String(e.id || '').toLowerCase() === String(empId).toLowerCase() ||
-            String(e.email || '').toLowerCase() === String(empId).toLowerCase()
-          ) : null;
-          const rawPhone = empRecord?.phone || '';
-          const homePool = empRecord?.homePool || '—';
-          const phoneDigits = getTenDigitPhone(rawPhone);
-          const displayPhone = phoneDigits ? formatPhoneDisplay(phoneDigits) : '—';
-          const phoneHref = phoneDigits ? `+1${phoneDigits}` : '';
-
-          const nameWrapper = document.createElement('span');
-          nameWrapper.className = 'dash-respondent-cell';
-
-          const nameSpan = document.createElement('span');
-          nameSpan.className = 'dash-respondent-name';
-          nameSpan.textContent = fullName;
-
-          const tooltip = document.createElement('div');
-          tooltip.className = 'dash-respondent-tooltip';
-          const tooltipName = document.createElement('strong');
-          tooltipName.textContent = fullName;
-          const idLine = document.createElement('div');
-          idLine.textContent = `ID: ${empId || '—'}`;
-          const homePoolLine = document.createElement('div');
-          homePoolLine.textContent = `Home Pool: ${homePool}`;
-          const phoneLine = document.createElement('div');
-          phoneLine.className = 'dash-phone-line';
-          phoneLine.textContent = `Phone: ${displayPhone}`;
-
-          tooltip.appendChild(tooltipName);
-          tooltip.appendChild(idLine);
-          tooltip.appendChild(homePoolLine);
-          tooltip.appendChild(phoneLine);
-
-          if (phoneHref) {
-            const actions = document.createElement('div');
-            actions.className = 'dash-phone-actions';
-
-            const textLink = document.createElement('a');
-            textLink.href = `sms:${phoneHref}`;
-            textLink.textContent = 'Text';
-            textLink.addEventListener('click', (event) => event.stopPropagation());
-
-            const callLink = document.createElement('a');
-            callLink.href = `tel:${phoneHref}`;
-            callLink.textContent = 'Call';
-            callLink.addEventListener('click', (event) => event.stopPropagation());
-
-            actions.appendChild(textLink);
-            actions.appendChild(callLink);
-            tooltip.appendChild(actions);
-          }
-
-          nameWrapper.appendChild(nameSpan);
-          nameWrapper.appendChild(tooltip);
-          respondentTd.appendChild(nameWrapper);
-        } else {
-          respondentTd.textContent = '—';
-        }
+        fillDashboardRespondentCell(respondentTd, log);
 
         tbody.appendChild(tr);
       });
@@ -1739,6 +2103,8 @@ function renderDashboard(recentLogs) {
     tabPanels.forEach(p => section.appendChild(p));
     container.appendChild(section);
   });
+
+  wrapResponsiveTables(container);
 }
 
 // ============================================================
@@ -1782,9 +2148,16 @@ async function loadSecuritySettings() {
     const snap = await getDoc(doc(db, 'settings', 'security'));
     if (snap.exists()) {
       const data = snap.data() || {};
+      const savedTimeout = String(data.sessionTimeout || '360');
+      const allowedTimeouts = new Set(Array.from({ length: 10 }, (_, i) => String((i + 1) * 60)));
       securitySettings = {
-        sessionTimeout: data.sessionTimeout || 'never',
+        sessionTimeout: allowedTimeouts.has(savedTimeout) ? savedTimeout : '360',
         requirePasswordConfirm: data.requirePasswordConfirm !== false,
+      };
+    } else {
+      securitySettings = {
+        sessionTimeout: '360',
+        requirePasswordConfirm: true,
       };
     }
   } catch (err) {
@@ -1836,44 +2209,40 @@ function setupSecuritySettingsUI() {
   const securitySection = saveBtn.closest('.settings-section') || timeoutSelect.closest('.settings-section');
   if (securitySection) securitySection.id = 'securitySection';
 
-  if (!editBtn) {
+  let controls = document.getElementById('securityControls');
+  if (!controls) {
+    const controlsRow = securitySection?.querySelector('.security-controls-row') || securitySection;
     const controlsWrap = document.createElement('div');
     controlsWrap.className = 'toggle-btn';
     controlsWrap.innerHTML = `
       <div id="securityControls" class="sanitation-controls">
-        <div class="sanitation-controls-thumb" style="transform:translateX(100%)"></div>
-        <button type="button" class="editAndSave" id="securityEditBtn">Edit</button>
-        <button type="button" class="editAndSave active" id="securitySaveBtn">Save</button>
+        <div class="sanitation-controls-thumb"></div>
+        <button type="button" class="editAndSave active" id="securityEditBtn">Edit</button>
       </div>
     `;
-    securitySection.appendChild(controlsWrap);
-    const newSaveBtn = controlsWrap.querySelector('#securitySaveBtn');
-    if (newSaveBtn) {
-      newSaveBtn.replaceWith(saveBtn);
-      saveBtn.classList.add('active');
-      saveBtn.classList.remove('submit-btn');
-      saveBtn.classList.add('editAndSave');
-      saveBtn.style.marginTop = '';
-    }
-    editBtn = controlsWrap.querySelector('#securityEditBtn');
+    controlsRow.appendChild(controlsWrap);
+    controls = controlsWrap.querySelector('#securityControls');
+    editBtn = controls.querySelector('#securityEditBtn');
+    controls.appendChild(saveBtn);
+  } else if (!editBtn) {
+    editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'editAndSave active';
+    editBtn.id = 'securityEditBtn';
+    editBtn.textContent = 'Edit';
+    controls.appendChild(editBtn);
   }
 
-  const timeoutOptions = [
-    { value: 'never', label: 'Never' },
-    { value: '15', label: '15 minutes' },
-    { value: '30', label: '30 minutes' },
-    { value: '60', label: '60 minutes' },
-    { value: '120', label: '2 hours' },
-    { value: '180', label: '3 hours' },
-    { value: '240', label: '4 hours' },
-    { value: '360', label: '6 hours' },
-    { value: '480', label: '8 hours' },
-    { value: '720', label: '12 hours' },
-    { value: '1440', label: '24 hours' },
-  ];
-  const existingOptionValues = new Set(Array.from(timeoutSelect.options).map((opt) => opt.value));
+  saveBtn.classList.remove('submit-btn');
+  saveBtn.classList.add('editAndSave');
+  saveBtn.style.marginTop = '';
+
+  const timeoutOptions = Array.from({ length: 10 }, (_, i) => {
+    const hours = i + 1;
+    return { value: String(hours * 60), label: `${hours} hour${hours === 1 ? '' : 's'}` };
+  });
+  timeoutSelect.innerHTML = '';
   timeoutOptions.forEach(({ value, label }) => {
-    if (existingOptionValues.has(value)) return;
     const opt = document.createElement('option');
     opt.value = value;
     opt.textContent = label;
@@ -1882,7 +2251,9 @@ function setupSecuritySettingsUI() {
   requirePassCb.classList.add('market-filter-checkbox');
   requirePassCb.style.marginRight = '10px';
 
-  timeoutSelect.value = securitySettings.sessionTimeout || 'never';
+  timeoutSelect.value = timeoutOptions.some((option) => option.value === securitySettings.sessionTimeout)
+    ? securitySettings.sessionTimeout
+    : '360';
   requirePassCb.checked = securitySettings.requirePasswordConfirm !== false;
 
   const setEditable = (editable) => {
@@ -1899,9 +2270,8 @@ function setupSecuritySettingsUI() {
 
   setEditable(false);
 
-  if (!editBtn) return;
-  if (editBtn.dataset.securityBound === 'true') return;
-  editBtn.dataset.securityBound = 'true';
+  if (!editBtn || !saveBtn || controls?.dataset.securityBound === 'true') return;
+  controls.dataset.securityBound = 'true';
 
   editBtn.addEventListener('click', () => setEditable(true));
 
@@ -2297,6 +2667,7 @@ function setupEmployeeFilters() {
 let resourcesData = [];
 let resourceEditingId = '';
 let pendingResourceFile = null;
+let resourceSourceType = 'file';
 let resourcePageMarketFilter = 'all';
 let resourcePagePoolFilter = 'all';
 let resourceSettingsMarketFilter = 'all';
@@ -2320,10 +2691,18 @@ function ensureResourcesSettingsSection() {
     <div class="resource-section-header">
       <button type="button" id="resourceDeleteAllBtn" class="submit-btn danger-button resource-delete-all-btn">Delete All Resources</button>
     </div>
-    <p class="section-subtitle">Upload and manage the documents and videos available on the Resources page.</p>
+    <p class="section-subtitle">Upload and manage the documents, videos, and website links available on the Resources page.</p>
+    <div class="settings-row resource-type-row" style="margin-top: 20px;">
+      <label for="resourceSourceTypeSelect" class="settings-field-label">Resource Type</label>
+      <select id="resourceSourceTypeSelect" class="training-filter-select" aria-label="Resource type">
+        <option value="file">File Upload</option>
+        <option value="link">Website Link</option>
+      </select>
+    </div>
     <div class="settings-row resource-file-row" style="margin-top: 20px;">
-      <label for="resourceFileInput" class="settings-field-label">Resource File</label>
+      <label for="resourceFileInput" class="settings-field-label" id="resourceFileLabel">Resource File</label>
       <input type="file" id="resourceFileInput" aria-label="Resource file" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.jpg,.jpeg,.png,.mp4,.mov,.webm,.avi,.mkv,.m4v" />
+      <input type="url" id="resourceLinkInput" class="resource-link-input hidden" aria-label="Resource link" placeholder="https://example.com/resource" />
     </div>
     <div class="settings-row resource-add-row">
       <div class="settings-field">
@@ -2421,6 +2800,7 @@ function normalizeResourceRecord(rawDoc, idOverride = '') {
     fileUrl: (docData.fileUrl || '').toString().trim(),
     fileName: (docData.fileName || '').toString().trim(),
     storagePath: (docData.storagePath || '').toString().trim(),
+    resourceType: (docData.resourceType || docData.type || '').toString().trim() || 'file',
     sortDate,
     uploadedAt: docData.uploadedAt || null,
   };
@@ -2514,6 +2894,38 @@ function refreshResourceControls() {
   populateResourcePoolOptions(document.getElementById('resourcesPoolFilter'), document.getElementById('resourcesMarketFilter')?.value || 'all', true);
 }
 
+function normalizeResourceLink(rawValue) {
+  const value = (rawValue || '').trim();
+  if (!value) return '';
+  try {
+    const withProtocol = /^https?:\/\//i.test(value) ? value : `https://${value}`;
+    const url = new URL(withProtocol);
+    if (!['http:', 'https:'].includes(url.protocol)) return '';
+    return url.toString();
+  } catch (_) {
+    return '';
+  }
+}
+
+function setResourceSourceType(type) {
+  resourceSourceType = type === 'link' ? 'link' : 'file';
+  const sourceSelect = document.getElementById('resourceSourceTypeSelect');
+  const fileInput = document.getElementById('resourceFileInput');
+  const linkInput = document.getElementById('resourceLinkInput');
+  const fileLabel = document.getElementById('resourceFileLabel');
+
+  if (sourceSelect) sourceSelect.value = resourceSourceType;
+  if (fileLabel) fileLabel.textContent = resourceSourceType === 'link' ? 'Resource Link' : 'Resource File';
+  fileInput?.classList.toggle('hidden', resourceSourceType === 'link');
+  linkInput?.classList.toggle('hidden', resourceSourceType !== 'link');
+  if (resourceSourceType === 'link') {
+    pendingResourceFile = null;
+    if (fileInput) fileInput.value = '';
+  } else if (linkInput) {
+    linkInput.value = '';
+  }
+}
+
 function isVideoUrl(url) {
   if (!url) return false;
   const lower = url.toLowerCase();
@@ -2600,8 +3012,11 @@ function renderResourcesSettingsTable() {
     editBtn.addEventListener('click', () => {
       resourceEditingId = item.id;
       pendingResourceFile = null;
+      setResourceSourceType(item.resourceType === 'link' ? 'link' : 'file');
       const fileInput = document.getElementById('resourceFileInput');
       if (fileInput) fileInput.value = '';
+      const linkInput = document.getElementById('resourceLinkInput');
+      if (linkInput) linkInput.value = item.resourceType === 'link' ? item.fileUrl || '' : '';
       document.getElementById('resourceDocumentNameInput').value = item.documentName || '';
       document.getElementById('resourceDescriptionInput').value = item.description || '';
       populateResourcePoolOptions(document.getElementById('resourcePoolInput'), 'all', false);
@@ -2638,6 +3053,9 @@ function clearResourceForm() {
   });
   const fileInput = document.getElementById('resourceFileInput');
   if (fileInput) fileInput.value = '';
+  const linkInput = document.getElementById('resourceLinkInput');
+  if (linkInput) linkInput.value = '';
+  setResourceSourceType('file');
   const poolInput = document.getElementById('resourcePoolInput');
   if (poolInput) poolInput.value = '';
   const actionBtn = document.getElementById('resourceAddBtn');
@@ -2743,16 +3161,23 @@ function setupResourcesPageFilters() {
 }
 
 function setupResourcesSettingsUI() {
+  const sourceSelect = document.getElementById('resourceSourceTypeSelect');
   const fileInput = document.getElementById('resourceFileInput');
+  const linkInput = document.getElementById('resourceLinkInput');
   const poolInput = document.getElementById('resourcePoolInput');
   const addBtn = document.getElementById('resourceAddBtn');
   const marketFilter = document.getElementById('resourceMarketFilter');
   const poolFilter = document.getElementById('resourcePoolFilter');
   const deleteAllBtn = document.getElementById('resourceDeleteAllBtn');
 
-  if (!fileInput || !poolInput || !addBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
+  if (!sourceSelect || !fileInput || !linkInput || !poolInput || !addBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
   if (addBtn.dataset.bound === 'true') return;
   addBtn.dataset.bound = 'true';
+
+  setResourceSourceType(resourceSourceType);
+  sourceSelect.addEventListener('change', () => {
+    setResourceSourceType(sourceSelect.value);
+  });
 
   fileInput.addEventListener('change', () => {
     pendingResourceFile = fileInput.files?.[0] || null;
@@ -2779,6 +3204,8 @@ function setupResourcesSettingsUI() {
     const description = document.getElementById('resourceDescriptionInput')?.value.trim() || '';
     const pool = poolInput.value || '';
     const market = getPoolMarket(pool);
+    const mode = sourceSelect.value === 'link' ? 'link' : 'file';
+    const normalizedLink = normalizeResourceLink(linkInput.value);
 
     if (!documentName || !description || !pool) {
       alert('Document Name, Description, and Facility are required.');
@@ -2788,8 +3215,12 @@ function setupResourcesSettingsUI() {
     const existing = resourceEditingId
       ? resourcesData.find((item) => item.id === resourceEditingId)
       : null;
-    if (!existing && !pendingResourceFile) {
+    if (mode === 'file' && !existing && !pendingResourceFile) {
       alert('Choose a file before adding a resource.');
+      return;
+    }
+    if (mode === 'link' && !normalizedLink) {
+      alert('Enter a valid website link before adding a resource.');
       return;
     }
 
@@ -2802,7 +3233,16 @@ function setupResourcesSettingsUI() {
         storagePath: existing.storagePath,
       } : null;
 
-      if (pendingResourceFile) {
+      if (mode === 'link') {
+        if (existing?.storagePath) {
+          await deleteObject(storageRef(getResourceStorage(), existing.storagePath)).catch(() => {});
+        }
+        fileMeta = {
+          fileUrl: normalizedLink,
+          fileName: '',
+          storagePath: '',
+        };
+      } else if (pendingResourceFile) {
         fileMeta = await uploadResourceFile(pendingResourceFile);
         if (existing?.storagePath) {
           await deleteObject(storageRef(getResourceStorage(), existing.storagePath)).catch(() => {});
@@ -2810,12 +3250,15 @@ function setupResourcesSettingsUI() {
       }
 
       const uploadTimestampMs = Date.now();
-      const uploadDate = pendingResourceFile || !existing
+      const isNewResourceValue = mode === 'link'
+        ? normalizedLink !== existing?.fileUrl
+        : !!pendingResourceFile || !existing;
+      const uploadDate = isNewResourceValue
         ? new Date(uploadTimestampMs).toISOString().slice(0, 10)
         : existing?.uploadDate
           || (existing?.uploadedAt?.toDate ? existing.uploadedAt.toDate().toISOString().slice(0, 10) : '')
           || new Date(uploadTimestampMs).toISOString().slice(0, 10);
-      const sortDate = pendingResourceFile || !existing
+      const sortDate = isNewResourceValue
         ? uploadTimestampMs
         : existing?.sortDate || uploadTimestampMs;
 
@@ -2828,8 +3271,9 @@ function setupResourcesSettingsUI() {
         fileUrl: fileMeta?.fileUrl || '',
         fileName: fileMeta?.fileName || '',
         storagePath: fileMeta?.storagePath || '',
+        resourceType: mode,
         sortDate,
-        uploadedAt: pendingResourceFile || !existing ? null : existing?.uploadedAt || null,
+        uploadedAt: isNewResourceValue ? null : existing?.uploadedAt || null,
       }, resourceEditingId);
 
       const targetRef = resourceEditingId
@@ -2844,9 +3288,10 @@ function setupResourcesSettingsUI() {
         fileUrl: payload.fileUrl,
         fileName: payload.fileName,
         storagePath: payload.storagePath,
+        resourceType: payload.resourceType,
         sortDate: payload.sortDate,
         uploadDate: payload.uploadDate,
-        uploadedAt: pendingResourceFile || !existing ? serverTimestamp() : existing?.uploadedAt || serverTimestamp(),
+        uploadedAt: isNewResourceValue ? serverTimestamp() : existing?.uploadedAt || serverTimestamp(),
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
@@ -3070,6 +3515,7 @@ function renderSanitationTables(container) {
   tableWrap.appendChild(table);
   container.appendChild(tableWrap);
   wrapResponsiveTables(container);
+  table.closest('.table-scroll-wrap')?.classList.add('sanitation-settings-scroll');
 
   const [editBtn, saveBtn] = controlsWrap.querySelectorAll('.editAndSave');
   editBtn?.addEventListener('click', () => {
@@ -3555,6 +4001,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (which === 'chemistry') {
         if (chemPanel) chemPanel.style.display = '';
         if (jobPanel) jobPanel.style.display = 'none';
+        if (allLogs.length) renderDashboard(allLogs);
+        else loadDashboardData();
       } else if (which === 'jobforms') {
         if (chemPanel) chemPanel.style.display = 'none';
         if (jobPanel) { jobPanel.style.display = ''; loadJobFormSubmissions(); }
@@ -3586,126 +4034,239 @@ async function loadJobFormSubmissions() {
 function renderJobFormSubmissions(submissions, container) {
   container.innerHTML = '';
 
-  if (!submissions.length) {
-    container.innerHTML = '<p style="padding:16px;color:#666;">No cleanliness reports yet.</p>';
+  renderDashboardFilterBar(container, () => renderJobFormSubmissions(submissions, container));
+
+  const marketMap = getDashboardMarketMap({ docs: false });
+  const marketsToShow = getVisibleDashboardMarkets(marketMap);
+  const submissionsForDate = submissions.filter((sub) => isDashboardDate(sub.timestamp, dashboardDateFilter));
+
+  if (!marketsToShow.length) {
+    container.insertAdjacentHTML('beforeend', '<p style="padding:16px;color:#666;">No markets selected. Enable markets in Settings.</p>');
     return;
   }
 
-  // Get selected markets
-  let selectedMarkets;
-  try {
-    const saved = JSON.parse(localStorage.getItem('chemlogMarkets') || '[]');
-    selectedMarkets = saved.length ? saved : null;
-  } catch (_) { selectedMarkets = null; }
+  if (dashboardPoolFilter !== 'all') {
+    const poolSubs = submissionsForDate.filter((sub) => sub.pool === dashboardPoolFilter);
+    const totalPages = Math.max(1, Math.ceil(poolSubs.length / DASHBOARD_PAGE_SIZE));
+    dashboardJobPage = Math.min(Math.max(1, dashboardJobPage), totalPages);
+    const pageSubs = poolSubs.slice((dashboardJobPage - 1) * DASHBOARD_PAGE_SIZE, dashboardJobPage * DASHBOARD_PAGE_SIZE);
 
-  // Group by market then pool
-  const marketMap = {};
-  poolsCache.forEach(pool => {
-    const markets = Array.isArray(pool.markets) ? pool.markets : (pool.market ? [pool.market] : ['Other']);
-    const primary = markets[0];
-    if (!marketMap[primary]) marketMap[primary] = [];
-    marketMap[primary].push(pool.name || pool.id);
-  });
+    const section = document.createElement('div');
+    section.className = 'dashboard-market-section dashboard-single-pool-section';
+    const h2 = document.createElement('h2');
+    h2.className = 'dashboard-market-heading';
+    h2.textContent = dashboardPoolFilter;
+    section.appendChild(h2);
 
-  const marketsToShow = selectedMarkets
-    ? selectedMarkets.filter(m => marketMap[m])
-    : Object.keys(marketMap).sort();
+    const table = document.createElement('table');
+    table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-cleanliness-table';
+    table.innerHTML = '<thead><tr><th>Form</th><th>Facility Name</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
+    const tbody = document.createElement('tbody');
 
-  // Filter bar
-  const filterBar = document.createElement('div');
-  filterBar.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;';
-  filterBar.innerHTML = `<span class="filter-by-label">Filter By:</span>
-    <select id="jobMarketFilter" class="training-filter-select"><option value="all">All Markets</option></select>
-    <select id="jobPoolFilter" class="training-filter-select"><option value="all">All Pools</option></select>`;
-  container.appendChild(filterBar);
-
-  const marketSel = filterBar.querySelector('#jobMarketFilter');
-  const poolSel = filterBar.querySelector('#jobPoolFilter');
-  marketsToShow.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; marketSel.appendChild(o); });
-
-  const tablesWrap = document.createElement('div');
-  container.appendChild(tablesWrap);
-
-  function renderTables() {
-    tablesWrap.innerHTML = '';
-    const mFilter = marketSel.value;
-    const pFilter = poolSel.value;
-
-    const toShow = mFilter === 'all' ? marketsToShow : [mFilter];
-    toShow.forEach(market => {
-      const pools = marketMap[market] || [];
-      if (pFilter !== 'all' && !pools.includes(pFilter)) return;
-
-      const section = document.createElement('div');
-      section.className = 'dashboard-market-section';
-      const h2 = document.createElement('h2');
-      h2.className = 'dashboard-market-heading';
-      h2.textContent = market;
-      section.appendChild(h2);
-
-      const poolsToRender = pFilter === 'all' ? pools : pools.filter(p => p === pFilter);
-      let poolsRendered = 0;
-      poolsToRender.forEach(poolName => {
-        const poolSubs = submissions.filter(s => s.pool === poolName);
-        if (!poolSubs.length) return;
-
-        const mostRecent = poolSubs[0]; // already sorted desc by timestamp
-        poolsRendered++;
-
-        const h3 = document.createElement('h3');
-        h3.style.cssText = 'font-size:1rem;color:#69140e;margin:16px 0 8px;border-bottom:1px solid #ccc;padding-bottom:4px;';
-        h3.textContent = poolName;
-        section.appendChild(h3);
-
-        const table = document.createElement('table');
-        table.className = 'data-table dashboard-pool-table';
-        table.style.width = '100%';
-        table.innerHTML = `<thead><tr><th>Form</th><th>Respondent</th><th>Timestamp</th></tr></thead>`;
-        const tbody = document.createElement('tbody');
-
+    if (!pageSubs.length) {
+      tbody.innerHTML = '<tr><td colspan="4">No cleanliness reports match the selected filters.</td></tr>';
+    } else {
+      pageSubs.forEach((sub) => {
+        const ts = toDateObject(sub.timestamp);
         const tr = document.createElement('tr');
-        const ts = mostRecent.timestamp?.toDate ? mostRecent.timestamp.toDate() : null;
-        const timeStr = ts ? ts.toLocaleString() : '—';
-
         const tdForm = document.createElement('td');
-        const formLink = document.createElement('a');
-        formLink.href = '#';
-        formLink.textContent = 'Cleanliness Report';
-        formLink.style.cssText = 'color:#69140e;text-decoration:underline;cursor:pointer;font-weight:bold;';
-        formLink.addEventListener('click', (e) => { e.preventDefault(); openDutyFormModal(mostRecent); });
-        tdForm.appendChild(formLink);
-
-        const tdResp = document.createElement('td');
-        tdResp.textContent = mostRecent.submitterEmail || '—';
-
-        const tdTime = document.createElement('td');
-        tdTime.style.whiteSpace = 'nowrap';
-        tdTime.textContent = timeStr;
-
+        tdForm.appendChild(createDutyFormLink(sub));
         tr.appendChild(tdForm);
-        tr.appendChild(tdResp);
-        tr.appendChild(tdTime);
+        tr.insertAdjacentHTML('beforeend', `
+          <td>${escapeHtml(sub.pool || '—')}</td>
+          <td>${escapeHtml(sub.submitterEmail || '—')}</td>
+          <td>${ts ? ts.toLocaleString() : '—'}</td>
+        `);
         tbody.appendChild(tr);
-        table.appendChild(tbody);
-        section.appendChild(table);
       });
-
-      if (poolsRendered > 0) tablesWrap.appendChild(section);
-    });
-
-    if (!tablesWrap.children.length) {
-      tablesWrap.innerHTML = '<p style="padding:8px 0;color:#666;">No submissions match the selected filters.</p>';
     }
+
+    table.appendChild(tbody);
+    section.appendChild(table);
+    renderDashboardPagination(section, {
+      page: dashboardJobPage,
+      totalRows: poolSubs.length,
+      onPageChange: (nextPage) => {
+        dashboardJobPage = nextPage;
+        renderJobFormSubmissions(submissions, container);
+      },
+    });
+    container.appendChild(section);
+    wrapResponsiveTables(container);
+    return;
   }
 
-  renderTables();
-  marketSel.addEventListener('change', () => {
-    poolSel.innerHTML = '<option value="all">All Pools</option>';
-    const pools = marketSel.value === 'all' ? Object.values(marketMap).flat() : (marketMap[marketSel.value] || []);
-    [...new Set(pools)].sort().forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; poolSel.appendChild(o); });
-    renderTables();
+  let renderedAny = false;
+  marketsToShow.forEach((market) => {
+    const poolNames = marketMap[market] || [];
+    if (!poolNames.length) return;
+
+    const section = document.createElement('div');
+    section.className = 'dashboard-market-section';
+    const h2 = document.createElement('h2');
+    h2.className = 'dashboard-market-heading';
+    h2.textContent = market;
+    section.appendChild(h2);
+
+    const table = document.createElement('table');
+    table.className = 'data-table dashboard-pool-table dashboard-cleanliness-table';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Form</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    poolNames.forEach((poolName) => {
+      const mostRecent = submissionsForDate.find((sub) => sub.pool === poolName);
+      const ts = toDateObject(mostRecent?.timestamp);
+      const tr = document.createElement('tr');
+      const facilityTd = document.createElement('td');
+      facilityTd.textContent = poolName;
+      const formTd = document.createElement('td');
+      if (mostRecent) formTd.appendChild(createDutyFormLink(mostRecent));
+      else formTd.textContent = 'No report';
+
+      tr.appendChild(facilityTd);
+      tr.appendChild(formTd);
+      tr.insertAdjacentHTML('beforeend', `
+        <td>${escapeHtml(mostRecent?.submitterEmail || '—')}</td>
+        <td>${ts ? ts.toLocaleString() : '—'}</td>
+      `);
+      tbody.appendChild(tr);
+    });
+
+    table.appendChild(tbody);
+    section.appendChild(table);
+    container.appendChild(section);
+    renderedAny = true;
   });
-  poolSel.addEventListener('change', renderTables);
+
+  if (!renderedAny) {
+    container.insertAdjacentHTML('beforeend', '<p style="padding:8px 0;color:#666;">No cleanliness reports match the selected filters.</p>');
+  }
+
+  wrapResponsiveTables(container);
+}
+
+function createDutyFormLink(sub) {
+  const formLink = document.createElement('a');
+  formLink.href = '#';
+  formLink.className = 'dashboard-form-link';
+  formLink.textContent = 'Cleanliness Report';
+  formLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    openDutyFormModal(sub);
+  });
+  return formLink;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function clampNumber(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function parseScaleNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function mixColor(startHex, endHex, amount) {
+  const parse = (hex) => {
+    const clean = hex.replace('#', '');
+    return [
+      parseInt(clean.slice(0, 2), 16),
+      parseInt(clean.slice(2, 4), 16),
+      parseInt(clean.slice(4, 6), 16),
+    ];
+  };
+  const [sr, sg, sb] = parse(startHex);
+  const [er, eg, eb] = parse(endHex);
+  const t = clampNumber(amount, 0, 1);
+  const toHex = (n) => Math.round(n).toString(16).padStart(2, '0');
+  return `#${toHex(sr + (er - sr) * t)}${toHex(sg + (eg - sg) * t)}${toHex(sb + (eb - sb) * t)}`;
+}
+
+function colorFromStops(value, stops) {
+  const v = clampNumber(value, stops[0].value, stops[stops.length - 1].value);
+  for (let i = 0; i < stops.length - 1; i++) {
+    const current = stops[i];
+    const next = stops[i + 1];
+    if (v >= current.value && v <= next.value) {
+      const span = next.value - current.value || 1;
+      return mixColor(current.color, next.color, (v - current.value) / span);
+    }
+  }
+  return stops[stops.length - 1].color;
+}
+
+const DUTY_SCALE_RED = '#a40000';
+const DUTY_SCALE_YELLOW = '#d4a900';
+const DUTY_SCALE_GREEN = '#18873b';
+
+function getDutyScaleConfig(type, rawValue) {
+  const value = parseScaleNumber(rawValue);
+  if (value === null) return null;
+
+  if (type === 'cya') {
+    return {
+      percent: clampNumber(value, 0, 100),
+      color: colorFromStops(value, [
+        { value: 0, color: DUTY_SCALE_RED },
+        { value: 10, color: DUTY_SCALE_RED },
+        { value: 30, color: DUTY_SCALE_YELLOW },
+        { value: 50, color: DUTY_SCALE_GREEN },
+        { value: 60, color: DUTY_SCALE_YELLOW },
+        { value: 70, color: DUTY_SCALE_RED },
+        { value: 100, color: DUTY_SCALE_RED },
+      ]),
+      trackClass: 'duty-scale-track-cya',
+    };
+  }
+
+  if (type === 'acid') {
+    return {
+      percent: clampNumber((value / 30) * 100, 0, 100),
+      color: colorFromStops(value, [
+        { value: 0, color: DUTY_SCALE_RED },
+        { value: 15, color: DUTY_SCALE_YELLOW },
+        { value: 30, color: DUTY_SCALE_GREEN },
+      ]),
+      trackClass: 'duty-scale-track-acid',
+    };
+  }
+
+  return {
+    percent: clampNumber(value, 0, 100),
+    color: colorFromStops(value, [
+      { value: 0, color: DUTY_SCALE_RED },
+      { value: 50, color: DUTY_SCALE_YELLOW },
+      { value: 100, color: DUTY_SCALE_GREEN },
+    ]),
+    trackClass: 'duty-scale-track-linear',
+  };
+}
+
+function dutyScaleHtml(label, value, unit, type) {
+  const config = getDutyScaleConfig(type, value);
+  if (!config) return '';
+  const displayValue = `${escapeHtml(value)}${escapeHtml(unit || '')}`;
+  return `
+    <div class="duty-scale-row">
+      <div class="duty-scale-label-row">
+        <span>${escapeHtml(label)}</span>
+        <strong>${displayValue}</strong>
+      </div>
+      <div class="duty-scale-track ${config.trackClass}">
+        <span class="duty-scale-marker" style="left:${config.percent}%;background:${config.color};"></span>
+      </div>
+    </div>
+  `;
 }
 
 function openDutyFormModal(sub) {
@@ -3713,68 +4274,74 @@ function openDutyFormModal(sub) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'dutyFormModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:10000;overflow-y:auto;display:none;align-items:flex-start;justify-content:center;padding:24px 16px;box-sizing:border-box;';
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
     document.body.appendChild(modal);
   }
+  modal.className = 'duty-report-modal';
+  modal.style.cssText = '';
 
-  const ts = sub.timestamp?.toDate ? sub.timestamp.toDate() : null;
-  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const ts = toDateObject(sub.timestamp);
+  const esc = escapeHtml;
 
   const photoSectionHtml = (label, photos) => {
     if (!photos?.length) return '';
-    const imgs = photos.map(p =>
-      `<img src="${esc(p.url)}" alt="photo" style="width:100px;height:100px;object-fit:cover;cursor:pointer;border:1px solid #ccc;border-radius:2px;"
-           onclick="window.openPhotoModal('${esc(p.url)}')" />`
-    ).join('');
-    return `<div style="margin-bottom:18px;">
-      <h4 style="margin:0 0 8px;font-size:14px;color:#555;text-transform:uppercase;letter-spacing:.04em;">${esc(label)}</h4>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;">${imgs}</div>
-    </div>`;
+    const imgs = photos.map((p) => {
+      const encodedUrl = encodeURIComponent(p.url || '');
+      return `<img src="${esc(p.url)}" alt="photo" class="duty-report-photo"
+           onclick="window.openPhotoModal(decodeURIComponent('${encodedUrl}'))" />`;
+    }).join('');
+    return `<section class="duty-report-photo-section">
+      <h4>${esc(label)}</h4>
+      <div class="duty-report-photo-grid">${imgs}</div>
+    </section>`;
   };
 
   const photos = sub.photos || {};
-  const hasManagerData = sub.bleachVolume != null || sub.muriaticAcid != null ||
-    sub.shockGranular != null || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
+  const hasValue = (value) => value !== null && value !== undefined && value !== '';
+  const hasManagerData = hasValue(sub.bleachVolume) || hasValue(sub.muriaticAcid) ||
+    hasValue(sub.shockGranular) || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
     photos.bleach?.length;
 
   let cyaHtml = '';
   if (sub.cyaReadings && Object.keys(sub.cyaReadings).length) {
-    const rows = Object.entries(sub.cyaReadings).map(([k, v]) =>
-      `<tr><td style="padding:3px 10px 3px 0;color:#555;">${esc(k.replace('pool', 'Pool '))}</td><td style="padding:3px 0;font-weight:bold;">${esc(v)}</td></tr>`
-    ).join('');
-    cyaHtml = `<div style="margin-top:8px;"><strong>CYA Levels:</strong><table style="margin-top:4px;border-collapse:collapse;">${rows}</table></div>`;
+    const rows = Object.entries(sub.cyaReadings).map(([k, v]) => {
+      const label = k.replace('pool', 'Pool ');
+      return dutyScaleHtml(`${label} CYA`, v, '', 'cya');
+    }).join('');
+    cyaHtml = `<div class="duty-scale-group"><h4>CYA Levels</h4>${rows}</div>`;
   }
 
   modal.innerHTML = `
-    <div style="background:#fff;max-width:680px;width:100%;padding:28px 24px;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.4);">
-      <button onclick="document.getElementById('dutyFormModal').style.display='none'"
-        style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:26px;line-height:1;cursor:pointer;color:#666;">&times;</button>
-      <h2 style="font-family:'Franklin Gothic Medium',Arial,sans-serif;color:#69140e;margin:0 0 6px;font-size:20px;">Cleanliness Report</h2>
-      <p style="margin:2px 0;font-size:14px;color:#555;"><strong>Pool:</strong> ${esc(sub.pool)}</p>
-      <p style="margin:2px 0;font-size:14px;color:#555;"><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
-      <p style="margin:2px 0 20px;font-size:14px;color:#555;"><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
+    <div class="duty-report-modal-card">
+      <div class="modal-header duty-report-modal-header">
+        <h2>Cleanliness Report</h2>
+        <button type="button" class="close" onclick="document.getElementById('dutyFormModal').style.display='none'">&times;</button>
+      </div>
+      <div class="duty-report-modal-scroll">
+        <div class="duty-report-meta">
+          <p><strong>Pool:</strong> ${esc(sub.pool)}</p>
+          <p><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
+          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
+        </div>
 
-      <hr style="border:none;border-top:1px solid #ddd;margin-bottom:18px;" />
+        ${photoSectionHtml('Deck', photos.deck)}
+        ${photoSectionHtml('Pool', photos.pool)}
+        ${photoSectionHtml('Skimmers', photos.skimmers)}
+        ${photoSectionHtml('Damaged Equipment', photos.damaged)}
 
-      ${photoSectionHtml('Deck', photos.deck)}
-      ${photoSectionHtml('Pool', photos.pool)}
-      ${photoSectionHtml('Skimmers', photos.skimmers)}
-      ${photoSectionHtml('Damaged Equipment', photos.damaged)}
+        ${sub.damagedNotes ? `<div class="duty-report-notes"><strong>Damaged Equipment Notes:</strong><span>${esc(sub.damagedNotes)}</span></div>` : ''}
+        ${sub.otherNotes ? `<div class="duty-report-notes"><strong>Other Notes:</strong><span>${esc(sub.otherNotes)}</span></div>` : ''}
 
-      ${sub.damagedNotes ? `<div style="margin-bottom:14px;font-size:14px;"><strong>Damaged Equipment Notes:</strong><br><span style="color:#444;">${esc(sub.damagedNotes)}</span></div>` : ''}
-      ${sub.otherNotes ? `<div style="margin-bottom:14px;font-size:14px;"><strong>Other Notes:</strong><br><span style="color:#444;">${esc(sub.otherNotes)}</span></div>` : ''}
-
-      ${hasManagerData ? `
-        <hr style="border:none;border-top:1px solid #ddd;margin:18px 0;" />
-        <div style="background:#fff5f5;border:1px solid #69140e;padding:16px;border-radius:2px;">
-          <h3 style="font-family:'Franklin Gothic Medium',Arial,sans-serif;color:#69140e;margin:0 0 12px;font-size:15px;">Managers Only</h3>
+        ${hasManagerData ? `
+        <section class="duty-report-manager-panel">
+          <h3>Managers Only</h3>
           ${photoSectionHtml('Bleach Barrels', photos.bleach)}
-          ${sub.bleachVolume != null ? `<p style="margin:4px 0;font-size:14px;"><strong>Bleach Volume:</strong> ${esc(sub.bleachVolume)}%</p>` : ''}
-          ${sub.muriaticAcid != null ? `<p style="margin:4px 0;font-size:14px;"><strong>Muriatic Acid:</strong> ${esc(sub.muriaticAcid)} gal</p>` : ''}
-          ${sub.shockGranular != null ? `<p style="margin:4px 0;font-size:14px;"><strong>Shock / Granular:</strong> ${esc(sub.shockGranular)}%</p>` : ''}
+          ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
+          ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}
+          ${dutyScaleHtml('Shock / Granular', sub.shockGranular, '%', 'linear')}
           ${cyaHtml}
-        </div>` : ''}
+        </section>` : ''}
+      </div>
     </div>`;
 
   modal.style.display = 'flex';
