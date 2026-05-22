@@ -1654,7 +1654,7 @@ function getVisibleDashboardMarkets(marketMap) {
 }
 
 function getPoolName(poolDoc) {
-  return poolDoc?.name || poolDoc?.id || '';
+  return (poolDoc?.name || poolDoc?.id || '').toString().trim();
 }
 
 function getDashboardPoolOptions() {
@@ -2751,10 +2751,6 @@ function ensureResourcesSettingsSection() {
   employeeSettings.insertAdjacentElement('afterend', section);
 }
 
-function getPoolName(pool) {
-  return (pool?.name || pool?.id || '').toString().trim();
-}
-
 function getPoolMarket(poolName) {
   const match = poolsCache.find((pool) => getPoolName(pool) === poolName);
   if (!match) return '';
@@ -3215,7 +3211,8 @@ function setupResourcesSettingsUI() {
     const existing = resourceEditingId
       ? resourcesData.find((item) => item.id === resourceEditingId)
       : null;
-    if (mode === 'file' && !existing && !pendingResourceFile) {
+    const switchingLinkToFile = existing?.resourceType === 'link' && mode === 'file';
+    if (mode === 'file' && (!existing || switchingLinkToFile) && !pendingResourceFile) {
       alert('Choose a file before adding a resource.');
       return;
     }
