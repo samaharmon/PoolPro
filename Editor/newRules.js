@@ -3,6 +3,7 @@ import { getPools, listenPools, savePoolDoc, deletePoolDoc } from '../firebase.j
 let poolsCache = [];
 let currentPoolId = '';
 let poolsListenerStarted = false;
+let activePoolLoadToken = 0;
 
 let currentEditorMode = window.currentEditorMode ?? null;
 window.currentEditorMode = currentEditorMode;
@@ -581,7 +582,7 @@ async function maybeMigrateLegacyRules(poolDoc) {
   return updatedDoc;
 }
 
-async function loadPoolIntoEditor(poolDoc) {
+async function loadPoolIntoEditor(poolDoc, loadToken = null) {
   if (!poolDoc) return;
 
   // poolDoc.rawData should be the original Firestore data; if you're currently
@@ -590,6 +591,8 @@ async function loadPoolIntoEditor(poolDoc) {
     poolDoc.rules && poolDoc.rules.pools ?
       poolDoc
       : await maybeMigrateLegacyRules(poolDoc);
+
+  if (loadToken !== null && loadToken !== activePoolLoadToken) return;
 
   currentPoolId = normalizedDoc.id || '';
 
@@ -667,6 +670,7 @@ async function loadPoolIntoEditor(poolDoc) {
   const saveBtn = document.getElementById('saveMetadataBtn');
   if (editBtn) editBtn.disabled = false;
   if (saveBtn) saveBtn.disabled = true;
+  syncMetadataToggleFromButtons();
 }
  
 const EDITOR_FADE_MS = 250;
@@ -802,6 +806,7 @@ function disableAllEditors() {
     metadataEditBtn.disabled = false;
     metadataSaveBtn.disabled = true;
   }
+  syncMetadataToggleFromButtons();
 
   setMetadataEnabled(false);
   captureRockbridgePresetIfNeeded();
@@ -958,6 +963,12 @@ function syncBlockIntoState(block) {
   // Write back into the currently selected sanitation method.
   state[activeMethod] = methodState;
 }
+
+function syncMetadataToggleFromButtons() {
+  const saveBtn = document.getElementById('saveMetadataBtn');
+  const toggle = document.querySelector('.metadata-rule-buttons .edit-save-toggle-input');
+  if (saveBtn && toggle) toggle.checked = saveBtn.disabled;
+}
  
 function wireMetadataButtons() {
   const editBtn = document.getElementById('editMetadataBtn');
@@ -966,10 +977,7 @@ function wireMetadataButtons() {
 
   if (!editBtn || !saveBtn || !ruleButtons) return;
 
-  const syncToggle = () => {
-    const toggle = ruleButtons.querySelector('.edit-save-toggle-input');
-    if (toggle) toggle.checked = saveBtn.disabled;
-  };
+  const syncToggle = syncMetadataToggleFromButtons;
 
   const setMetadataEditing = (isEditing) => {
     setMetadataEnabled(isEditing);
@@ -1192,18 +1200,8 @@ function toggleMode(mode) {
     const poolSelect = document.getElementById('editorPoolSelect');
 
     if (poolSelect && poolSelect.value) {
-      // If a pool is already selected, immediately show + load it
       poolMetadataSection?.classList.remove('hidden');
       ruleEditorSection?.classList.remove('hidden');
-
-      if (typeof loadPoolIntoEditor === 'function') {
-        const poolDoc = findPoolById(poolSelect.value);
-        if (poolDoc) {
-          loadPoolIntoEditor(poolDoc);
-        } else {
-          console.warn('Selected pool not found in cache:', poolSelect.value);
-        }
-      }
     } else {
       // Force selection before exposing the editor
       poolMetadataSection?.classList.add('hidden');
@@ -1347,8 +1345,10 @@ function attachEditorEvents() {
   const poolSelect = document.getElementById('editorPoolSelect');
   const numPoolsSelect = document.getElementById('editorNumPools');
 
-  if (addModeBtn) {
+  if (addModeBtn && addModeBtn.dataset.editorModeBound !== 'true') {
+    addModeBtn.dataset.editorModeBound = 'true';
     addModeBtn.addEventListener('click', async () => {
+      activePoolLoadToken += 1;
       toggleMode('add');
 
       currentPoolId = '';
@@ -1369,24 +1369,27 @@ function attachEditorEvents() {
     });
   }
 
-  if (editModeBtn) {
+  if (editModeBtn && editModeBtn.dataset.editorModeBound !== 'true') {
+    editModeBtn.dataset.editorModeBound = 'true';
     editModeBtn.addEventListener('click', () => {
-      toggleMode('edit');
-
+      activePoolLoadToken += 1;
       currentPoolId = '';
       if (poolSelect) poolSelect.value = '';
 
       resetPoolEditorState();
       updatePoolBlockVisibility(0);
       disableAllEditors();
+      toggleMode('edit');
     });
   }
 
-  if (poolSelect) {
+  if (poolSelect && poolSelect.dataset.editorPoolSelectBound !== 'true') {
+    poolSelect.dataset.editorPoolSelectBound = 'true';
     poolSelect.addEventListener('change', async () => {
       const selectedId = poolSelect.value;
 
       if (!selectedId) {
+        activePoolLoadToken += 1;
         toggleMode('edit');
         resetPoolEditorState();
         updatePoolBlockVisibility(0);
@@ -1400,9 +1403,11 @@ function attachEditorEvents() {
         return;
       }
 
+      const loadToken = ++activePoolLoadToken;
       resetPoolEditorState();
 
-      await loadPoolIntoEditor(poolDoc);
+      await loadPoolIntoEditor(poolDoc, loadToken);
+      if (loadToken !== activePoolLoadToken) return;
 
       // Ensure sections are visible in edit mode once selected
       toggleMode('edit');
@@ -1412,7 +1417,8 @@ function attachEditorEvents() {
     });
   }
 
-  if (numPoolsSelect) {
+  if (numPoolsSelect && numPoolsSelect.dataset.editorPoolCountBound !== 'true') {
+    numPoolsSelect.dataset.editorPoolCountBound = 'true';
     numPoolsSelect.addEventListener('change', () => {
       const count = Math.max(1, Math.min(5, Number(numPoolsSelect.value || 1)));
       updatePoolBlockVisibility(count);
