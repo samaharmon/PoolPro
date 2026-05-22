@@ -2673,6 +2673,8 @@ let resourcePagePoolFilter = 'all';
 let resourceSettingsMarketFilter = 'all';
 let resourceSettingsPoolFilter = 'all';
 const resourceDataUrlMap = new Map();
+const RESOURCE_FILTER_ALL_VALUE = 'all';
+const RESOURCE_ALL_FACILITIES_VALUE = 'All';
 
 function getResourceStorage() {
   return getStorage(getApp());
@@ -2729,7 +2731,7 @@ function ensureResourcesSettingsSection() {
         <option value="all">All Markets</option>
       </select>
       <select id="resourcePoolFilter" class="training-filter-select" aria-label="Filter resources by facility">
-        <option value="all">All Facilities</option>
+        <option value="all">All</option>
       </select>
     </div>
     <div id="resourceTableSection" class="sanitation-section overlay-disabled resource-table-section">
@@ -2752,6 +2754,7 @@ function ensureResourcesSettingsSection() {
 }
 
 function getPoolMarket(poolName) {
+  if (isResourceAllFacilities(poolName)) return RESOURCE_ALL_FACILITIES_VALUE;
   const match = poolsCache.find((pool) => getPoolName(pool) === poolName);
   if (!match) return '';
   const markets = Array.isArray(match.markets) ? match.markets : (match.market ? [match.market] : []);
@@ -2759,7 +2762,18 @@ function getPoolMarket(poolName) {
 }
 
 function getResourceMarket(item) {
+  if (isResourceAllFacilities(item?.pool)) return RESOURCE_ALL_FACILITIES_VALUE;
   return (item?.market || getPoolMarket(item?.pool || '') || '').toString().trim();
+}
+
+function isResourceAllFacilities(value) {
+  const normalized = (value || '').toString().trim().toLowerCase();
+  return normalized === 'all' || normalized === 'all facilities';
+}
+
+function normalizeResourcePoolValue(value) {
+  const trimmed = (value || '').toString().trim();
+  return isResourceAllFacilities(trimmed) ? RESOURCE_ALL_FACILITIES_VALUE : trimmed;
 }
 
 function getAllMarkets() {
@@ -2792,7 +2806,7 @@ function normalizeResourceRecord(rawDoc, idOverride = '') {
     uploadDate,
     description: (docData.description || '').toString().trim(),
     market: (docData.market || '').toString().trim(),
-    pool: (docData.pool || '').toString().trim(),
+    pool: normalizeResourcePoolValue(docData.pool),
     fileUrl: (docData.fileUrl || '').toString().trim(),
     fileName: (docData.fileName || '').toString().trim(),
     storagePath: (docData.storagePath || '').toString().trim(),
@@ -2818,16 +2832,24 @@ function formatResourceDate(uploadDate, uploadedAt) {
 
 function getFilteredResources({ market = 'all', pool = 'all' } = {}) {
   return resourcesData
-    .filter((item) => (market === 'all' ? true : getResourceMarket(item) === market))
-    .filter((item) => (pool === 'all' ? true : item.pool === pool))
+    .filter((item) => (market === RESOURCE_FILTER_ALL_VALUE ? true : getResourceMarket(item) === market || isResourceAllFacilities(item.pool)))
+    .filter((item) => (pool === RESOURCE_FILTER_ALL_VALUE ? true : item.pool === pool || isResourceAllFacilities(item.pool)))
     .sort(sortResourcesDescending);
 }
 
 function populateResourcePoolOptions(selectEl, market = 'all', includeAll = false) {
   if (!selectEl) return;
   const current = selectEl.value;
-  const defaultLabel = includeAll ? 'All Facilities' : 'Select facility';
-  selectEl.innerHTML = `<option value="${includeAll ? 'all' : ''}">${defaultLabel}</option>`;
+  const defaultValue = includeAll ? RESOURCE_FILTER_ALL_VALUE : '';
+  const defaultLabel = includeAll ? 'All' : 'Select facility';
+  selectEl.innerHTML = `<option value="${defaultValue}">${defaultLabel}</option>`;
+
+  if (!includeAll) {
+    const allOption = document.createElement('option');
+    allOption.value = RESOURCE_ALL_FACILITIES_VALUE;
+    allOption.textContent = RESOURCE_ALL_FACILITIES_VALUE;
+    selectEl.appendChild(allOption);
+  }
 
   const pools = (market === 'all' || !market)
     ? [...poolsCache]

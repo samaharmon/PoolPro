@@ -253,6 +253,12 @@
     flex: 1;
 }
 
+#ruleEditorContent {
+    width: min(1320px, calc(100vw - 28px));
+    max-width: min(1320px, calc(100vw - 28px));
+    align-self: center;
+}
+
 /* Mode toggle buttons ("Add new pool" / "Edit existing pool") */
 .mode-toggle {
     min-width: 160px;
@@ -788,6 +794,11 @@ body.dark-mode .pool-rule-block .concernLevel {
   #mainForm .container {
     padding: 0 12px;
     margin: 16px auto;
+  }
+
+  #ruleEditorContent {
+    width: 100%;
+    max-width: 100%;
   }
 
   /* Rules table: allow horizontal scroll */
