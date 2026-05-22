@@ -2,8 +2,8 @@
 
 html {
   --poolpro-accent-gradient: linear-gradient(135deg, rgba(105, 20, 14, 0.92), rgba(32, 40, 52, 0.92));
-  background-color: #69140e; /* top red band */
-  background-image: linear-gradient(#69140e, #69140e), linear-gradient(#666, #666);
+  background-color: #666;
+  background-image: var(--poolpro-accent-gradient), linear-gradient(#666, #666);
   background-repeat: no-repeat, no-repeat;
   background-position: top, bottom;
   background-size: 100% calc(120px + env(safe-area-inset-top, 0px)), 100% calc(120px + env(safe-area-inset-bottom, 0px));
@@ -2678,12 +2678,18 @@ body.dark-mode .help-text {
   }
 
   .training-main {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     margin: 16px auto;
     padding: 0 10px;
     gap: 24px;
   }
 
   .card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
     padding: 16px;
   }
 
@@ -2716,6 +2722,29 @@ body.dark-mode .help-text {
   .form-row,
   .admin-form-cols {
     gap: 12px;
+  }
+
+  #trainingSignupForm {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  #trainingSignupForm .form-row {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  #trainingSignupForm .form-group {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  #trainingSignupForm input,
+  #trainingSignupForm select {
+    width: 100%;
+    max-width: 100%;
   }
 
   .form-group {
@@ -2978,7 +3007,55 @@ body.dark-mode .training-schedule-table thead th {
   margin-right: 10px;
 }
 
+#settingsModal.lifeguard-settings-view {
+  width: min(520px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  height: auto;
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+}
+
+#settingsModal.lifeguard-settings-view .settings-modal-content {
+  height: auto;
+  min-height: 0;
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+}
+
+#settingsModal.lifeguard-settings-view .settings-modal-scroll {
+  flex: 0 1 auto;
+}
+
+#settingsModal.lifeguard-settings-view .account-management-section {
+  margin-top: 0;
+}
+
+#settingsModal.lifeguard-settings-view .account-management-section .settings-section-toggle {
+  pointer-events: none;
+  cursor: default;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#settingsModal.lifeguard-settings-view .account-management-section .settings-section-caret {
+  display: none;
+}
+
+#settingsModal.lifeguard-settings-view .account-management-section .settings-section-body,
+#settingsModal.lifeguard-settings-view .account-management-section .settings-section-body-inner {
+  max-height: none;
+  opacity: 1;
+  transform: none;
+  overflow: visible;
+}
+
 @media (max-width: 768px) {
+  #settingsModal.lifeguard-settings-view {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    height: auto;
+  }
+
   #settingsModal .settings-modal-content {
     max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
   }

@@ -224,7 +224,8 @@ function getResponsiveTableMinWidth(table) {
   if (table.matches('.employee-table')) return '980px';
   if (table.matches('.sanitation-table--settings')) return '420px';
   if (table.matches('.sanitation-table')) return '700px';
-  if (table.matches('.resource-table')) return '980px';
+  if (table.matches('.resource-table-admin')) return '980px';
+  if (table.matches('.resource-table')) return '760px';
   return '720px';
 }
 
@@ -316,16 +317,35 @@ function observeResponsiveTables() {
 // SETTINGS MODAL
 // ============================================================
 
+function showSharedModalOverlay() {
+  const overlay = document.getElementById('settingsOverlay');
+  if (!overlay) return;
+  overlay.style.display = 'block';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function hideSharedModalOverlayIfUnused() {
+  const overlay = document.getElementById('settingsOverlay');
+  if (!overlay) return;
+  const settingsModal = document.getElementById('settingsModal');
+  const feedbackModal = document.getElementById('feedbackModal');
+  const settingsOpen = settingsModal?.classList.contains('visible');
+  const feedbackOpen = feedbackModal?.classList.contains('visible');
+  if (settingsOpen || feedbackOpen) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => {
+    if (!settingsModal?.classList.contains('visible') && !feedbackModal?.classList.contains('visible')) {
+      overlay.style.display = 'none';
+    }
+  }, 250);
+}
+
 window.openSettings = function () {
   ensureAccountManagementSection();
   updateSettingsModalForRole();
   const modal = document.getElementById('settingsModal');
-  const overlay = document.getElementById('settingsOverlay');
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
-  if (overlay) {
-    overlay.style.display = 'block';
-    requestAnimationFrame(() => overlay.classList.add('visible'));
-  }
+  showSharedModalOverlay();
   if (modal) {
     modal.style.display = 'block';
     requestAnimationFrame(() => modal.classList.add('visible'));
@@ -581,20 +601,21 @@ function setupAccountManagement() {
 
 window.closeSettings = function () {
   const modal = document.getElementById('settingsModal');
-  const overlay = document.getElementById('settingsOverlay');
   if (modal) {
     modal.classList.remove('visible');
     setTimeout(() => { modal.style.display = 'none'; }, 250);
   }
-  if (overlay) {
-    overlay.classList.remove('visible');
-    setTimeout(() => { overlay.style.display = 'none'; }, 250);
-  }
+  setTimeout(hideSharedModalOverlayIfUnused, 250);
 };
 
 // Close settings modal when clicking the overlay
 document.addEventListener('click', (e) => {
   if (e.target && e.target.id === 'settingsOverlay') {
+    const feedbackModal = document.getElementById('feedbackModal');
+    if (feedbackModal?.classList.contains('visible')) {
+      window.closeModal();
+      return;
+    }
     window.closeSettings();
   }
 });
@@ -865,6 +886,7 @@ window.closeModal = function () {
   modal.classList.remove('visible');
   setTimeout(() => {
     modal.style.display = 'none';
+    hideSharedModalOverlayIfUnused();
   }, 250);
   const supSection = document.getElementById('supervisorNotifySection');
   if (supSection) supSection.style.display = 'none';
@@ -1460,6 +1482,7 @@ function setupChemForm() {
 
         feedbackModal.dataset.majorItems = majorLines.join('\n');
         modalContent.innerHTML = html;
+        showSharedModalOverlay();
         feedbackModal.style.display = 'block';
         requestAnimationFrame(() => feedbackModal.classList.add('visible'));
       } else {
@@ -2965,15 +2988,23 @@ function buildResourceRowCells(item, includeActions = false) {
     nameHtml = nameText;
   }
 
-  const row = `
+  if (!includeActions) {
+    return `
+      <td>${nameHtml}</td>
+      <td>${item.pool || '—'}</td>
+      <td>${item.description || '—'}</td>
+      <td>${formatResourceDate(item.uploadDate, item.uploadedAt)}</td>
+    `;
+  }
+
+  return `
     <td>${nameHtml}</td>
     <td>${formatResourceDate(item.uploadDate, item.uploadedAt)}</td>
     <td>${item.description || '—'}</td>
     <td>${getResourceMarket(item) || '—'}</td>
     <td>${item.pool || '—'}</td>
-    ${includeActions ? '<td class="actions-cell"></td>' : ''}
+    <td class="actions-cell"></td>
   `;
-  return row;
 }
 
 function renderResourcesPageTable() {
@@ -2987,7 +3018,7 @@ function renderResourcesPageTable() {
   });
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
     return;
   }
 
