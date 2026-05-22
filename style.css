@@ -1517,7 +1517,7 @@ button:active,
     width: 20%;   /* Bleach / Granular */
 }
 
-/* Settings sanitation table: Facility | Pool | Bleach | Granular | Tablet | Off */
+/* Settings sanitation table: Facility | Pool | Bleach | Granular | Tablet | No Changes */
 .sanitation-table--settings th:nth-child(1),
 .sanitation-table--settings td:nth-child(1) {
     width: 26%;
@@ -4173,6 +4173,11 @@ body.dark-mode .dash-respondent-tooltip {
   width: 1% !important;
   min-width: 76px;
   text-align: center !important;
+}
+
+.sanitation-settings-scroll > .sanitation-table--settings th:nth-child(6),
+.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(6) {
+  min-width: 112px;
 }
 
 .sanitation-settings-scroll .market-filter-checkbox {

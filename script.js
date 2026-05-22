@@ -1533,6 +1533,7 @@ function setupChemForm() {
 
 let allLogs = [];
 let sanitationSelections = {}; // poolId::poolIdx -> 'bleach' | 'granular' | 'tablet' | 'off'
+const PH_RULE_METHODS = ['muriaticAcid', 'noChanges'];
 let dashboardPoolFilter = 'all';
 let dashboardDateFilter = getTodayDateValue();
 let dashboardChemPage = 1;
@@ -1581,8 +1582,12 @@ function getSanitationMethodLabel(method) {
     bleach: 'Bleach',
     granular: 'Granular',
     tablet: 'Tablet',
-    off: 'Off',
+    off: 'No Changes',
   }[method] || 'Bleach';
+}
+
+function getPhRuleMethodForSanitation(method) {
+  return method === 'off' ? 'noChanges' : 'muriaticAcid';
 }
 
 function getFacilityPoolLabel(poolDoc, poolIdx) {
@@ -1626,12 +1631,23 @@ function normalizePoolRules(poolDoc) {
         ...acc,
         ...(poolRules[method]?.ph || {}),
       }), {});
+      const phMethods = Object.fromEntries(
+        PH_RULE_METHODS.map((method) => {
+          const hasPhMethod = !!poolRules.phMethods?.[method];
+          const directPh = poolRules.phMethods?.[method]?.ph || {};
+          return [
+            method,
+            { ph: hasPhMethod ? directPh : sharedPh },
+          ];
+        })
+      );
       const fallbackCl = methods
         .map(method => poolRules[method]?.cl || {})
         .find(cl => Object.keys(cl).length > 0) || {};
 
       return {
         ...poolRules,
+        phMethods,
         bleach: poolRules.bleach || { ph: sharedPh, cl: fallbackCl },
         granular: poolRules.granular || { ph: sharedPh, cl: fallbackCl },
         tablet: poolRules.tablet || { ph: sharedPh, cl: fallbackCl },
@@ -1655,7 +1671,16 @@ function normalizePoolRules(poolDoc) {
         cl[rk] = { response: poolDoc[key], concernLevel: poolDoc[`${key}_level`] || 'none' };
       }
     });
-    pools.push({ bleach: { ph, cl }, granular: { ph, cl }, tablet: { ph, cl }, off: { ph, cl } });
+    pools.push({
+      phMethods: {
+        muriaticAcid: { ph },
+        noChanges: { ph },
+      },
+      bleach: { ph, cl },
+      granular: { ph, cl },
+      tablet: { ph, cl },
+      off: { ph, cl },
+    });
   }
   return pools;
 }
@@ -1665,6 +1690,14 @@ function getRuleForReading(poolRules, poolIdx, method, type, submittedValue) {
   const key = type === 'ph' ? phToRuleKey(submittedValue) : clToRuleKey(submittedValue);
   if (!key) return null;
   const poolRuleSet = poolRules?.[poolIdx] || {};
+  if (type === 'ph' && poolRuleSet.phMethods) {
+    const phMethod = getPhRuleMethodForSanitation(method);
+    const phMethodRules = poolRuleSet.phMethods?.[phMethod];
+    if (phMethodRules) return phMethodRules.ph?.[key] || null;
+    return poolRuleSet.phMethods?.muriaticAcid?.ph?.[key] ||
+      poolRuleSet[method]?.ph?.[key] ||
+      null;
+  }
   const selectedRules = poolRuleSet[method] || {};
   return selectedRules?.[type]?.[key] || null;
 }
@@ -3608,7 +3641,7 @@ function renderSanitationTables(container) {
 
   const table = document.createElement('table');
   table.className = 'sanitation-table sanitation-table--settings';
-  table.innerHTML = '<thead><tr><th>Facility</th><th>Pool</th><th>Bleach</th><th>Granular</th><th>Tablet</th><th>Off</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>Facility</th><th>Pool</th><th>Bleach</th><th>Granular</th><th>Tablet</th><th>No Changes</th></tr></thead>';
   const tbody = document.createElement('tbody');
 
   const filteredRows = rows.filter(({ market }) => sanitationMarketFilter === 'all' || market === sanitationMarketFilter);

@@ -491,8 +491,9 @@ body.dark-mode .pool-rule-block {
   margin: 0 !important;
 }
 
-/* Sanitation tabs sit inside the Cl table wrapper, above chlorine rows */
-.sanitation-tabs {
+/* Rule tabs sit above their corresponding pH or Cl rows */
+.sanitation-tabs,
+.ph-rule-tabs {
   display: flex;
   align-items: stretch;
   border-bottom: 2px solid #69140e;
