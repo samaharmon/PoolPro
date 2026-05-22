@@ -491,7 +491,7 @@ body.dark-mode .pool-rule-block {
   margin: 0 !important;
 }
 
-/* Bleach / Granular tabs — now inside .table-wrapper, above table rows */
+/* Sanitation tabs sit inside the Cl table wrapper, above chlorine rows */
 .sanitation-tabs {
   display: flex;
   align-items: stretch;

@@ -1717,6 +1717,76 @@ function ensureEditorAccessibility() {
 
 // ---- Copy Existing Rules ----
 
+function cloneRuleMap(ruleMap = {}) {
+  return JSON.parse(JSON.stringify(ruleMap || {}));
+}
+
+function hasRuleEntries(ruleMap = {}) {
+  return Object.keys(ruleMap || {}).length > 0;
+}
+
+function getSanitationMethodLabel(method) {
+  return {
+    bleach: 'Bleach',
+    granular: 'Granular',
+    tablet: 'Tablet',
+    off: 'Off',
+  }[method] || 'Bleach';
+}
+
+async function getLatestPoolForCopy(poolId) {
+  let fallbackPool = poolsCache.find(p => p.id === poolId) || null;
+
+  try {
+    poolsCache = await getPools();
+    fallbackPool = poolsCache.find(p => p.id === poolId) || fallbackPool;
+  } catch (err) {
+    console.warn('Unable to fetch the latest pool rules for copy; using cached rules.', err);
+  }
+
+  return fallbackPool;
+}
+
+function getRulesForMethodCopy(sourcePoolRules = {}, method = 'bleach') {
+  const sourceHasLegacyShape = sourcePoolRules.ph || sourcePoolRules.cl;
+  const hasMethodDoc = !!sourcePoolRules[method];
+  const methodDoc = hasMethodDoc ? sourcePoolRules[method] : (sourceHasLegacyShape ? sourcePoolRules : {});
+
+  const sharedPh = {
+    ...(sourceHasLegacyShape ? sourcePoolRules.ph || {} : {}),
+    ...SANITATION_METHODS.reduce((acc, methodName) => ({
+      ...acc,
+      ...(sourcePoolRules[methodName]?.ph || {}),
+    }), {}),
+  };
+  const directCl = methodDoc.cl || {};
+  const fallbackCl = SANITATION_METHODS
+    .map(methodName => sourcePoolRules[methodName]?.cl || {})
+    .find(hasRuleEntries) || (sourceHasLegacyShape ? sourcePoolRules.cl || {} : {});
+  const clSource = hasMethodDoc || sourceHasLegacyShape ? directCl : fallbackCl;
+
+  return {
+    ph: cloneRuleMap(sharedPh),
+    cl: cloneRuleMap(clSource),
+  };
+}
+
+function getRulesForCopyPool(pool, blockIdx) {
+  const rulesForPools = pool?.rules?.pools || [];
+  if (rulesForPools.length) return rulesForPools[blockIdx] || null;
+
+  const legacyRules = extractLegacyRulesFromDoc(pool?.rawData || pool, blockIdx + 1);
+  return Object.fromEntries(
+    SANITATION_METHODS.map(method => [
+      method,
+      {
+        ph: cloneRuleMap(legacyRules.ph),
+        cl: cloneRuleMap(legacyRules.cl),
+      },
+    ])
+  );
+}
+
 function populateCopyRulesLocationSelects() {
   const locationSelects = document.querySelectorAll('.copy-rules-location');
   if (!locationSelects.length) return;
@@ -1755,14 +1825,14 @@ function wireCopyRulesDropdowns() {
     const copyBtn = document.querySelector(`.copy-rules-btn[data-pool-index="${poolIndex}"]`);
     if (!blockSelect || !copyBtn) return;
 
-    locationSelect.addEventListener('change', () => {
+    locationSelect.addEventListener('change', async () => {
       const poolId = locationSelect.value;
       blockSelect.innerHTML = '<option value="">— Rule block —</option>';
       blockSelect.disabled = true;
       copyBtn.disabled = true;
       if (!poolId) return;
 
-      const pool = poolsCache.find(p => p.id === poolId);
+      const pool = await getLatestPoolForCopy(poolId);
       if (!pool) return;
 
       const rulesForPools = pool.rules?.pools || [];
@@ -1784,45 +1854,54 @@ function wireCopyRulesDropdowns() {
       copyBtn.disabled = false;
     });
 
-    copyBtn.addEventListener('click', () => {
+    copyBtn.addEventListener('click', async () => {
       const poolId = locationSelect.value;
       if (!poolId || blockSelect.value === '') return;
 
       const blockIdx = Number(blockSelect.value);
-      const pool = poolsCache.find(p => p.id === poolId);
-      if (!pool) return;
-
-      const rulesForPools = pool.rules?.pools || [];
-      const sourcePoolRules = rulesForPools[blockIdx];
-      if (!sourcePoolRules) return;
-
       const targetBlock = document.querySelector(`.pool-rule-block[data-pool-index="${poolIndex}"]`);
       if (!targetBlock) return;
 
-      const state = getOrCreatePoolRuleState(poolIndex);
-      const sharedPh = SANITATION_METHODS.reduce((acc, method) => ({
-        ...acc,
-        ...(sourcePoolRules[method]?.ph || {}),
-      }), {});
-      const fallbackCl = SANITATION_METHODS
-        .map(method => sourcePoolRules[method]?.cl || {})
-        .find(cl => Object.keys(cl).length > 0) || {};
-
-      SANITATION_METHODS.forEach((method) => {
-        const methodCl = sourcePoolRules[method]?.cl || {};
-        state[method] = {
-          ph: JSON.parse(JSON.stringify(sharedPh)),
-          cl: JSON.parse(JSON.stringify(Object.keys(methodCl).length > 0 ? methodCl : fallbackCl)),
-        };
-      });
-
       const activeMethod = targetBlock.dataset.activeMethod || 'bleach';
-      showRulesForMethod(targetBlock, activeMethod);
-
-      locationSelect.value = '';
-      blockSelect.innerHTML = '<option value="">— Rule block —</option>';
-      blockSelect.disabled = true;
+      const originalText = copyBtn.textContent;
       copyBtn.disabled = true;
+      copyBtn.textContent = 'Copying...';
+
+      try {
+        const pool = await getLatestPoolForCopy(poolId);
+        if (!pool) {
+          showMessage('Could not find the selected pool to copy from.', 'error');
+          return;
+        }
+
+        const sourcePoolRules = getRulesForCopyPool(pool, blockIdx);
+        if (!sourcePoolRules) {
+          showMessage('No saved rule block was found for that pool.', 'error');
+          return;
+        }
+
+        const state = getOrCreatePoolRuleState(poolIndex);
+        const copiedRules = getRulesForMethodCopy(sourcePoolRules, activeMethod);
+
+        SANITATION_METHODS.forEach((method) => {
+          if (!state[method]) state[method] = createEmptyMethodRules();
+          state[method].ph = cloneRuleMap(copiedRules.ph);
+        });
+        state[activeMethod].cl = cloneRuleMap(copiedRules.cl);
+
+        showRulesForMethod(targetBlock, activeMethod);
+        showMessage(`${getSanitationMethodLabel(activeMethod)} rules copied into Pool ${poolIndex}.`, 'success');
+
+        locationSelect.value = '';
+        blockSelect.innerHTML = '<option value="">— Rule block —</option>';
+        blockSelect.disabled = true;
+      } catch (err) {
+        console.error('Error copying rules:', err);
+        showMessage(`Could not copy rules: ${err?.message || String(err)}`, 'error');
+      } finally {
+        copyBtn.textContent = originalText;
+        copyBtn.disabled = !locationSelect.value || blockSelect.value === '';
+      }
     });
   });
 }
