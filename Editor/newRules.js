@@ -10,10 +10,10 @@ window.currentEditorMode = currentEditorMode;
 // Safety alias in case any older inline handler references the typo:
 window.CurrentEditorMide = window.currentEditorMode;
 
-// ---- Per‑sanitation rule state ----
-const SANITATION_METHODS = ['bleach', 'granular', 'tablet'];
+// ---- Per-sanitation rule state ----
+const SANITATION_METHODS = ['bleach', 'granular', 'tablet', 'off'];
 
-// ruleStateByPool[poolIndex] = { bleach: { ph:{}, cl:{} }, granular: { ph:{}, cl:{} } }
+// ruleStateByPool[poolIndex] = { bleach: { ph:{}, cl:{} }, granular: { ph:{}, cl:{} }, tablet: { ph:{}, cl:{} }, off: { ph:{}, cl:{} } }
 const ruleStateByPool = {};
 
 // ---------- Rockbridge preset handling ----------
@@ -29,6 +29,30 @@ function escapeHtmlUnsafe(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function showMessage(message, type = 'info') {
+  const content = document.getElementById('ruleEditorContent') || document.body;
+  let messageEl = document.getElementById('editorMessage');
+
+  if (!messageEl) {
+    messageEl = document.createElement('div');
+    messageEl.id = 'editorMessage';
+    messageEl.className = 'editor-message';
+    const anchor = document.getElementById('editorModeRow') || content.firstElementChild;
+    if (anchor?.parentNode) anchor.parentNode.insertBefore(messageEl, anchor.nextSibling);
+    else content.prepend(messageEl);
+  }
+
+  const normalizedType = type === true ? 'error' : (type || 'info');
+  messageEl.textContent = String(message || '');
+  messageEl.dataset.type = normalizedType;
+  messageEl.classList.add('visible');
+
+  clearTimeout(showMessage.hideTimer);
+  showMessage.hideTimer = window.setTimeout(() => {
+    messageEl.classList.remove('visible');
+  }, 5000);
 }
 
 function getResponseFields(block, poolIndex) {
@@ -209,6 +233,7 @@ function getOrCreatePoolRuleState(poolIndex) {
       bleach: createEmptyMethodRules(),
       granular: createEmptyMethodRules(),
       tablet: createEmptyMethodRules(),
+      off: createEmptyMethodRules(),
     };
   }
   return ruleStateByPool[poolIndex];
@@ -234,7 +259,7 @@ function captureRulesFromBlock(block, method) {
     };
   });
 
-  // 🔁 pH is shared across ALL sanitation methods (Bleach + Granular).
+  // pH is shared across all sanitation methods.
   // Whatever is on screen right now becomes the single source of truth
   // for pH for this pool, regardless of which tab is active.
   SANITATION_METHODS.forEach((m) => {
@@ -242,7 +267,7 @@ function captureRulesFromBlock(block, method) {
     state[m].ph = JSON.parse(JSON.stringify(methodRules.ph));
   });
 
-  // 💧 Chlorine rules remain method‑specific.
+  // Chlorine rules remain method-specific.
   if (!state[method]) state[method] = createEmptyMethodRules();
   state[method].cl = JSON.parse(JSON.stringify(methodRules.cl));
 }
@@ -255,9 +280,9 @@ function showRulesForMethod(block, method) {
   const poolIndex = block.dataset.poolIndex;
   const state = getOrCreatePoolRuleState(poolIndex);
 
-  // If switching to granular or tablet and their Cl rules are empty,
+  // If switching to another method and its Cl rules are empty,
   // clone bleach Cl rules so the user never sees a blank Cl section by default.
-  if (method === 'granular' || method === 'tablet') {
+  if (method !== 'bleach') {
     const bleach     = state.bleach   || createEmptyMethodRules();
     const methodData = state[method]  || createEmptyMethodRules();
 
@@ -506,7 +531,7 @@ async function maybeMigrateLegacyRules(poolDoc) {
   const existing = poolDoc.rules?.pools || [];
 
   // If we already have rules in the new shape, nothing to do
-  if (Array.isArray(existing) && existing.some(p => p && (p.bleach || p.granular))) {
+  if (Array.isArray(existing) && existing.some(p => p && SANITATION_METHODS.some(method => p[method]))) {
     return poolDoc;
   }
 
@@ -520,20 +545,21 @@ async function maybeMigrateLegacyRules(poolDoc) {
       (legacy.cl && Object.keys(legacy.cl).length);
 
     if (!hasAny) {
-      migratedPools.push({ bleach: { ph: {}, cl: {} }, granular: { ph: {}, cl: {} } });
+      migratedPools.push(Object.fromEntries(
+        SANITATION_METHODS.map(method => [method, { ph: {}, cl: {} }])
+      ));
       continue;
     }
 
-    migratedPools.push({
-      bleach: {
-        ph: legacy.ph || {},
-        cl: legacy.cl || {},
-      },
-      granular: {
-        ph: legacy.ph || {},
-        cl: legacy.cl || {},
-      },
-    });
+    migratedPools.push(Object.fromEntries(
+      SANITATION_METHODS.map(method => [
+        method,
+        {
+          ph: legacy.ph || {},
+          cl: legacy.cl || {},
+        },
+      ])
+    ));
   }
 
   const newRules = { pools: migratedPools };
@@ -597,7 +623,7 @@ async function loadPoolIntoEditor(poolDoc) {
     });
   }
 
-  // Load rules for each pool (bleach + granular) into editor state
+  // Load rules for each pool into editor state.
   const rulesForPools = normalizedDoc.rules?.pools || [];
   const blocks = document.querySelectorAll(poolRuleContainerSelector);
 
@@ -606,25 +632,22 @@ async function loadPoolIntoEditor(poolDoc) {
     const state = getOrCreatePoolRuleState(poolIndex);
     const fromDoc = rulesForPools[idx] || {};
 
-    if (fromDoc.bleach || fromDoc.granular || fromDoc.tablet) {
-      const sharedPh = {
-        ...(fromDoc.bleach?.ph || {}),
-        ...(fromDoc.granular?.ph || {}),
-        ...(fromDoc.tablet?.ph || {}),
-      };
+    if (SANITATION_METHODS.some(method => fromDoc[method])) {
+      const sharedPh = SANITATION_METHODS.reduce((acc, method) => ({
+        ...acc,
+        ...(fromDoc[method]?.ph || {}),
+      }), {});
+      const fallbackCl = SANITATION_METHODS
+        .map(method => fromDoc[method]?.cl || {})
+        .find(cl => Object.keys(cl).length > 0) || {};
 
-      state.bleach = {
-        ph: sharedPh,
-        cl: fromDoc.bleach?.cl || {},
-      };
-      state.granular = {
-        ph: sharedPh,
-        cl: fromDoc.granular?.cl || {},
-      };
-      state.tablet = {
-        ph: sharedPh,
-        cl: fromDoc.tablet?.cl || fromDoc.granular?.cl || {},
-      };
+      SANITATION_METHODS.forEach((method) => {
+        const methodCl = fromDoc[method]?.cl || {};
+        state[method] = {
+          ph: JSON.parse(JSON.stringify(sharedPh)),
+          cl: JSON.parse(JSON.stringify(Object.keys(methodCl).length > 0 ? methodCl : fallbackCl)),
+        };
+      });
     }
 
     applyRuleToInputs(block, state.bleach); // default view: bleach
@@ -711,6 +734,7 @@ function readEditorToObject() {
       bleach: state.bleach || createEmptyMethodRules(),
       granular: state.granular || createEmptyMethodRules(),
       tablet: state.tablet || createEmptyMethodRules(),
+      off: state.off || createEmptyMethodRules(),
       poolName,
     });
   });
@@ -908,7 +932,7 @@ function setBlockEditing(block, isEditing) {
   }
 }
 
-// Sync the contents of one pool block back into the in‑memory rule state
+// Sync the contents of one pool block back into the in-memory rule state.
 function syncBlockIntoState(block) {
   const poolIndex = block.dataset.poolIndex;
   if (!poolIndex) return;
@@ -931,7 +955,7 @@ function syncBlockIntoState(block) {
     };
   });
 
-  // Write back into the correct method (bleach / granular)
+  // Write back into the currently selected sanitation method.
   state[activeMethod] = methodState;
 }
  
@@ -1211,43 +1235,29 @@ async function cloneRockbridgePresets() {
     // Pick the Rockbridge pool rules to clone into this block
     const fromDoc = rulesArray[idx] || rulesArray[0] || {};
 
-    // Support both the new {bleach, granular} shape and the older {ph, cl} shape
-    const bleachDoc   = fromDoc.bleach || fromDoc || {};
-    const granularDoc = fromDoc.granular || {};
+    // Support both the new per-method shape and the older {ph, cl} shape.
+    const methodDocs = Object.fromEntries(
+      SANITATION_METHODS.map(method => [method, fromDoc[method] || (method === 'bleach' ? fromDoc : {})])
+    );
 
-    const bleachPh   = bleachDoc.ph   || {};
-    const bleachCl   = bleachDoc.cl   || {};
-    const granularPh = granularDoc.ph || {};
-    const granularCl = granularDoc.cl || {};
-
-    // pH is shared across methods – merge any separate ph rules
-    const sharedPh = {
-      ...bleachPh,
-      ...granularPh,
-    };
-
-    // If granular has no Cl defined, fall back to bleach Cl
-    const granularClSource =
-      Object.keys(granularCl).length > 0 ?
-        granularCl
-        : bleachCl;
+    // pH is shared across methods. Merge any separate ph rules.
+    const sharedPh = SANITATION_METHODS.reduce((acc, method) => ({
+      ...acc,
+      ...(methodDocs[method]?.ph || {}),
+    }), {});
+    const fallbackCl = SANITATION_METHODS
+      .map(method => methodDocs[method]?.cl || {})
+      .find(cl => Object.keys(cl).length > 0) || {};
 
     const state = getOrCreatePoolRuleState(poolIndex);
 
-    state.bleach = {
-      ph: JSON.parse(JSON.stringify(sharedPh)),
-      cl: JSON.parse(JSON.stringify(bleachCl)),
-    };
-
-    state.granular = {
-      ph: JSON.parse(JSON.stringify(sharedPh)),
-      cl: JSON.parse(JSON.stringify(granularClSource)),
-    };
-
-    state.tablet = {
-      ph: JSON.parse(JSON.stringify(sharedPh)),
-      cl: JSON.parse(JSON.stringify(granularClSource)),
-    };
+    SANITATION_METHODS.forEach((method) => {
+      const methodCl = methodDocs[method]?.cl || {};
+      state[method] = {
+        ph: JSON.parse(JSON.stringify(sharedPh)),
+        cl: JSON.parse(JSON.stringify(Object.keys(methodCl).length > 0 ? methodCl : fallbackCl)),
+      };
+    });
 
     // Default view is Bleach
     showRulesForMethod(block, 'bleach');
@@ -1563,58 +1573,44 @@ function setupDeletePool() {
 
   cancelBtn.addEventListener('click', closeModal);
 
-confirmBtn.addEventListener('click', async () => {
-  if (!currentPoolId) return;
+  confirmBtn.addEventListener('click', async () => {
+    if (!currentPoolId) return;
 
-  // disable button to prevent double-clicks while working
-  confirmBtn.disabled = true;
+    const deletedPoolName = getPoolName(findPoolById(currentPoolId)) || currentPoolId;
+    const originalText = confirmBtn.textContent;
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Deleting...';
 
-  try {
-    // Attempt deletion (deletePoolDoc may return true/false or throw)
-    const result = await deletePoolDoc(currentPoolId);
-
-    // If the helper returns falsey (explicit false or null/undefined),
-    // treat it as a failure and surface a helpful message.
-    if (!result) {
-      console.error('deletePoolDoc indicated failure for id:', currentPoolId, 'result:', result);
-      showMessage('Could not delete pool. Check console for details.', 'error');
-      return;
-    }
-
-    // Success path
-    showMessage('Pool deleted.', 'success');
-
-    // Close modal & remove overlay if those functions exist
     try {
-      if (typeof closeModal === 'function') closeModal();
-    } catch (e) {
-      // non-fatal: log and continue
-      console.warn('Error closing modal / removing overlay after delete:', e);
+      const result = await deletePoolDoc(currentPoolId);
+
+      if (!result) {
+        console.error('deletePoolDoc indicated failure for id:', currentPoolId, 'result:', result);
+        showMessage('Could not delete pool. Check console for details.', 'error');
+        return;
+      }
+
+      closeModal();
+      await refreshPools();
+
+      const poolSelect = document.getElementById('editorPoolSelect');
+      if (poolSelect) poolSelect.value = '';
+      currentPoolId = '';
+
+      const metadataSection = document.getElementById('poolMetadataSection');
+      const ruleSection = document.getElementById('ruleEditorSection');
+      metadataSection?.classList.add('hidden');
+      ruleSection?.classList.add('hidden');
+
+      showMessage(`${deletedPoolName} deleted.`, 'success');
+    } catch (err) {
+      console.error('Error deleting pool:', err);
+      showMessage(`Could not delete pool: ${err?.message || String(err)}`, 'error');
+    } finally {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = originalText;
     }
-
-    // Refresh pools list and UI
-    await refreshPools();
-
-    // Clear selection and current id
-    const poolSelect = document.getElementById('editorPoolSelect');
-    if (poolSelect) poolSelect.value = '';
-    currentPoolId = '';
-
-    // Hide metadata + rules sections (back to pre-edit state)
-    const metadataSection = document.getElementById('poolMetadataSection');
-    const ruleSection = document.getElementById('ruleEditorSection');
-    metadataSection?.classList.add('hidden');
-    ruleSection?.classList.add('hidden');
-
-  } catch (err) {
-    // Unexpected exception (network / Firestore permission / etc.)
-    console.error('Error deleting pool:', err);
-    showMessage(`Could not delete pool: ${err?.message || String(err)}`, 'error');
-  } finally {
-    // always re-enable confirm button
-    confirmBtn.disabled = false;
-  }
-});
+  });
 }
 
 // Utility: make sure rule textareas/selects inside #poolRuleBlocks
@@ -1804,24 +1800,21 @@ function wireCopyRulesDropdowns() {
       if (!targetBlock) return;
 
       const state = getOrCreatePoolRuleState(poolIndex);
-      const sharedPh = {
-        ...(sourcePoolRules.bleach?.ph || {}),
-        ...(sourcePoolRules.granular?.ph || {}),
-        ...(sourcePoolRules.tablet?.ph || {}),
-      };
+      const sharedPh = SANITATION_METHODS.reduce((acc, method) => ({
+        ...acc,
+        ...(sourcePoolRules[method]?.ph || {}),
+      }), {});
+      const fallbackCl = SANITATION_METHODS
+        .map(method => sourcePoolRules[method]?.cl || {})
+        .find(cl => Object.keys(cl).length > 0) || {};
 
-      state.bleach = {
-        ph: JSON.parse(JSON.stringify(sharedPh)),
-        cl: JSON.parse(JSON.stringify(sourcePoolRules.bleach?.cl || {})),
-      };
-      state.granular = {
-        ph: JSON.parse(JSON.stringify(sharedPh)),
-        cl: JSON.parse(JSON.stringify(sourcePoolRules.granular?.cl || {})),
-      };
-      state.tablet = {
-        ph: JSON.parse(JSON.stringify(sharedPh)),
-        cl: JSON.parse(JSON.stringify(sourcePoolRules.tablet?.cl || sourcePoolRules.granular?.cl || {})),
-      };
+      SANITATION_METHODS.forEach((method) => {
+        const methodCl = sourcePoolRules[method]?.cl || {};
+        state[method] = {
+          ph: JSON.parse(JSON.stringify(sharedPh)),
+          cl: JSON.parse(JSON.stringify(Object.keys(methodCl).length > 0 ? methodCl : fallbackCl)),
+        };
+      });
 
       const activeMethod = targetBlock.dataset.activeMethod || 'bleach';
       showRulesForMethod(targetBlock, activeMethod);

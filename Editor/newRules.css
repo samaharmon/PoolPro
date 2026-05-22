@@ -93,6 +93,31 @@
   min-width: 80px;
  }
 
+.editor-message {
+  display: none;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid #666;
+  background: #202834;
+  color: #fff;
+  font-weight: 700;
+}
+
+.editor-message.visible {
+  display: block;
+}
+
+.editor-message[data-type="success"] {
+  border-color: #4f8d5a;
+  background: #243b2b;
+}
+
+.editor-message[data-type="error"],
+.editor-message[data-type="warning"] {
+  border-color: #8f1a12;
+  background: #4a1714;
+}
+
 /* Make the Delete pool button match Edit / Save sizing */
 #poolMetadataSection #deletePoolBtn {
   padding: 6px 12px !important;      /* same vertical/horizontal padding as edit/save */

@@ -1517,7 +1517,7 @@ button:active,
     width: 20%;   /* Bleach / Granular */
 }
 
-/* Settings sanitation table: Facility | Pool | Bleach | Granular | Tablet */
+/* Settings sanitation table: Facility | Pool | Bleach | Granular | Tablet | Off */
 .sanitation-table--settings th:nth-child(1),
 .sanitation-table--settings td:nth-child(1) {
     width: 26%;
@@ -1533,8 +1533,10 @@ button:active,
 .sanitation-table--settings th:nth-child(4),
 .sanitation-table--settings td:nth-child(4),
 .sanitation-table--settings th:nth-child(5),
-.sanitation-table--settings td:nth-child(5) {
-    width: 17%;
+.sanitation-table--settings td:nth-child(5),
+.sanitation-table--settings th:nth-child(6),
+.sanitation-table--settings td:nth-child(6) {
+    width: 13%;
     text-align: center;
 }
 
@@ -3785,7 +3787,11 @@ body.dark-mode .dashboard-tab-panel {
 .sanitation-table.sanitation-table--settings th:nth-child(3),
 .sanitation-table.sanitation-table--settings td:nth-child(3),
 .sanitation-table.sanitation-table--settings th:nth-child(4),
-.sanitation-table.sanitation-table--settings td:nth-child(4) {
+.sanitation-table.sanitation-table--settings td:nth-child(4),
+.sanitation-table.sanitation-table--settings th:nth-child(5),
+.sanitation-table.sanitation-table--settings td:nth-child(5),
+.sanitation-table.sanitation-table--settings th:nth-child(6),
+.sanitation-table.sanitation-table--settings td:nth-child(6) {
   width: auto;
 }
 
@@ -4161,7 +4167,9 @@ body.dark-mode .dash-respondent-tooltip {
 .sanitation-settings-scroll > .sanitation-table--settings th:nth-child(4),
 .sanitation-settings-scroll > .sanitation-table--settings td:nth-child(4),
 .sanitation-settings-scroll > .sanitation-table--settings th:nth-child(5),
-.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(5) {
+.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(5),
+.sanitation-settings-scroll > .sanitation-table--settings th:nth-child(6),
+.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(6) {
   width: 1% !important;
   min-width: 76px;
   text-align: center !important;
@@ -4172,7 +4180,10 @@ body.dark-mode .dash-respondent-tooltip {
   margin: 0 auto;
 }
 
-.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(3) {
+.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(3),
+.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(4),
+.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(5),
+.sanitation-settings-scroll > .sanitation-table--settings td:nth-child(6) {
   text-align: center !important;
 }
 
