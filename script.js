@@ -59,6 +59,7 @@ let sanitationEditing = false;
 let sanitationMarketFilter = 'all';
 const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
+const LIFEGUARD_SESSION_VERIFICATION_VERSION = 1;
 window.trainingSchedule = trainingSchedule;
 window.addEventListener('load', () => {
   document.body.classList.add('page-loaded');
@@ -705,7 +706,11 @@ function getStoredLifeguardSession() {
     const session = JSON.parse(raw);
     const expires = Number(session?.expires || 0);
     const hasIdentity = !!(session?.email || session?.employeeId || session?.username);
-    if (!hasIdentity || !expires || Date.now() >= expires) {
+    const hasVerifiedMarker =
+      session?.emailVerified === true &&
+      Number(session?.verificationVersion || 0) >= LIFEGUARD_SESSION_VERIFICATION_VERSION &&
+      !!session?.verifiedAt;
+    if (!hasIdentity || !hasVerifiedMarker || !expires || Date.now() >= expires) {
       localStorage.removeItem(LIFEGUARD_SESSION_KEY);
       if (localStorage.getItem('chemlogRole') === 'lifeguard') localStorage.removeItem('chemlogRole');
       return null;

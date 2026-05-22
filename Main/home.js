@@ -22,6 +22,7 @@ const ROLE_STORAGE_KEY = 'chemlogRole';
 const VERIFY_CONTEXT_KEY = 'poolproPendingLifeguardVerification';
 const VERIFY_WINDOW_MS = 5 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
+const LIFEGUARD_SESSION_VERIFICATION_VERSION = 1;
 const VERIFY_EMAIL_RESEND_MS = 30 * 1000;
 const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
@@ -374,6 +375,9 @@ function persistLifeguardSession(employee, username) {
   const normalizedEmployee = normalizeEmployeeRecord(employee);
   const session = {
     role: 'lifeguard',
+    emailVerified: true,
+    verificationVersion: LIFEGUARD_SESSION_VERIFICATION_VERSION,
+    verifiedAt: new Date().toISOString(),
     email: normalizedEmployee.email || '',
     employeeId: normalizedEmployee.email || normalizedEmployee.id || '',
     username: normalizeUsername(username || normalizedEmployee.username || ''),
@@ -414,7 +418,11 @@ function getStoredLifeguardSession() {
     const session = JSON.parse(raw);
     const expires = Number(session?.expires || 0);
     const hasIdentity = !!(session?.email || session?.employeeId || session?.username);
-    if (!hasIdentity || !expires || Date.now() >= expires) {
+    const hasVerifiedMarker =
+      session?.emailVerified === true &&
+      Number(session?.verificationVersion || 0) >= LIFEGUARD_SESSION_VERIFICATION_VERSION &&
+      !!session?.verifiedAt;
+    if (!hasIdentity || !hasVerifiedMarker || !expires || Date.now() >= expires) {
       clearLifeguardSession();
       return null;
     }
@@ -720,6 +728,11 @@ async function resumeInterruptedSignup({ username, email, password, accountRef, 
     throw new Error(`That email is already linked to username "${existingUsername}". Sign in with that username, or use "Forgot Password?" to reset the password.`);
   }
 
+  if (auth.currentUser?.emailVerified) {
+    await signOut(auth).catch(() => {});
+    throw new Error('That email is already verified for an existing login. Sign in instead, or use "Forgot Password?" to reset the password.');
+  }
+
   await saveSignupRecords(accountRef, accountData, employeeRecord);
   showSignupVerification(
     username,
@@ -728,7 +741,30 @@ async function resumeInterruptedSignup({ username, email, password, accountRef, 
   );
 }
 
+async function requireVerifiedCurrentUserForAccount(account) {
+  const expectedEmail = (account?.employeeEmail || getAuthEmail(account) || '').trim().toLowerCase();
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Please sign in again and complete email verification before accessing PoolPro.');
+  }
+
+  await currentUser.reload();
+  const refreshedUser = auth.currentUser;
+  const currentEmail = (refreshedUser?.email || '').trim().toLowerCase();
+  if (expectedEmail && currentEmail && currentEmail !== expectedEmail) {
+    await signOut(auth).catch(() => {});
+    clearLifeguardSession();
+    throw new Error('The verified Firebase user does not match this PoolPro account. Sign in again with the correct username.');
+  }
+
+  if (!refreshedUser?.emailVerified) {
+    clearLifeguardSession();
+    throw new Error('Email verification is required before accessing PoolPro.');
+  }
+}
+
 async function finalizeLifeguardAccess({ username, account, target, method }) {
+  await requireVerifiedCurrentUserForAccount(account);
   stopVerifyStatusPoller();
   clearPendingVerificationContext();
 
@@ -830,6 +866,15 @@ function openVerificationView({
   }
 
   if (auth.currentUser?.emailVerified) {
+    if (force || origin === 'create') {
+      setMessage(
+        verifyMessageEl,
+        'This email is already verified for an existing login. For security, sign in instead of creating a new account.',
+        true
+      );
+      signOut(auth).catch(() => {});
+      return;
+    }
     confirmVerifiedEmail().catch((err) => {
       setMessage(verifyMessageEl, err.message || 'Your email is verified, but PoolPro could not finish sign-in yet.', true);
     });
@@ -910,10 +955,16 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
 
 async function sendVerificationEmail({ isResend = false } = {}) {
   if (!pendingVerification) throw new Error('No verification session is active.');
-  const email = pendingVerification.account.employeeEmail || getAuthEmail(pendingVerification.account);
+  const email = (pendingVerification.account.employeeEmail || getAuthEmail(pendingVerification.account) || '').trim().toLowerCase();
   if (!email) throw new Error('This account does not have an email address on file.');
   if (!auth.currentUser) throw new Error('Please sign in again before requesting a verification email.');
-  if (auth.currentUser.emailVerified) throw new Error('This email is already verified. PoolPro should finish sign-in automatically.');
+  await auth.currentUser.reload();
+  const currentEmail = (auth.currentUser?.email || '').trim().toLowerCase();
+  if (currentEmail && currentEmail !== email) {
+    await signOut(auth).catch(() => {});
+    throw new Error('The signed-in Firebase user does not match this PoolPro account. Sign in again before requesting verification.');
+  }
+  if (auth.currentUser.emailVerified) throw new Error('This email is already verified. Sign in with your username to continue.');
   if (isResend && Date.now() < verifyCooldownUntil) {
     const remainingSeconds = Math.ceil((verifyCooldownUntil - Date.now()) / 1000);
     throw new Error(`Please wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending the verification email.`);
@@ -1113,6 +1164,11 @@ async function handleCreateAccountSubmit(event) {
     });
 
     await createUserWithEmailAndPassword(auth, email, password);
+    await auth.currentUser?.reload();
+    if (auth.currentUser?.emailVerified) {
+      await signOut(auth).catch(() => {});
+      throw new Error('This email is already verified for an existing login. Sign in instead of creating a new account.');
+    }
     await saveSignupRecords(accountRef, accountData, employeeRecord);
 
     showSignupVerification(
