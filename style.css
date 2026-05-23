@@ -3377,6 +3377,29 @@ textarea,
   opacity: 1;
 }
 
+#resourceTableSection {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#resourceTableSection .resource-table-scroll-shell {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+#resourceTableSection .resource-table-scroll-wrap {
+  display: block;
+  max-width: 100%;
+  max-height: min(52vh, 520px);
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#resourceTableSection .resource-table-admin {
+  min-width: 980px;
+}
+
 /* Resource doc links */
 .resource-table a,
 #resourcesTableBody a {

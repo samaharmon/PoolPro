@@ -2938,22 +2938,27 @@ function ensureResourcesSettingsSection() {
       </select>
     </div>
     <div id="resourceTableSection" class="sanitation-section overlay-disabled resource-table-section">
-      <table class="employee-table resource-table resource-table-admin">
-        <thead>
-          <tr>
-            <th>Document Name</th>
-            <th>Upload Date</th>
-            <th>Description</th>
-            <th>Market</th>
-            <th>Facility</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody id="resourceTableBody"></tbody>
-      </table>
+      <div class="table-scroll-shell resource-table-scroll-shell">
+        <div class="table-scroll-wrap resource-table-scroll-wrap">
+          <table class="employee-table resource-table resource-table-admin">
+            <thead>
+              <tr>
+                <th>Document Name</th>
+                <th>Upload Date</th>
+                <th>Description</th>
+                <th>Market</th>
+                <th>Facility</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="resourceTableBody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   `;
   employeeSettings.insertAdjacentElement('afterend', section);
+  wrapResponsiveTables(section);
 }
 
 function getPoolMarket(poolName) {
@@ -3221,6 +3226,8 @@ function renderResourcesSettingsTable() {
 
   if (!rows.length) {
     tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
+    const wrapper = tbody.closest('.table-scroll-wrap');
+    if (wrapper) requestAnimationFrame(() => updateTableScrollShadow(wrapper));
     return;
   }
 
@@ -3270,6 +3277,9 @@ function renderResourcesSettingsTable() {
     actionsCell.appendChild(wrap);
     tbody.appendChild(tr);
   });
+
+  const wrapper = tbody.closest('.table-scroll-wrap');
+  if (wrapper) requestAnimationFrame(() => updateTableScrollShadow(wrapper));
 }
 
 function clearResourceForm() {
@@ -3307,6 +3317,15 @@ function readFileAsDataURL(file) {
   });
 }
 
+function isFirebaseStorageCorsError(err) {
+  const message = `${err?.code || ''} ${err?.message || ''}`.toLowerCase();
+  return message.includes('cors')
+    || message.includes('xmlhttprequest')
+    || message.includes('preflight')
+    || message.includes('net::err_failed')
+    || message.includes('firebase storage upload timed out');
+}
+
 async function uploadResourceFile(file) {
   const safeName = `${Date.now()}_${String(file.name || 'resource').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const path = `resources/${safeName}`;
@@ -3314,12 +3333,12 @@ async function uploadResourceFile(file) {
   const refObj = storageRef(storage, path);
   try {
     await Promise.race([
-      uploadBytes(refObj, file),
-      timeoutAfter(12000, 'Firebase Storage upload'),
+      uploadBytes(refObj, file, { contentType: file.type || 'application/octet-stream' }),
+      timeoutAfter(60000, 'Firebase Storage upload'),
     ]);
     const fileUrl = await Promise.race([
       getDownloadURL(refObj),
-      timeoutAfter(12000, 'Firebase Storage download URL'),
+      timeoutAfter(20000, 'Firebase Storage download URL'),
     ]);
     return {
       storagePath: path,
@@ -3329,7 +3348,10 @@ async function uploadResourceFile(file) {
   } catch (err) {
     console.warn('[PoolPro] Storage upload failed for resource.', err);
     if (file.size > 450 * 1024) {
-      throw new Error('Firebase Storage upload is blocked. Configure Storage CORS for poolpro1.vercel.app, then try this file again.');
+      const corsHint = isFirebaseStorageCorsError(err)
+        ? ' The browser is reporting a Firebase Storage CORS/preflight failure, which is controlled by the bucket configuration.'
+        : '';
+      throw new Error(`Firebase Storage upload is blocked.${corsHint} Apply storage-cors.json to gs://chemlog-43c08.appspot.com, then try this file again.`);
     }
     return {
       storagePath: '',
