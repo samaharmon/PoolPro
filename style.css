@@ -3693,7 +3693,7 @@ td.concern-major {
 }
 
 .dashboard-detail-table {
-  --table-min-width: 980px;
+  --table-min-width: 1080px;
 }
 
 .dashboard-cleanliness-table {
@@ -3760,21 +3760,37 @@ td.concern-major {
   margin-right: 0;
 }
 
-/* 5-column widths: Facility Name, pH, Cl, Timestamp, Respondent */
+/* Dashboard widths: Facility Name, pH, Cl, Fill Line/Hose, Bleach Feeder Rate */
 .dashboard-pool-table th:nth-child(1),
-.dashboard-pool-table td:nth-child(1) { width: 26%; }
+.dashboard-pool-table td:nth-child(1) { width: 30%; }
 
 .dashboard-pool-table th:nth-child(2),
-.dashboard-pool-table td:nth-child(2) { width: 10%; }
+.dashboard-pool-table td:nth-child(2) { width: 9%; }
 
 .dashboard-pool-table th:nth-child(3),
-.dashboard-pool-table td:nth-child(3) { width: 10%; }
+.dashboard-pool-table td:nth-child(3) { width: 9%; }
 
 .dashboard-pool-table th:nth-child(4),
-.dashboard-pool-table td:nth-child(4) { width: 28%; }
+.dashboard-pool-table td:nth-child(4) { width: 26%; }
 
 .dashboard-pool-table th:nth-child(5),
 .dashboard-pool-table td:nth-child(5) { width: 26%; }
+
+.dashboard-detail-table th:nth-child(1),
+.dashboard-detail-table td:nth-child(1) { width: 20%; }
+
+.dashboard-detail-table th:nth-child(2),
+.dashboard-detail-table td:nth-child(2) { width: 12%; }
+
+.dashboard-detail-table th:nth-child(3),
+.dashboard-detail-table td:nth-child(3),
+.dashboard-detail-table th:nth-child(4),
+.dashboard-detail-table td:nth-child(4) { width: 9%; }
+
+.dashboard-detail-table th:nth-child(5),
+.dashboard-detail-table td:nth-child(5),
+.dashboard-detail-table th:nth-child(6),
+.dashboard-detail-table td:nth-child(6) { width: 25%; }
 
 body.dark-mode .dashboard-market-heading {
   color: #ff8080;
@@ -3880,6 +3896,193 @@ body.dark-mode .dash-respondent-tooltip {
   background: #333;
   border-color: #555;
   color: #ddd;
+}
+
+.dash-value-cell {
+  position: relative;
+  display: inline-block;
+}
+
+.dash-value-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: bold;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.dash-value-popover {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 350;
+  background: #333;
+  color: #fff;
+  padding: 8px 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  border: 1px solid #69140e;
+  line-height: 1.6;
+  min-width: 190px;
+}
+
+.dash-value-cell.open .dash-value-popover {
+  display: block;
+}
+
+body.dark-mode .dash-value-popover {
+  background: #333;
+  color: #fff;
+  border-color: #69140e;
+}
+
+.operational-status-page-wrap {
+  width: 100%;
+}
+
+.operational-location-field select {
+  width: min(720px, 100%);
+}
+
+.operational-status-grid {
+  width: min(1200px, 100%);
+  display: grid;
+  gap: 18px;
+  margin: 0 auto 18px;
+}
+
+.operational-empty-state {
+  margin: 0;
+  padding: 18px 20px;
+  background: #2d2d2d;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #d8d8d8;
+}
+
+.operational-status-card {
+  background: #2d2d2d;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-top: 4px solid #69140e;
+  padding: 18px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.operational-status-card h3 {
+  margin: 0 0 14px;
+  color: #fff;
+  font-size: 1.25rem;
+}
+
+.operational-control-block + .operational-control-block {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.operational-control-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: #fff;
+  font-weight: bold;
+}
+
+.operational-control-heading small {
+  color: #cfcfcf;
+  font-weight: normal;
+}
+
+.operational-switch-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.operational-switch-option {
+  position: relative;
+  display: inline-flex;
+}
+
+.operational-switch-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.operational-switch-option span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  background: #444;
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.operational-switch-option input:checked + span {
+  background: #69140e;
+  color: #fff;
+  border-color: #ffb5ae;
+}
+
+.operational-switch-option input:focus-visible + span {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.operational-status-actions {
+  width: min(1200px, 100%);
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.operational-status-message {
+  margin: 0;
+  min-height: 1.2em;
+}
+
+.operational-status-message.success {
+  color: #9be29b;
+}
+
+.operational-status-message.error {
+  color: #ff8e8e;
+}
+
+@media (max-width: 768px) {
+  .operational-control-heading {
+    display: block;
+  }
+
+  .operational-control-heading small {
+    display: block;
+    margin-top: 4px;
+  }
+
+  .operational-switch-option {
+    flex: 1 1 calc(50% - 8px);
+  }
+
+  .operational-switch-option span {
+    width: 100%;
+    padding: 0 10px;
+    text-align: center;
+  }
 }
 
 /* Employees: ensure the Add button is the same height as input fields */

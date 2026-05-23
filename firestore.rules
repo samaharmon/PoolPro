@@ -37,6 +37,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Fill line, hose, and bleach feeder operational status updates
+    match /operationalStatusLogs/{logId} {
+      allow read, write: if true;
+    }
+
     // Lifeguard employees who can log in via home screen
     match /employees/{employeeId} {
       allow read, write: if true;

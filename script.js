@@ -113,12 +113,40 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('.dash-value-trigger');
+  document.querySelectorAll('.dash-value-cell.open').forEach((cell) => {
+    if (!trigger || !cell.contains(trigger)) cell.classList.remove('open');
+  });
+  if (!trigger) return;
+  e.preventDefault();
+  trigger.closest('.dash-value-cell')?.classList.toggle('open');
+});
+
 function getPagePrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   parts.pop();
-  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources'];
+  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
   const last = parts[parts.length - 1] || '';
   return subDirs.includes(last) ? '../' : '';
+}
+
+function injectOperationalStatusMenuLinks() {
+  const prefix = getPagePrefix();
+  const isOperationalPage = /\/operational\/operational\.html$/i.test(window.location.pathname);
+
+  document.querySelectorAll('.dropdown-menu').forEach((menu) => {
+    if (menu.querySelector('[data-nav="operational-status"]')) return;
+    const dutiesLink = menu.querySelector('[data-nav="duties"]');
+    if (!dutiesLink) return;
+
+    const link = document.createElement('a');
+    link.href = isOperationalPage ? 'operational.html' : `${prefix}operational/operational.html`;
+    link.className = `dropdown-item${isOperationalPage ? ' active-page' : ''}`;
+    link.dataset.nav = 'operational-status';
+    link.textContent = 'Operational Status Log';
+    dutiesLink.insertAdjacentElement('afterend', link);
+  });
 }
 
 function injectResourcesMenuLinks() {
@@ -127,15 +155,15 @@ function injectResourcesMenuLinks() {
 
   document.querySelectorAll('.dropdown-menu').forEach((menu) => {
     if (menu.querySelector('[data-nav="resources"]')) return;
-    const dutiesLink = menu.querySelector('[data-nav="duties"]');
-    if (!dutiesLink) return;
+    const anchorLink = menu.querySelector('[data-nav="operational-status"]') || menu.querySelector('[data-nav="duties"]');
+    if (!anchorLink) return;
 
     const link = document.createElement('a');
     link.href = isResourcesPage ? 'resources.html' : `${prefix}resources/resources.html`;
     link.className = `dropdown-item${isResourcesPage ? ' active-page' : ''}`;
     link.dataset.nav = 'resources';
     link.textContent = 'Resources';
-    dutiesLink.insertAdjacentElement('afterend', link);
+    anchorLink.insertAdjacentElement('afterend', link);
   });
 }
 
@@ -526,6 +554,7 @@ async function redactDeletedAccountData(context) {
     redactCollectionIdentity('poolSubmissions', identifiers, ['employeeId', 'email', 'submitterEmail', 'username']),
     redactCollectionIdentity('dutySubmissions', identifiers, ['submitterEmail', 'employeeId', 'email', 'username']),
     redactCollectionIdentity('trainingSignups', identifiers, ['employeeId', 'email', 'username']),
+    redactCollectionIdentity('operationalStatusLogs', identifiers, ['employeeId', 'email', 'submitterEmail', 'username']),
     redactTrainingScheduleIdentity(identifiers),
   ]);
 }
@@ -672,7 +701,7 @@ window.logout = async function () {
   } catch (_) { /* ignore */ }
   const _parts = window.location.pathname.split('/').filter(Boolean);
   _parts.pop();
-  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources'];
+  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
   const _last = _parts[_parts.length - 1] || '';
   window.location.href = (_subDirs.includes(_last) ? '../' : '') + 'index.html';
 };
@@ -847,7 +876,7 @@ window.goToEditor = function () {
   // Remove the filename (last element)
   parts.pop();
   // Remove segments that are known subdirectories to find the project root depth
-  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties', 'resources'];
+  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties', 'resources', 'operational'];
   const lastPart = parts[parts.length - 1] || '';
   const stepsUp = subDirs.some(d => d.toLowerCase() === lastPart.toLowerCase()) ? 1 : 0;
   const prefix = stepsUp > 0 ? '../' : '';
@@ -877,7 +906,7 @@ window.goToTrainingSetup = function () {
     sessionStorage.setItem('trainingIntentAdmin', '1');
     const parts = window.location.pathname.split('/').filter(Boolean);
     parts.pop();
-    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources'];
+    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
     const lastPart = parts[parts.length - 1] || '';
     const prefix = subDirs.includes(lastPart) ? '../' : '';
     window.location.href = prefix + 'Training/training.html';
@@ -1198,6 +1227,27 @@ function populatePoolSelects(pools) {
     if (current) dutiesPool.value = current;
   }
 
+  // Operational Status page facility select — grouped by market, value = pool.id
+  const operationalPool = document.getElementById('operationalPoolLocation');
+  if (operationalPool) {
+    const current = operationalPool.value;
+    while (operationalPool.options.length > 1) operationalPool.remove(1);
+    Array.from(operationalPool.querySelectorAll('optgroup')).forEach(g => g.remove());
+    groups.forEach(({ market, pools: mPools }) => {
+      const group = document.createElement('optgroup');
+      group.label = market;
+      mPools.forEach(pool => {
+        const opt = document.createElement('option');
+        opt.value = pool.id;
+        opt.textContent = pool.name || pool.id;
+        group.appendChild(opt);
+      });
+      operationalPool.appendChild(group);
+    });
+    if (current) operationalPool.value = current;
+    renderOperationalStatusLog();
+  }
+
   // Refresh employee pool filter options when pools update
   populateEmployeePoolFilter(employeeMarketFilter);
   refreshResourceControls();
@@ -1281,7 +1331,7 @@ window.setupDropdownVisibility = function () {
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const lastDir = parts.length > 1 ? parts[parts.length - 2] : '';
-  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'resources', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Employees', 'Testing', 'Resources'];
+  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'resources', 'operational', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Employees', 'Testing', 'Resources', 'Operational'];
   return subDirs.includes(lastDir) ? '../' : '';
 }
 
@@ -1376,6 +1426,11 @@ function getLoggedInEmployeeName() {
       String(e.id || '').toLowerCase() === String(empId).toLowerCase()
     );
     if (emp) return { firstName: emp.firstName || '', lastName: emp.lastName || '' };
+  }
+  const sessionFirstName = sessionStorage.getItem('chemlogEmployeeFirstName') || '';
+  const sessionLastName = sessionStorage.getItem('chemlogEmployeeLastName') || '';
+  if (sessionFirstName || sessionLastName) {
+    return { firstName: sessionFirstName, lastName: sessionLastName };
   }
   // Fallback: supervisor name from localStorage if set
   try {
@@ -1584,6 +1639,11 @@ let dashboardDateFilter = getTodayDateValue();
 let dashboardChemPage = 1;
 let dashboardJobPage = 1;
 const DASHBOARD_PAGE_SIZE = 10;
+const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a trickle'];
+const BLEACH_FEEDER_STATUS_OPTIONS = ['Not applicable', 'Off', '0 or L', '1', '1.5', '1.75', '2', '2.25', '2.5', '3', '4', '5', '6', '7', '8', '9', '10'];
+let operationalStatusLogs = [];
+let operationalStatusLatestMap = {};
+let operationalStatusPageReady = false;
 
 async function refreshSanitationSelections() {
   try {
@@ -1812,6 +1872,183 @@ function toDateObject(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function formatTimestampDisplay(value) {
+  const date = toDateObject(value);
+  return date ? date.toLocaleString() : '—';
+}
+
+function formatElapsedSince(value) {
+  const date = toDateObject(value);
+  if (!date) return '—';
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours < 24) return remainingMinutes ? `${hours} hr ${remainingMinutes} min` : `${hours} hr`;
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return remainingHours ? `${days} day ${remainingHours} hr` : `${days} day`;
+}
+
+function getLogRespondentName(log) {
+  const fullName = [log?.firstName, log?.lastName].filter(Boolean).join(' ').trim();
+  return fullName || log?.submitterName || log?.employeeId || log?.submitterEmail || '—';
+}
+
+function normalizeOperationalStatusRecord(rawDoc, idOverride = '') {
+  const data = rawDoc || {};
+  const poolIndex = Number(data.poolIndex ?? data.poolIdx ?? 0);
+  return {
+    id: idOverride || data.id || '',
+    facilityId: (data.facilityId || '').toString().trim(),
+    facilityName: (data.facilityName || data.poolLocation || '').toString().trim(),
+    market: (data.market || '').toString().trim(),
+    poolIndex: Number.isFinite(poolIndex) ? poolIndex : 0,
+    poolLabel: (data.poolLabel || '').toString().trim(),
+    fillStatus: (data.fillStatus || '').toString().trim(),
+    bleachStatus: (data.bleachStatus || '').toString().trim(),
+    firstName: (data.firstName || '').toString().trim(),
+    lastName: (data.lastName || '').toString().trim(),
+    employeeId: (data.employeeId || '').toString().trim(),
+    timestamp: data.timestamp || data.updatedAt || data.createdAt || null,
+  };
+}
+
+function operationalStatusKey(facilityName, poolIdx, type) {
+  return `${String(facilityName || '').trim()}::${Number(poolIdx || 0)}::${type}`;
+}
+
+function refreshOperationalStatusLatestMap() {
+  const next = {};
+  operationalStatusLogs.forEach((log) => {
+    if (!log.facilityName) return;
+    if (log.fillStatus) {
+      const key = operationalStatusKey(log.facilityName, log.poolIndex, 'fill');
+      if (!next[key]) next[key] = log;
+    }
+    if (log.bleachStatus) {
+      const key = operationalStatusKey(log.facilityName, log.poolIndex, 'bleach');
+      if (!next[key]) next[key] = log;
+    }
+  });
+  operationalStatusLatestMap = next;
+}
+
+async function loadOperationalStatusLogs() {
+  try {
+    const q = query(collection(db, 'operationalStatusLogs'), orderBy('timestamp', 'desc'));
+    const snap = await getDocs(q);
+    operationalStatusLogs = snap.docs.map((docSnap) => normalizeOperationalStatusRecord(docSnap.data(), docSnap.id));
+    refreshOperationalStatusLatestMap();
+  } catch (err) {
+    console.error('[PoolPro] Error loading operational status logs:', err);
+    operationalStatusLogs = [];
+    operationalStatusLatestMap = {};
+  }
+  return operationalStatusLogs;
+}
+
+function getLatestOperationalStatus(facilityName, poolIdx, type) {
+  return operationalStatusLatestMap[operationalStatusKey(facilityName, poolIdx, type)] || null;
+}
+
+function getPoolRuleName(poolDoc, poolIdx) {
+  return (poolDoc?.rules?.pools?.[poolIdx]?.poolName || '').toString().trim();
+}
+
+function getPoolSimpleLabel(poolDoc, poolIdx) {
+  return getPoolRuleName(poolDoc, poolIdx) || (poolIdx === 0 ? 'Pool 1 (Main)' : `Pool ${poolIdx + 1}`);
+}
+
+function isBabyPool(poolDoc, poolIdx) {
+  const label = `${getPoolSimpleLabel(poolDoc, poolIdx)} ${poolIdx === 0 ? 'main' : ''}`.toLowerCase();
+  return /\b(baby|wading|kiddie|tot|splash)\b/.test(label);
+}
+
+function getElapsedMs(log) {
+  const date = toDateObject(log?.timestamp);
+  return date ? Math.max(0, Date.now() - date.getTime()) : 0;
+}
+
+function getFillLineConcernLevel(poolDoc, poolIdx, statusLog) {
+  const status = statusLog?.fillStatus || '';
+  const elapsed = getElapsedMs(statusLog);
+  const hour = 60 * 60 * 1000;
+  const minute = 60 * 1000;
+  if (status === 'On full blast') {
+    if (isBabyPool(poolDoc, poolIdx)) {
+      if (elapsed > 25 * minute) return 'major';
+      if (elapsed > 15 * minute) return 'minor';
+      return 'none';
+    }
+    if (elapsed > 2 * hour) return 'major';
+    if (elapsed > hour) return 'minor';
+  }
+  if (status === 'On halfway' && !isBabyPool(poolDoc, poolIdx)) {
+    if (elapsed > 3 * hour) return 'major';
+    if (elapsed >= 2 * hour) return 'minor';
+  }
+  return 'none';
+}
+
+function bleachStatusToNumber(status) {
+  if (status === '0 or L') return 0;
+  const num = Number(status);
+  return Number.isFinite(num) ? num : null;
+}
+
+function getBleachFeederConcernLevel(statusLog) {
+  const status = statusLog?.bleachStatus || '';
+  if (!status || status === 'Not applicable' || status === 'Off') return 'none';
+  const value = bleachStatusToNumber(status);
+  if (value === null) return 'none';
+  const elapsed = getElapsedMs(statusLog);
+  const hour = 60 * 60 * 1000;
+  const outOfRange = value > 2 || value < 1.5;
+  if (!outOfRange) return 'none';
+  if (elapsed > 4 * hour) return 'major';
+  if (elapsed > 2 * hour) return 'minor';
+  return 'none';
+}
+
+function createDashboardValueControl({ value, log, includeElapsed = false }) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'dash-value-cell';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'dash-value-trigger';
+  button.textContent = value || '—';
+  wrapper.appendChild(button);
+
+  const popover = document.createElement('div');
+  popover.className = 'dash-value-popover';
+  const rows = [
+    ['Timestamp', formatTimestampDisplay(log?.timestamp)],
+    ['Respondent', getLogRespondentName(log)],
+  ];
+  if (includeElapsed) rows.push(['Time Elapsed', formatElapsedSince(log?.timestamp)]);
+  popover.innerHTML = rows.map(([label, rowValue]) =>
+    `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(rowValue)}</div>`
+  ).join('');
+  wrapper.appendChild(popover);
+  return wrapper;
+}
+
+function fillDashboardValueCell(cell, { value, log, concern = 'none', includeElapsed = false } = {}) {
+  if (!cell) return;
+  cell.innerHTML = '';
+  cell.className = concernClass(concern);
+  cell.appendChild(createDashboardValueControl({ value: value || '—', log, includeElapsed }));
+}
+
+function getLatestChemistryLogForPool(logs, facilityName, poolIdx) {
+  const fields = poolFieldNames(poolIdx);
+  return logs.find((log) => log.poolLocation === facilityName && (log?.[fields.ph] || log?.[fields.cl])) || null;
+}
+
 function isDashboardDate(value, dateFilter) {
   const date = toDateObject(value);
   if (!date || !dateFilter) return false;
@@ -1985,6 +2222,7 @@ async function loadDashboardData() {
     const q = query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'));
     const snap = await getDocs(q);
     allLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    await loadOperationalStatusLogs();
 
     renderDashboard(allLogs);
   } catch (err) {
@@ -2102,8 +2340,8 @@ function renderChemistryPoolDetail(container, logs, poolDoc) {
       <th>Pool</th>
       <th>pH</th>
       <th>Cl</th>
-      <th>Timestamp</th>
-      <th>Respondent</th>
+      <th>Fill Line/Hose</th>
+      <th>Bleach Feeder Rate</th>
     </tr></thead>
   `;
   const tbody = document.createElement('tbody');
@@ -2114,17 +2352,34 @@ function renderChemistryPoolDetail(container, logs, poolDoc) {
     pageRows.forEach(({ log, poolIdx, phVal, clVal }) => {
       const phConcern = phVal ? getPhConcernLevel(facilityName, poolIdx, phVal) : 'none';
       const clConcern = clVal ? getClConcernLevel(facilityName, poolIdx, clVal) : 'none';
-      const tsDate = toDateObject(log?.timestamp);
+      const fillLog = getLatestOperationalStatus(facilityName, poolIdx, 'fill');
+      const bleachLog = getLatestOperationalStatus(facilityName, poolIdx, 'bleach');
+      const fillConcern = getFillLineConcernLevel(poolDoc, poolIdx, fillLog);
+      const bleachConcern = getBleachFeederConcernLevel(bleachLog);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHtml(facilityName)}</td>
         <td>Pool ${poolIdx + 1}</td>
-        <td class="${concernClass(phConcern)}">${escapeHtml(phVal || '—')}</td>
-        <td class="${concernClass(clConcern)}">${escapeHtml(clVal || '—')}</td>
-        <td>${tsDate ? tsDate.toLocaleString() : '—'}</td>
+        <td></td>
+        <td></td>
+        <td></td>
         <td></td>
       `;
-      fillDashboardRespondentCell(tr.querySelector('td:last-child'), log);
+      const cells = tr.querySelectorAll('td');
+      fillDashboardValueCell(cells[2], { value: phVal || '—', log, concern: phConcern });
+      fillDashboardValueCell(cells[3], { value: clVal || '—', log, concern: clConcern });
+      fillDashboardValueCell(cells[4], {
+        value: fillLog?.fillStatus || '—',
+        log: fillLog,
+        concern: fillConcern,
+        includeElapsed: true,
+      });
+      fillDashboardValueCell(cells[5], {
+        value: bleachLog?.bleachStatus || '—',
+        log: bleachLog,
+        concern: bleachConcern,
+        includeElapsed: true,
+      });
       tbody.appendChild(tr);
     });
   }
@@ -2210,8 +2465,8 @@ function renderDashboard(logs) {
           <th>Facility Name</th>
           <th>pH</th>
           <th>Cl</th>
-          <th>Timestamp</th>
-          <th>Respondent</th>
+          <th>Fill Line/Hose</th>
+          <th>Bleach Feeder Rate</th>
         </tr></thead>
       `;
       const tbody = document.createElement('tbody');
@@ -2224,21 +2479,20 @@ function renderDashboard(logs) {
         const poolCount = poolDoc.numPools || poolDoc.poolCount || 1;
         if (poolCount <= i) return; // skip pools that don't have a pool at this index
         const facilityName = poolDoc.name || poolDoc.id;
-        const log = logsForDate.find(l => l.poolLocation === facilityName);
+        const log = getLatestChemistryLogForPool(logsForDate, facilityName, i);
         const fields = poolFieldNames(i);
         const phVal = log?.[fields.ph] || '';
         const clVal = log?.[fields.cl] || '';
+        const fillLog = getLatestOperationalStatus(facilityName, i, 'fill');
+        const bleachLog = getLatestOperationalStatus(facilityName, i, 'bleach');
 
         const phConcern = phVal ? getPhConcernLevel(facilityName, i, phVal) : 'none';
         const clConcern = clVal ? getClConcernLevel(facilityName, i, clVal) : 'none';
-
-        // Item 7: Timestamp — flag if ≥3 hours old
-        const tsDate = toDateObject(log?.timestamp);
-        const tsStr = tsDate ? tsDate.toLocaleString() : '—';
-        const isOld = tsDate && phVal && (Date.now() - tsDate.getTime() >= 3 * 60 * 60 * 1000);
+        const fillConcern = getFillLineConcernLevel(poolDoc, i, fillLog);
+        const bleachConcern = getBleachFeederConcernLevel(bleachLog);
 
         // Item 9: Consecutive major concern — check 2 most recent logs for this facility
-        const facilityLogs = allLogs.filter(l => l.poolLocation === facilityName);
+        const facilityLogs = allLogs.filter(l => l.poolLocation === facilityName && (l?.[fields.ph] || l?.[fields.cl]));
         const recent2 = facilityLogs.slice(0, 2);
         const hasConsecutiveMajor = recent2.length >= 2 && ['ph', 'cl'].some(type => {
           const field = fields[type];
@@ -2255,8 +2509,8 @@ function renderDashboard(logs) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${escapeHtml(facilityName)}</td>
-          <td class="${concernClass(phConcern)}">${escapeHtml(phVal || '—')}</td>
-          <td class="${concernClass(clConcern)}">${escapeHtml(clVal || '—')}</td>
+          <td></td>
+          <td></td>
           <td></td>
           <td></td>
         `;
@@ -2265,23 +2519,21 @@ function renderDashboard(logs) {
           tr.style.outline = '4px solid #8b0000';
         }
 
-        // Item 7: Timestamp cell
-        const tsTd = tr.querySelectorAll('td')[3];
-        if (phVal && tsDate) {
-          if (isOld) {
-            const bang = document.createElement('span');
-            bang.textContent = '!!! ';
-            bang.style.cssText = 'color:#8b0000;font-weight:bold;';
-            tsTd.appendChild(bang);
-          }
-          tsTd.appendChild(document.createTextNode(tsStr));
-        } else {
-          tsTd.textContent = '—';
-        }
-
-        // Item 8: Respondent cell with tooltip
-        const respondentTd = tr.querySelector('td:last-child');
-        fillDashboardRespondentCell(respondentTd, log);
+        const cells = tr.querySelectorAll('td');
+        fillDashboardValueCell(cells[1], { value: phVal || '—', log, concern: phConcern });
+        fillDashboardValueCell(cells[2], { value: clVal || '—', log, concern: clConcern });
+        fillDashboardValueCell(cells[3], {
+          value: fillLog?.fillStatus || '—',
+          log: fillLog,
+          concern: fillConcern,
+          includeElapsed: true,
+        });
+        fillDashboardValueCell(cells[4], {
+          value: bleachLog?.bleachStatus || '—',
+          log: bleachLog,
+          concern: bleachConcern,
+          includeElapsed: true,
+        });
 
         tbody.appendChild(tr);
       });
@@ -2307,6 +2559,190 @@ function renderDashboard(logs) {
   });
 
   wrapResponsiveTables(container);
+}
+
+// ============================================================
+// OPERATIONAL STATUS LOG
+// ============================================================
+
+function buildOperationalOptionGroup({ name, options, selected }) {
+  const group = document.createElement('div');
+  group.className = 'operational-switch-group';
+  options.forEach((option) => {
+    const label = document.createElement('label');
+    label.className = 'operational-switch-option';
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.name = name;
+    input.value = option;
+    input.checked = option === selected;
+    const text = document.createElement('span');
+    text.textContent = option;
+    label.appendChild(input);
+    label.appendChild(text);
+    group.appendChild(label);
+  });
+  return group;
+}
+
+function setOperationalMessage(message, isError = false) {
+  const el = document.getElementById('operationalStatusMessage');
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.toggle('error', !!message && isError);
+  el.classList.toggle('success', !!message && !isError);
+}
+
+function getOperationalSelectedFacility() {
+  const select = document.getElementById('operationalPoolLocation');
+  const poolId = select?.value || '';
+  return poolsCache.find((pool) => pool.id === poolId) || null;
+}
+
+function renderOperationalStatusLog() {
+  const cards = document.getElementById('operationalStatusCards');
+  const submitBtn = document.getElementById('operationalStatusSubmit');
+  if (!cards) return;
+
+  const poolDoc = getOperationalSelectedFacility();
+  cards.innerHTML = '';
+  setOperationalMessage('');
+
+  if (!poolDoc) {
+    cards.innerHTML = '<p class="operational-empty-state">Select a facility to update fill line, hose, and bleach feeder statuses.</p>';
+    if (submitBtn) submitBtn.disabled = true;
+    return;
+  }
+
+  if (submitBtn) submitBtn.disabled = false;
+  const facilityName = getPoolName(poolDoc);
+  const poolCount = Math.max(1, Number(poolDoc.numPools || poolDoc.poolCount || 1));
+
+  for (let idx = 0; idx < poolCount; idx++) {
+    const fillLog = getLatestOperationalStatus(facilityName, idx, 'fill');
+    const bleachLog = getLatestOperationalStatus(facilityName, idx, 'bleach');
+    const poolLabel = getPoolSimpleLabel(poolDoc, idx);
+
+    const card = document.createElement('section');
+    card.className = 'operational-status-card';
+    card.dataset.poolIndex = String(idx);
+
+    const heading = document.createElement('h3');
+    heading.textContent = poolLabel;
+    card.appendChild(heading);
+
+    const fillBlock = document.createElement('div');
+    fillBlock.className = 'operational-control-block';
+    fillBlock.innerHTML = `
+      <div class="operational-control-heading">
+        <span>Fill Line / Hose</span>
+        <small>Current: ${escapeHtml(fillLog?.fillStatus || 'Not recorded')}</small>
+      </div>
+    `;
+    fillBlock.appendChild(buildOperationalOptionGroup({
+      name: `operational_fill_${idx}`,
+      options: FILL_LINE_STATUS_OPTIONS,
+      selected: fillLog?.fillStatus || 'Off',
+    }));
+
+    const bleachBlock = document.createElement('div');
+    bleachBlock.className = 'operational-control-block';
+    bleachBlock.innerHTML = `
+      <div class="operational-control-heading">
+        <span>Bleach Feeder Rate</span>
+        <small>Current: ${escapeHtml(bleachLog?.bleachStatus || 'Not recorded')}</small>
+      </div>
+    `;
+    bleachBlock.appendChild(buildOperationalOptionGroup({
+      name: `operational_bleach_${idx}`,
+      options: BLEACH_FEEDER_STATUS_OPTIONS,
+      selected: bleachLog?.bleachStatus || 'Not applicable',
+    }));
+
+    card.appendChild(fillBlock);
+    card.appendChild(bleachBlock);
+    cards.appendChild(card);
+  }
+}
+
+async function saveOperationalStatusLog() {
+  const submitBtn = document.getElementById('operationalStatusSubmit');
+  const poolDoc = getOperationalSelectedFacility();
+  if (!poolDoc) {
+    setOperationalMessage('Select a facility before submitting operational status.', true);
+    return;
+  }
+
+  const facilityName = getPoolName(poolDoc);
+  const poolCount = Math.max(1, Number(poolDoc.numPools || poolDoc.poolCount || 1));
+  const market = Array.isArray(poolDoc.markets) ? (poolDoc.markets[0] || '') : (poolDoc.market || '');
+  const { firstName, lastName } = getLoggedInEmployeeName();
+  const employeeId = sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId') || '';
+  const writes = [];
+
+  try {
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Submitting...';
+    }
+    setOperationalMessage('Submitting status updates...');
+
+    for (let idx = 0; idx < poolCount; idx++) {
+      const fillStatus = document.querySelector(`input[name="operational_fill_${idx}"]:checked`)?.value || '';
+      const bleachStatus = document.querySelector(`input[name="operational_bleach_${idx}"]:checked`)?.value || '';
+      const latestFill = getLatestOperationalStatus(facilityName, idx, 'fill');
+      const latestBleach = getLatestOperationalStatus(facilityName, idx, 'bleach');
+      const fillChanged = fillStatus && fillStatus !== (latestFill?.fillStatus || '');
+      const bleachChanged = bleachStatus && bleachStatus !== (latestBleach?.bleachStatus || '');
+      if (!fillChanged && !bleachChanged) continue;
+
+      const payload = {
+        timestamp: Timestamp.now(),
+        facilityId: poolDoc.id || '',
+        facilityName,
+        market,
+        poolIndex: idx,
+        poolLabel: getPoolSimpleLabel(poolDoc, idx),
+        firstName,
+        lastName,
+        employeeId,
+      };
+      if (fillChanged) payload.fillStatus = fillStatus;
+      if (bleachChanged) payload.bleachStatus = bleachStatus;
+      writes.push(addDoc(collection(db, 'operationalStatusLogs'), payload));
+    }
+
+    if (!writes.length) {
+      setOperationalMessage('No operational status changes to submit.');
+      return;
+    }
+
+    await Promise.all(writes);
+    await loadOperationalStatusLogs();
+    renderOperationalStatusLog();
+    if (allLogs.length && document.getElementById('supervisorDashboard')?.classList.contains('show')) {
+      renderDashboard(allLogs);
+    }
+    setOperationalMessage('Operational status submitted successfully.');
+  } catch (err) {
+    console.error('[PoolPro] Unable to save operational status:', err);
+    setOperationalMessage('Unable to submit operational status right now.', true);
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = !getOperationalSelectedFacility();
+      submitBtn.textContent = 'Submit Status';
+    }
+  }
+}
+
+function setupOperationalStatusLog() {
+  const select = document.getElementById('operationalPoolLocation');
+  const submitBtn = document.getElementById('operationalStatusSubmit');
+  if (!select || !submitBtn || operationalStatusPageReady) return;
+  operationalStatusPageReady = true;
+  select.addEventListener('change', renderOperationalStatusLog);
+  submitBtn.addEventListener('click', saveOperationalStatusLog);
+  loadOperationalStatusLogs().then(renderOperationalStatusLog);
 }
 
 // ============================================================
@@ -4271,6 +4707,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   restoreLifeguardSessionFromLocalStorage();
   mountUnifiedFooter();
   normalizeSharedHeaderCopy();
+  injectOperationalStatusMenuLinks();
   injectResourcesMenuLinks();
   injectLifeguardSettingsMenuLinks();
   ensureResourcesSettingsSection();
@@ -4343,6 +4780,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load pools from Firestore and populate all dropdowns
   listenPools(populatePoolSelects);
+  setupOperationalStatusLog();
 
   // Chemistry form submission
   setupChemForm();

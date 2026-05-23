@@ -14,6 +14,7 @@ const DESTINATIONS = {
   chem: 'chem/chem.html',
   training: 'Training/training.html',
   duties: 'duties/duties.html',
+  operational: 'operational/operational.html',
   resources: 'resources/resources.html',
   supervisor: 'chem/chem.html#supervisorDashboard'
 };
