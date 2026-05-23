@@ -1793,20 +1793,22 @@ function ensureEditorAccessibility() {
       poolNameInput.setAttribute('aria-label', `Pool ${poolIndex} name`);
     }
 
-    const copyLocation = block.querySelector('.copy-rules-location');
-    if (copyLocation) {
+    block.querySelectorAll('.copy-rules-location').forEach((copyLocation) => {
+      const copyKind = copyLocation.closest('.copy-rules-row')?.dataset.copyKind || 'rules';
       if (!copyLocation.id) copyLocation.id = `pool${poolIndex}_copy_location`;
-      copyLocation.setAttribute('aria-label', `Pool ${poolIndex} copy from facility`);
-    }
+      copyLocation.setAttribute('aria-label', `Pool ${poolIndex} ${copyKind} copy from facility`);
+    });
 
-    const copyBlock = block.querySelector('.copy-rules-block');
-    if (copyBlock) {
+    block.querySelectorAll('.copy-rules-block').forEach((copyBlock) => {
+      const copyKind = copyBlock.closest('.copy-rules-row')?.dataset.copyKind || 'rules';
       if (!copyBlock.id) copyBlock.id = `pool${poolIndex}_copy_block`;
-      copyBlock.setAttribute('aria-label', `Pool ${poolIndex} copy from rule block`);
-    }
+      copyBlock.setAttribute('aria-label', `Pool ${poolIndex} ${copyKind} copy from rule block`);
+    });
 
-    const copyBtn = block.querySelector('.copy-rules-btn');
-    if (copyBtn) copyBtn.setAttribute('aria-label', `Copy rules into Pool ${poolIndex}`);
+    block.querySelectorAll('.copy-rules-btn').forEach((copyBtn) => {
+      const copyKind = copyBtn.closest('.copy-rules-row')?.dataset.copyKind || 'rules';
+      copyBtn.setAttribute('aria-label', `Copy ${copyKind} rules into Pool ${poolIndex}`);
+    });
 
     block.querySelectorAll('.sanitation-tabs .sanitation-tab').forEach((tab) => {
       const method = tab.dataset.method || tab.textContent.trim() || 'sanitation';
@@ -1930,11 +1932,17 @@ function populateCopyRulesLocationSelects() {
 }
 
 function wireCopyRulesDropdowns() {
-  document.querySelectorAll('.copy-rules-location').forEach(locationSelect => {
+  document.querySelectorAll('.copy-rules-row').forEach(copyRow => {
+    if (copyRow.dataset.copyRulesBound === 'true') return;
+    copyRow.dataset.copyRulesBound = 'true';
+
+    const locationSelect = copyRow.querySelector('.copy-rules-location');
+    const blockSelect = copyRow.querySelector('.copy-rules-block');
+    const copyBtn = copyRow.querySelector('.copy-rules-btn');
+    if (!locationSelect || !blockSelect || !copyBtn) return;
+
     const poolIndex = locationSelect.dataset.poolIndex;
-    const blockSelect = document.querySelector(`.copy-rules-block[data-pool-index="${poolIndex}"]`);
-    const copyBtn = document.querySelector(`.copy-rules-btn[data-pool-index="${poolIndex}"]`);
-    if (!blockSelect || !copyBtn) return;
+    const copyKind = copyRow.dataset.copyKind || 'cl';
 
     locationSelect.addEventListener('change', async () => {
       const poolId = locationSelect.value;
@@ -1995,18 +2003,23 @@ function wireCopyRulesDropdowns() {
         const state = getOrCreatePoolRuleState(poolIndex);
         const copiedRules = getRulesForMethodCopy(sourcePoolRules, activeMethod, activePhMethod);
 
-        if (!state.phMethods) state.phMethods = createEmptyPhMethods();
-        if (!state.phMethods[activePhMethod]) state.phMethods[activePhMethod] = createEmptyPhMethodRules();
-        state.phMethods[activePhMethod].ph = cloneRuleMap(copiedRules.ph);
-        const defaultPh = state.phMethods[DEFAULT_PH_RULE_METHOD]?.ph || {};
-        SANITATION_METHODS.forEach((method) => {
-          if (!state[method]) state[method] = createEmptyMethodRules();
-          state[method].ph = cloneRuleMap(defaultPh);
-        });
-        state[activeMethod].cl = cloneRuleMap(copiedRules.cl);
-
-        showRulesForMethod(targetBlock, activeMethod);
-        showMessage(`${getSanitationMethodLabel(activeMethod)} rules copied into Pool ${poolIndex}.`, 'success');
+        if (copyKind === 'ph') {
+          if (!state.phMethods) state.phMethods = createEmptyPhMethods();
+          if (!state.phMethods[activePhMethod]) state.phMethods[activePhMethod] = createEmptyPhMethodRules();
+          state.phMethods[activePhMethod].ph = cloneRuleMap(copiedRules.ph);
+          const defaultPh = state.phMethods[DEFAULT_PH_RULE_METHOD]?.ph || {};
+          SANITATION_METHODS.forEach((method) => {
+            if (!state[method]) state[method] = createEmptyMethodRules();
+            state[method].ph = cloneRuleMap(defaultPh);
+          });
+          showRulesForPhMethod(targetBlock, activePhMethod);
+          showMessage(`${activePhMethod === 'noChanges' ? 'No Changes' : 'Muriatic Acid'} pH rules copied into Pool ${poolIndex}.`, 'success');
+        } else {
+          if (!state[activeMethod]) state[activeMethod] = createEmptyMethodRules();
+          state[activeMethod].cl = cloneRuleMap(copiedRules.cl);
+          showRulesForMethod(targetBlock, activeMethod);
+          showMessage(`${getSanitationMethodLabel(activeMethod)} chlorine rules copied into Pool ${poolIndex}.`, 'success');
+        }
 
         locationSelect.value = '';
         blockSelect.innerHTML = '<option value="">— Rule block —</option>';
