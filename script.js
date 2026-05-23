@@ -57,6 +57,7 @@ let agreementGatePromise = null;
 let accountDeletionInProgress = false;
 let sanitationEditing = false;
 let sanitationMarketFilter = 'all';
+const FEEDBACK_RESPONSES_ENABLED = false;
 const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 const LIFEGUARD_SESSION_VERIFICATION_VERSION = 1;
@@ -546,8 +547,9 @@ async function handleDeleteCurrentAccount() {
   const confirmation = prompt(`Type DELETE to permanently delete the ${role} account for ${email}.`);
   if (confirmation !== 'DELETE') return;
 
-  const password = prompt('Enter your password to confirm account deletion:');
-  if (!password) return;
+  const passwordRequired = role !== 'lifeguard';
+  const password = passwordRequired ? prompt('Enter your password to confirm account deletion:') : '';
+  if (passwordRequired && !password) return;
 
   if (role === 'lifeguard' && !username) {
     setAccountManagementMessage('This lifeguard session is missing its username. Sign out and sign in again before deleting the account.', true);
@@ -559,7 +561,9 @@ async function handleDeleteCurrentAccount() {
   setAccountManagementMessage('Deleting account...');
 
   try {
-    await reauthenticateAccountForDeletion(email, password);
+    if (passwordRequired) {
+      await reauthenticateAccountForDeletion(email, password);
+    }
     await redactDeletedAccountData(context);
 
     if (role === 'lifeguard') {
@@ -570,7 +574,15 @@ async function handleDeleteCurrentAccount() {
     await deleteDoc(doc(db, 'userAgreements', getAgreementDocIdForContext(context))).catch(() => {});
 
     if (auth.currentUser) {
-      await deleteUser(auth.currentUser);
+      try {
+        await deleteUser(auth.currentUser);
+      } catch (deleteErr) {
+        if (role === 'lifeguard' && deleteErr?.code === 'auth/requires-recent-login') {
+          console.warn('[PoolPro] Lifeguard app account was removed, but Firebase Auth requires a recent login before deleting the auth user.', deleteErr);
+        } else {
+          throw deleteErr;
+        }
+      }
     }
 
     setAccountManagementMessage('Account deleted. Signing out...');
@@ -896,6 +908,38 @@ window.closeModal = function () {
   const supSection = document.getElementById('supervisorNotifySection');
   if (supSection) supSection.style.display = 'none';
 };
+
+function forceCloseFeedbackModal() {
+  const modal = document.getElementById('feedbackModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  modal.style.display = 'none';
+  delete modal.dataset.submitterName;
+  delete modal.dataset.poolName;
+  delete modal.dataset.entry;
+  delete modal.dataset.majorItems;
+  const modalContent = document.getElementById('modalContent');
+  if (modalContent) modalContent.innerHTML = '';
+  const supSection = document.getElementById('supervisorNotifySection');
+  if (supSection) supSection.style.display = 'none';
+  hideSharedModalOverlayIfUnused();
+}
+
+function resetChemistryFormFields() {
+  ['mainPoolPH', 'mainPoolCl', 'secondaryPoolPH', 'secondaryPoolCl'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['3', '4', '5'].forEach(n => {
+    const ph = document.getElementById(`pool${n}PH`);
+    const cl = document.getElementById(`pool${n}Cl`);
+    if (ph) ph.value = '';
+    if (cl) cl.value = '';
+  });
+  const poolLocation = document.getElementById('poolLocation');
+  if (poolLocation) poolLocation.value = '';
+  updateVisiblePoolSections(2);
+}
 
 window.showSupervisorNotify = function () {
   const section = document.getElementById('supervisorNotifySection');
@@ -1401,6 +1445,13 @@ function setupChemForm() {
       submitBtn.textContent = 'Submitting…';
       await addDoc(collection(db, 'poolSubmissions'), entry);
 
+      if (!FEEDBACK_RESPONSES_ENABLED) {
+        forceCloseFeedbackModal();
+        alert('Chemistry log submitted successfully!');
+        resetChemistryFormFields();
+        return;
+      }
+
       await refreshSanitationSelections();
       const poolDoc = await getFreshPoolDoc(poolId, pool);
       const poolRules = poolDoc ? normalizePoolRules(poolDoc) : [];
@@ -1510,12 +1561,7 @@ function setupChemForm() {
       }
 
       // Reset form fields
-      ['mainPoolPH', 'mainPoolCl', 'secondaryPoolPH', 'secondaryPoolCl'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
-      });
-      if (document.getElementById('poolLocation')) document.getElementById('poolLocation').value = '';
-      updateVisiblePoolSections(2);
+      resetChemistryFormFields();
 
     } catch (err) {
       console.error('[ChemLog] Error submitting chemistry log:', err);

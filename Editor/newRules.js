@@ -4,6 +4,7 @@ let poolsCache = [];
 let currentPoolId = '';
 let poolsListenerStarted = false;
 let activePoolLoadToken = 0;
+let editorSaveInProgress = false;
 
 let currentEditorMode = window.currentEditorMode ?? null;
 window.currentEditorMode = currentEditorMode;
@@ -752,7 +753,9 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
     }
 
     block.dataset.activePhMethod = DEFAULT_PH_RULE_METHOD;
-    applyRuleToInputs(block, state.bleach); // default view: bleach
+    block.dataset.activeMethod = 'bleach';
+    activeSanitationByPool[poolIndex] = 'bleach';
+    showRulesForMethod(block, 'bleach');
 
     // Load pool sub-name if stored
     const nameInput = block.querySelector('.pool-name-input');
@@ -879,13 +882,17 @@ async function handleSavePoolClick() {
 }
  
 async function attemptSave() {
+  if (editorSaveInProgress) return false;
   const poolData = readEditorToObject();
   if (!poolData) return false;
 
+  editorSaveInProgress = true;
   try {
     const poolId = currentPoolId || poolData.name;
     const savedId = await savePoolDoc(poolId, poolData);
-    currentPoolId = savedId || poolId;
+    if (!savedId) throw new Error('Pool save did not complete.');
+    currentPoolId = savedId;
+    updatePoolsCacheAfterSave(savedId, poolData);
     onSaveSuccess(currentPoolId);
     disableAllEditors();
     return true;
@@ -893,6 +900,8 @@ async function attemptSave() {
     console.error('Failed to save pool', error);
     showMessage('Could not save the pool. Please try again.', 'error');
     return false;
+  } finally {
+    editorSaveInProgress = false;
   }
 }
  
@@ -1171,6 +1180,29 @@ async function refreshPools() {
   renderSelectOptions(document.getElementById('editorPoolSelect'), poolsCache);
   populateCopyRulesLocationSelects();
 }
+
+function updatePoolsCacheAfterSave(poolId, poolData) {
+  if (!poolId || !poolData) return;
+  const savedPool = { id: poolId, ...poolData };
+  const existingIndex = poolsCache.findIndex((pool) => pool.id === poolId);
+  if (existingIndex >= 0) poolsCache[existingIndex] = savedPool;
+  else poolsCache.push(savedPool);
+  renderSelectOptions(document.getElementById('editorPoolSelect'), poolsCache);
+  populateCopyRulesLocationSelects();
+}
+
+function hasUnsavedEditorChanges() {
+  const metadataSaveBtn = document.getElementById('saveMetadataBtn');
+  const metadataEditing = !!metadataSaveBtn && !metadataSaveBtn.disabled;
+  const blockEditing = !!document.querySelector('.pool-rule-block[data-is-editing="true"]');
+  return metadataEditing || blockEditing;
+}
+
+async function saveCurrentPoolBeforeSwitch(nextPoolId) {
+  if (!currentPoolId || nextPoolId === currentPoolId || !hasUnsavedEditorChanges()) return true;
+  showMessage('Saving current pool before switching...', 'info');
+  return attemptSave();
+}
  
 function findPoolById(poolId) {
   return poolsCache.find((pool) => pool.id === poolId);
@@ -1354,6 +1386,7 @@ async function cloneRockbridgePresets() {
 function resetPoolEditorState() {
   // Clear in-memory rule state
   Object.keys(ruleStateByPool).forEach((k) => delete ruleStateByPool[k]);
+  Object.keys(activeSanitationByPool).forEach((k) => delete activeSanitationByPool[k]);
 
   // Clear rule textareas + concern dropdowns
   document.querySelectorAll(`#poolRuleBlocks ${RULE_RESPONSE_SELECTOR}`).forEach((t) => {
@@ -1478,6 +1511,13 @@ function attachEditorEvents() {
     poolSelect.dataset.editorPoolSelectBound = 'true';
     poolSelect.addEventListener('change', async () => {
       const selectedId = poolSelect.value;
+      const previousPoolId = currentPoolId;
+
+      const savedBeforeSwitch = await saveCurrentPoolBeforeSwitch(selectedId);
+      if (!savedBeforeSwitch) {
+        if (previousPoolId) poolSelect.value = previousPoolId;
+        return;
+      }
 
       if (!selectedId) {
         activePoolLoadToken += 1;
