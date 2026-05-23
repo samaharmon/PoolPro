@@ -92,25 +92,24 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// Open data-URL resources as blob URLs (direct data: links are blocked in modern browsers)
-document.addEventListener('click', (e) => {
+// Open inline/chunked resources as blob URLs (direct data: links are blocked in modern browsers)
+document.addEventListener('click', async (e) => {
   const link = e.target.closest('.resource-doc-link');
   if (!link) return;
   e.preventDefault();
   const key = link.dataset.resourceKey;
-  const dataUrl = resourceDataUrlMap.get(key) || '';
-  if (!dataUrl) return;
+  const resource = resourcesData.find((item) => item.id === key);
+  const resourceUrl = resource?.fileUrl || resourceDataUrlMap.get(key) || '';
+  if (!resourceUrl) return;
   try {
-    const [header, b64] = dataUrl.split(',');
-    const mime = header.split(':')[1].split(';')[0];
-    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    const blob = new Blob([bytes], { type: mime });
-    const blobUrl = URL.createObjectURL(blob);
-    const win = window.open(blobUrl, '_blank');
-    if (!win) { URL.revokeObjectURL(blobUrl); }
-    else { setTimeout(() => URL.revokeObjectURL(blobUrl), 60000); }
+    const dataUrl = resource?.storageType === FIRESTORE_RESOURCE_STORAGE
+      || resourceUrl.startsWith(`${FIRESTORE_RESOURCE_STORAGE}:`)
+      ? await getFirestoreResourceDataUrl(key)
+      : resourceUrl;
+    openResourceDataUrl(dataUrl);
   } catch (err) {
     console.error('[PoolPro] Could not open resource file:', err);
+    alert('Unable to open this resource right now.');
   }
 });
 
@@ -2878,6 +2877,12 @@ let resourceSettingsPoolFilter = 'all';
 const resourceDataUrlMap = new Map();
 const RESOURCE_FILTER_ALL_VALUE = 'all';
 const RESOURCE_ALL_FACILITIES_VALUE = 'All';
+const FIRESTORE_RESOURCE_STORAGE = 'firestoreChunks';
+const RESOURCE_FIRESTORE_CHUNK_SIZE = 650000;
+const RESOURCE_FIRESTORE_MAX_FILE_SIZE = 20 * 1024 * 1024;
+const RESOURCE_STORAGE_UPLOAD_TIMEOUT_MS = 12000;
+const RESOURCE_STORAGE_URL_TIMEOUT_MS = 10000;
+const RESOURCE_STORAGE_BLOCKED_SESSION_KEY = 'poolproResourceStorageBlocked';
 
 function getResourceStorage() {
   return getStorage(getApp());
@@ -3018,6 +3023,11 @@ function normalizeResourceRecord(rawDoc, idOverride = '') {
     fileUrl: (docData.fileUrl || '').toString().trim(),
     fileName: (docData.fileName || '').toString().trim(),
     storagePath: (docData.storagePath || '').toString().trim(),
+    storageType: (docData.storageType || '').toString().trim(),
+    contentType: (docData.contentType || '').toString().trim(),
+    fileSize: Number(docData.fileSize || 0),
+    chunkCount: Number(docData.chunkCount || 0),
+    dataUrlPrefix: (docData.dataUrlPrefix || '').toString().trim(),
     resourceType: (docData.resourceType || docData.type || '').toString().trim() || 'file',
     sortDate,
     uploadedAt: docData.uploadedAt || null,
@@ -3164,6 +3174,9 @@ function buildResourceRowCells(item, includeActions = false) {
   let nameHtml;
   if (item.fileUrl) {
     if (item.fileUrl.startsWith('data:')) {
+      resourceDataUrlMap.set(item.id, item.fileUrl);
+      nameHtml = `<a href="#" class="resource-doc-link" data-resource-key="${item.id}" rel="noopener">${nameText}</a>`;
+    } else if (item.storageType === FIRESTORE_RESOURCE_STORAGE || item.fileUrl.startsWith(`${FIRESTORE_RESOURCE_STORAGE}:`)) {
       resourceDataUrlMap.set(item.id, item.fileUrl);
       nameHtml = `<a href="#" class="resource-doc-link" data-resource-key="${item.id}" rel="noopener">${nameText}</a>`;
     } else {
@@ -3317,6 +3330,18 @@ function readFileAsDataURL(file) {
   });
 }
 
+function openResourceDataUrl(dataUrl) {
+  if (!dataUrl || !dataUrl.startsWith('data:')) throw new Error('Invalid resource data.');
+  const [header, b64] = dataUrl.split(',');
+  const mime = header.split(':')[1].split(';')[0];
+  const bytes = Uint8Array.from(atob(b64 || ''), c => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: mime });
+  const blobUrl = URL.createObjectURL(blob);
+  const win = window.open(blobUrl, '_blank');
+  if (!win) URL.revokeObjectURL(blobUrl);
+  else setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+}
+
 function isFirebaseStorageCorsError(err) {
   const message = `${err?.code || ''} ${err?.message || ''}`.toLowerCase();
   return message.includes('cors')
@@ -3326,52 +3351,144 @@ function isFirebaseStorageCorsError(err) {
     || message.includes('firebase storage upload timed out');
 }
 
-async function uploadResourceFile(file) {
+function isResourceStorageMarkedBlocked() {
+  try {
+    return sessionStorage.getItem(RESOURCE_STORAGE_BLOCKED_SESSION_KEY) === 'true';
+  } catch (err) {
+    return false;
+  }
+}
+
+function markResourceStorageBlocked() {
+  try {
+    sessionStorage.setItem(RESOURCE_STORAGE_BLOCKED_SESSION_KEY, 'true');
+  } catch (err) {
+    // Non-critical: uploads can still fall back for this request.
+  }
+}
+
+async function deleteResourceFileChunks(resourceId) {
+  if (!resourceId) return;
+  const chunksSnap = await getDocs(collection(db, 'resourcesDocuments', resourceId, 'fileChunks'));
+  const chunkRefs = chunksSnap.docs.map((docSnap) => docSnap.ref);
+  for (let i = 0; i < chunkRefs.length; i += 400) {
+    const batch = writeBatch(db);
+    chunkRefs.slice(i, i + 400).forEach((chunkRef) => batch.delete(chunkRef));
+    await batch.commit();
+  }
+}
+
+async function storeResourceFileInFirestoreChunks(file, resourceId, safeName) {
+  if (!resourceId) throw new Error('Resource upload could not be prepared. Try again.');
+  if (file.size > RESOURCE_FIRESTORE_MAX_FILE_SIZE) {
+    throw new Error('This file is too large for the temporary Firestore upload fallback. Use a website link, or apply Firebase Storage CORS and try again.');
+  }
+
+  const dataUrl = await readFileAsDataURL(file);
+  const [prefix, encoded = ''] = dataUrl.split(',');
+  const chunks = [];
+  for (let i = 0; i < encoded.length; i += RESOURCE_FIRESTORE_CHUNK_SIZE) {
+    chunks.push(encoded.slice(i, i + RESOURCE_FIRESTORE_CHUNK_SIZE));
+  }
+
+  await deleteResourceFileChunks(resourceId);
+  for (let i = 0; i < chunks.length; i += 400) {
+    const batch = writeBatch(db);
+    chunks.slice(i, i + 400).forEach((chunk, offset) => {
+      const index = i + offset;
+      const chunkId = String(index).padStart(4, '0');
+      batch.set(doc(db, 'resourcesDocuments', resourceId, 'fileChunks', chunkId), {
+        index,
+        data: chunk,
+      });
+    });
+    await batch.commit();
+  }
+
+  return {
+    storagePath: '',
+    fileUrl: `${FIRESTORE_RESOURCE_STORAGE}:${resourceId}`,
+    fileName: file.name || safeName,
+    storageType: FIRESTORE_RESOURCE_STORAGE,
+    contentType: file.type || 'application/octet-stream',
+    fileSize: file.size || 0,
+    chunkCount: chunks.length,
+    dataUrlPrefix: prefix,
+  };
+}
+
+async function getFirestoreResourceDataUrl(resourceId) {
+  const resource = resourcesData.find((item) => item.id === resourceId);
+  if (!resource) throw new Error('Resource metadata was not found.');
+  const chunksSnap = await getDocs(collection(db, 'resourcesDocuments', resourceId, 'fileChunks'));
+  const chunks = chunksSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
+    .sort((a, b) => Number(a.index ?? a.id) - Number(b.index ?? b.id))
+    .map((chunk) => chunk.data || '');
+  if (!chunks.length) throw new Error('Resource file chunks were not found.');
+  const prefix = resource.dataUrlPrefix || `data:${resource.contentType || 'application/octet-stream'};base64`;
+  return `${prefix},${chunks.join('')}`;
+}
+
+async function uploadResourceFile(file, resourceId) {
   const safeName = `${Date.now()}_${String(file.name || 'resource').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  if (isResourceStorageMarkedBlocked()) {
+    return storeResourceFileInFirestoreChunks(file, resourceId, safeName);
+  }
+
   const path = `resources/${safeName}`;
   const storage = getResourceStorage();
   const refObj = storageRef(storage, path);
   try {
     await Promise.race([
       uploadBytes(refObj, file, { contentType: file.type || 'application/octet-stream' }),
-      timeoutAfter(60000, 'Firebase Storage upload'),
+      timeoutAfter(RESOURCE_STORAGE_UPLOAD_TIMEOUT_MS, 'Firebase Storage upload'),
     ]);
     const fileUrl = await Promise.race([
       getDownloadURL(refObj),
-      timeoutAfter(20000, 'Firebase Storage download URL'),
+      timeoutAfter(RESOURCE_STORAGE_URL_TIMEOUT_MS, 'Firebase Storage download URL'),
     ]);
     return {
       storagePath: path,
       fileUrl,
       fileName: file.name || safeName,
+      storageType: 'storage',
+      contentType: file.type || 'application/octet-stream',
+      fileSize: file.size || 0,
+      chunkCount: 0,
+      dataUrlPrefix: '',
     };
   } catch (err) {
     console.warn('[PoolPro] Storage upload failed for resource.', err);
-    if (file.size > 450 * 1024) {
-      const corsHint = isFirebaseStorageCorsError(err)
-        ? ' The browser is reporting a Firebase Storage CORS/preflight failure, which is controlled by the bucket configuration.'
-        : '';
-      throw new Error(`Firebase Storage upload is blocked.${corsHint} Apply storage-cors.json to gs://chemlog-43c08.appspot.com, then try this file again.`);
-    }
-    return {
-      storagePath: '',
-      fileUrl: await readFileAsDataURL(file),
-      fileName: file.name || safeName,
-    };
+    const isCorsBlocked = isFirebaseStorageCorsError(err);
+    if (isCorsBlocked) markResourceStorageBlocked();
+    const corsHint = isCorsBlocked
+      ? ' Storage CORS is still blocked, so PoolPro saved this file through its Firestore fallback.'
+      : ' Firebase Storage failed, so PoolPro saved this file through its Firestore fallback.';
+    console.warn(`[PoolPro]${corsHint}`);
+    return storeResourceFileInFirestoreChunks(file, resourceId, safeName);
   }
 }
 
 async function deleteResourceRecord(item) {
   try {
-    if (item.storagePath) {
-      await deleteObject(storageRef(getResourceStorage(), item.storagePath)).catch(() => {});
-    }
+    await deleteResourceBackingFile(item);
     await deleteDoc(doc(db, 'resourcesDocuments', item.id));
     await loadResourcesDocuments();
     if (resourceEditingId === item.id) clearResourceForm();
   } catch (err) {
     console.error('[PoolPro] Unable to remove resource:', err);
     alert('Unable to remove this document right now.');
+  }
+}
+
+async function deleteResourceBackingFile(item) {
+  if (!item) return;
+  if (item.storagePath) {
+    await deleteObject(storageRef(getResourceStorage(), item.storagePath)).catch(() => {});
+  }
+  if (item.storageType === FIRESTORE_RESOURCE_STORAGE || item.fileUrl?.startsWith(`${FIRESTORE_RESOURCE_STORAGE}:`)) {
+    await deleteResourceFileChunks(item.id).catch(() => {});
   }
 }
 
@@ -3479,25 +3596,44 @@ function setupResourcesSettingsUI() {
     try {
       addBtn.disabled = true;
       addBtn.textContent = resourceEditingId ? 'Saving...' : 'Adding...';
+      const targetRef = resourceEditingId
+        ? doc(db, 'resourcesDocuments', resourceEditingId)
+        : doc(collection(db, 'resourcesDocuments'));
+      const targetId = targetRef.id;
       let fileMeta = existing ? {
         fileUrl: existing.fileUrl,
         fileName: existing.fileName,
         storagePath: existing.storagePath,
+        storageType: existing.storageType,
+        contentType: existing.contentType,
+        fileSize: existing.fileSize,
+        chunkCount: existing.chunkCount,
+        dataUrlPrefix: existing.dataUrlPrefix,
       } : null;
 
       if (mode === 'link') {
-        if (existing?.storagePath) {
-          await deleteObject(storageRef(getResourceStorage(), existing.storagePath)).catch(() => {});
-        }
+        if (existing) await deleteResourceBackingFile(existing);
         fileMeta = {
           fileUrl: normalizedLink,
           fileName: '',
           storagePath: '',
+          storageType: 'link',
+          contentType: '',
+          fileSize: 0,
+          chunkCount: 0,
+          dataUrlPrefix: '',
         };
       } else if (pendingResourceFile) {
-        fileMeta = await uploadResourceFile(pendingResourceFile);
-        if (existing?.storagePath) {
-          await deleteObject(storageRef(getResourceStorage(), existing.storagePath)).catch(() => {});
+        const oldStoragePath = existing?.storagePath || '';
+        const hadChunkedFile = !!existing
+          && (existing.storageType === FIRESTORE_RESOURCE_STORAGE
+            || existing.fileUrl?.startsWith(`${FIRESTORE_RESOURCE_STORAGE}:`));
+        if (hadChunkedFile) {
+          await deleteResourceFileChunks(existing.id).catch(() => {});
+        }
+        fileMeta = await uploadResourceFile(pendingResourceFile, targetId);
+        if (oldStoragePath && oldStoragePath !== fileMeta.storagePath) {
+          await deleteObject(storageRef(getResourceStorage(), oldStoragePath)).catch(() => {});
         }
       }
 
@@ -3523,14 +3659,15 @@ function setupResourcesSettingsUI() {
         fileUrl: fileMeta?.fileUrl || '',
         fileName: fileMeta?.fileName || '',
         storagePath: fileMeta?.storagePath || '',
+        storageType: fileMeta?.storageType || '',
+        contentType: fileMeta?.contentType || '',
+        fileSize: fileMeta?.fileSize || 0,
+        chunkCount: fileMeta?.chunkCount || 0,
+        dataUrlPrefix: fileMeta?.dataUrlPrefix || '',
         resourceType: mode,
         sortDate,
         uploadedAt: isNewResourceValue ? null : existing?.uploadedAt || null,
       }, resourceEditingId);
-
-      const targetRef = resourceEditingId
-        ? doc(db, 'resourcesDocuments', resourceEditingId)
-        : doc(collection(db, 'resourcesDocuments'));
 
       await setDoc(targetRef, {
         documentName: payload.documentName,
@@ -3540,6 +3677,11 @@ function setupResourcesSettingsUI() {
         fileUrl: payload.fileUrl,
         fileName: payload.fileName,
         storagePath: payload.storagePath,
+        storageType: payload.storageType,
+        contentType: payload.contentType,
+        fileSize: payload.fileSize,
+        chunkCount: payload.chunkCount,
+        dataUrlPrefix: payload.dataUrlPrefix,
         resourceType: payload.resourceType,
         sortDate: payload.sortDate,
         uploadDate: payload.uploadDate,
@@ -3567,9 +3709,7 @@ function setupResourcesSettingsUI() {
 
     try {
       const removals = resourcesData.map(async (item) => {
-        if (item.storagePath) {
-          await deleteObject(storageRef(getResourceStorage(), item.storagePath)).catch(() => {});
-        }
+        await deleteResourceBackingFile(item);
         await deleteDoc(doc(db, 'resourcesDocuments', item.id));
       });
       await Promise.all(removals);
