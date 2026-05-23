@@ -285,7 +285,9 @@ body.dark-mode .page-content-title {
     position: absolute;
     top: calc(100% + 4px);
     left: 0;
-    min-width: 180px;
+    min-width: min(260px, calc(100vw - 32px));
+    width: max-content;
+    max-width: min(360px, calc(100vw - 32px));
     background-color: #333;
     border: 1px solid #ddd;
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
@@ -314,7 +316,8 @@ body.dark-mode .page-content-title {
     opacity: 1;
     visibility: visible;
     transform: translateY(0) scaleY(1);
-    max-height: 400px; /* big enough for all items */
+    max-height: min(80vh, 720px);
+    overflow-y: auto;
     pointer-events: auto;
     transition-delay: 0s;
 }
@@ -328,6 +331,7 @@ body.dark-mode .page-content-title {
     font-family: 'Franklin Gothic Medium', Arial, sans-serif;
     font-size: 16px;
     border-bottom: 1px solid #ccc;
+    white-space: nowrap;
 }
 
 .dropdown-item:last-child {
