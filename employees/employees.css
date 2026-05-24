@@ -209,14 +209,14 @@ body.dark-mode .emp-market-heading {
   overflow: visible;
 }
 
-.emp-table-section.overlay-disabled {
-  pointer-events: none;
+.emp-table-section.overlay-disabled .emp-table tbody td:not(:first-child) {
+  position: relative;
 }
 
-.emp-table-section.overlay-disabled::before {
+.emp-table-section.overlay-disabled .emp-table tbody td:not(:first-child)::after {
   content: '';
   position: absolute;
-  inset: 0 0 0 22%;
+  inset: 0;
   background: rgba(0, 0, 0, 0.18);
   opacity: 0.35;
   pointer-events: auto;
@@ -229,6 +229,40 @@ body.dark-mode .emp-market-heading {
   margin-top: 10px;
   display: flex;
   align-items: center;
+}
+
+.emp-table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 14px 0 18px;
+}
+
+.emp-table-pagination .emp-pagination-select {
+  min-width: 150px;
+}
+
+.emp-table-pagination .emp-pagination-arrow {
+  border: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  font-size: 28px;
+  line-height: 1;
+  padding: 0 8px;
+  margin: 0 10px;
+  cursor: pointer;
+}
+
+.emp-table-pagination .emp-pagination-arrow:hover:not(:disabled) {
+  opacity: 0.8;
+  transform: scale(1.06);
+}
+
+.emp-table-pagination .emp-pagination-arrow:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* ============================================================

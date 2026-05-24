@@ -3176,6 +3176,96 @@ textarea,
   cursor: not-allowed;
 }
 
+.roles-permissions-section h4 {
+  margin: 18px 0 8px;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.roles-add-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(260px, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin: 18px 0;
+}
+
+.roles-search-field {
+  position: relative;
+}
+
+.roles-search-results {
+  display: none;
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  background: #2d2d2d;
+  border: 1px solid #aaa;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.roles-search-results.visible {
+  display: block;
+}
+
+.roles-search-option {
+  display: block;
+  width: 100%;
+  padding: 9px 11px;
+  border: 0;
+  border-bottom: 1px solid #555;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  cursor: pointer;
+}
+
+.roles-search-option:hover {
+  background: #69140e;
+}
+
+.roles-tables-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.roles-table,
+.roles-permissions-table {
+  min-width: 620px;
+}
+
+.roles-inline-check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 4px 0;
+  white-space: nowrap;
+}
+
+.roles-permissions-btn {
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+.roles-individual-permissions {
+  margin-top: 8px;
+}
+
+.roles-remove-btn {
+  padding: 4px 10px;
+  font-size: 0.82rem;
+}
+
+.permissions-table-wrap {
+  margin-top: 16px;
+}
+
 /* Danger color but same overall styling */
 .danger-button {
   background-color: #c0392b;

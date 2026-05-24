@@ -166,6 +166,38 @@ body {
   color: #fff;
 }
 
+.home-first-time-callout {
+  position: relative;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 8px 0 14px;
+  padding: 9px 12px;
+  border: 1px solid #c8a47e;
+  background: rgba(200, 164, 126, 0.14);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+}
+
+.home-first-time-callout::after {
+  content: '↝';
+  position: absolute;
+  left: 28px;
+  top: -28px;
+  color: #c8a47e;
+  font-size: 32px;
+  line-height: 1;
+  transform: rotate(210deg);
+  pointer-events: none;
+}
+
+.home-first-time-callout.hidden {
+  display: none;
+}
+
 .form-group {
   margin-bottom: 12px;
 }

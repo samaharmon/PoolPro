@@ -61,6 +61,7 @@ const verifyCooldownText = document.getElementById('homeVerifyCooldownText');
 const verifyBackBtn = document.getElementById('homeVerifyBackBtn');
 const roleToggle = document.getElementById('roleToggle');
 const showCreateAccountBtn = document.getElementById('homeShowCreateAccountBtn');
+const firstTimeCallout = document.getElementById('homeFirstTimeCallout');
 const forgotPasswordBtn = document.getElementById('homeForgotPasswordBtn');
 const backToLoginBtn = document.getElementById('homeBackToLoginBtn');
 const resetPasswordForm = document.getElementById('homeResetPasswordForm');
@@ -310,6 +311,7 @@ function setModalView(view) {
   createAccountForm?.classList.toggle('hidden', view !== 'create');
   verifyForm?.classList.toggle('hidden', view !== 'verify');
   resetPasswordForm?.classList.toggle('hidden', view !== 'reset');
+  updateFirstTimeCallout();
 
   if (modalTitle) {
     modalTitle.textContent = view === 'create'
@@ -520,7 +522,15 @@ function setRole(role) {
     if (currentView !== 'login') setModalView('login');
   }
 
+  updateFirstTimeCallout();
   clearMessages();
+}
+
+function updateFirstTimeCallout() {
+  if (!firstTimeCallout) return;
+  const show = currentView === 'login' && currentRole === 'lifeguard';
+  firstTimeCallout.classList.toggle('hidden', !show);
+  firstTimeCallout.setAttribute('aria-hidden', show ? 'false' : 'true');
 }
 
 function openModal(target) {

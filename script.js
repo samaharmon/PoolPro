@@ -665,13 +665,37 @@ document.addEventListener('click', (e) => {
 // SUPERVISOR DASHBOARD
 // ============================================================
 
+function applyDashboardAccessMode() {
+  const dashboard = document.getElementById('supervisorDashboard');
+  if (!dashboard) return;
+  const fullAccess = isSupervisor();
+  const canViewChemDashboard = canAccessPoolChemistryDashboard();
+  const tabs = document.getElementById('supervisorDashTabs');
+  const title = dashboard.querySelector('.page-content-title');
+  const chemPanel = document.getElementById('dashboardContent');
+  const jobPanel = document.getElementById('jobFormsContent');
+  if (!canViewChemDashboard) return;
+  if (tabs) tabs.style.display = fullAccess ? '' : 'none';
+  if (title) title.textContent = fullAccess ? 'Supervisor Dashboard' : 'Pool Chemistry Dashboard';
+  if (!fullAccess) {
+    document.querySelectorAll('[data-dash-tab]').forEach((tab) => tab.classList.toggle('active', tab.dataset.dashTab === 'chemistry'));
+    if (chemPanel) chemPanel.style.display = '';
+    if (jobPanel) jobPanel.style.display = 'none';
+  }
+}
+
 window.goToDashboard = function () {
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  if (!canAccessPoolChemistryDashboard()) {
+    alert('You do not have permission to view the Pool Chemistry Dashboard.');
+    return;
+  }
   const dashboard = document.getElementById('supervisorDashboard');
   if (dashboard) {
     const mainForm = document.getElementById('mainForm');
     if (mainForm) mainForm.style.display = 'none';
     dashboard.classList.add('show');
+    applyDashboardAccessMode();
     window.scrollTo({ top: 0, behavior: 'smooth' });
     loadDashboardData();
   } else {
@@ -693,6 +717,7 @@ window.logout = async function () {
     localStorage.removeItem('loginToken');
     localStorage.removeItem('ChemLogSupervisor');
     localStorage.removeItem('chemlogRole');
+    localStorage.removeItem(ROLE_PERMISSIONS_STORAGE_KEY);
     localStorage.removeItem(LIFEGUARD_SESSION_KEY);
     localStorage.removeItem('trainingSupervisorLoggedIn');
     localStorage.removeItem('training_supervisor_logged_in_v1');
@@ -716,6 +741,7 @@ function clearSupervisorLoginState() {
     const hasLifeguardSession = !!getStoredLifeguardSession() || sessionStorage.getItem('chemlogRole') === 'lifeguard';
     if (!hasLifeguardSession) {
       localStorage.removeItem('chemlogRole');
+      localStorage.removeItem(ROLE_PERMISSIONS_STORAGE_KEY);
     }
   } catch (_) { /* ignore */ }
 }
@@ -1255,7 +1281,7 @@ function populatePoolSelects(pools) {
   renderResourcesSettingsTable();
 
   const dashboard = document.getElementById('supervisorDashboard');
-  if (dashboard?.classList.contains('show') && isSupervisor()) {
+  if (dashboard?.classList.contains('show') && canAccessPoolChemistryDashboard()) {
     const activeDashTab = document.querySelector('[data-dash-tab].active')?.dataset.dashTab || 'chemistry';
     if (activeDashTab === 'jobforms') {
       loadJobFormSubmissions();
@@ -1271,6 +1297,170 @@ function populatePoolSelects(pools) {
 // AUTH HELPERS
 // ============================================================
 
+const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
+const ROLE_PERMISSIONS_STORAGE_KEY = 'poolproRolePermissionsProfile';
+const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
+const ROLE_DEFINITIONS = [
+  { key: 'poolManager', label: 'Pool Manager' },
+  { key: 'supervisor', label: 'Supervisor' },
+];
+const PERMISSION_DEFINITIONS = [
+  { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
+  { key: 'managerialReport', label: 'Managerial Report' },
+];
+let rolesPermissionsData = {
+  roles: { poolManager: [], supervisor: [] },
+  permissions: {
+    poolManager: { poolChemistryDashboard: false, managerialReport: false },
+    supervisor: { poolChemistryDashboard: false, managerialReport: false },
+  },
+  individualPermissions: {},
+};
+
+function normalizeIdentityKey(value) {
+  return (value || '').toString().trim().toLowerCase();
+}
+
+function getEmployeeRoleKey(employee) {
+  const normalized = normalizeEmployeeRecord(employee || {});
+  return normalizeIdentityKey(normalized.email || normalized.id || normalized.username);
+}
+
+function getCurrentIdentityKeys() {
+  restoreLifeguardSessionFromLocalStorage();
+  const keys = [
+    auth.currentUser?.email,
+    getStoredSupervisorEmail(),
+    sessionStorage.getItem('chemlogEmployeeEmail'),
+    sessionStorage.getItem('chemlogEmployeeId'),
+    sessionStorage.getItem('chemlogEmployeeUsername'),
+  ].map(normalizeIdentityKey).filter(Boolean);
+  return [...new Set(keys)];
+}
+
+function normalizeRolesPermissionsData(data = {}) {
+  const roles = data.roles || {};
+  const permissions = data.permissions || {};
+  const individual = data.individualPermissions || {};
+  return {
+    roles: {
+      poolManager: Array.isArray(roles.poolManager) ? roles.poolManager.map(normalizeIdentityKey).filter(Boolean) : [],
+      supervisor: Array.isArray(roles.supervisor) ? roles.supervisor.map(normalizeIdentityKey).filter(Boolean) : [],
+    },
+    permissions: {
+      poolManager: {
+        poolChemistryDashboard: !!permissions.poolManager?.poolChemistryDashboard,
+        managerialReport: !!permissions.poolManager?.managerialReport,
+      },
+      supervisor: {
+        poolChemistryDashboard: !!permissions.supervisor?.poolChemistryDashboard,
+        managerialReport: !!permissions.supervisor?.managerialReport,
+      },
+    },
+    individualPermissions: Object.fromEntries(Object.entries(individual).map(([key, value]) => [
+      normalizeIdentityKey(key),
+      {
+        poolChemistryDashboard: !!value?.poolChemistryDashboard,
+        managerialReport: !!value?.managerialReport,
+      },
+    ])),
+  };
+}
+
+function getEffectiveRolePermissionsForKeys(keys) {
+  const normalizedKeys = new Set((keys || []).map(normalizeIdentityKey).filter(Boolean));
+  const effective = { poolChemistryDashboard: false, managerialReport: false };
+  ROLE_DEFINITIONS.forEach(({ key }) => {
+    const members = rolesPermissionsData.roles[key] || [];
+    if (!members.some((memberKey) => normalizedKeys.has(memberKey))) return;
+    PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
+      if (rolesPermissionsData.permissions[key]?.[permissionKey]) {
+        effective[permissionKey] = true;
+      }
+    });
+  });
+  normalizedKeys.forEach((identityKey) => {
+    const individual = rolesPermissionsData.individualPermissions?.[identityKey];
+    if (!individual) return;
+    PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
+      if (individual[permissionKey]) effective[permissionKey] = true;
+    });
+  });
+  return effective;
+}
+
+function isDeveloperUser() {
+  return getCurrentIdentityKeys().includes(SITE_DEVELOPER_EMAIL);
+}
+
+function getCurrentAccessProfile() {
+  const keys = getCurrentIdentityKeys();
+  const permissions = getEffectiveRolePermissionsForKeys(keys);
+  if (isDeveloperUser()) {
+    permissions.poolChemistryDashboard = true;
+    permissions.managerialReport = true;
+  }
+  return {
+    isDeveloper: isDeveloperUser(),
+    permissions,
+  };
+}
+
+function cacheCurrentAccessProfile() {
+  try {
+    localStorage.setItem(ROLE_PERMISSIONS_STORAGE_KEY, JSON.stringify(getCurrentAccessProfile()));
+  } catch (_) { /* ignore */ }
+}
+
+function readCachedAccessProfile() {
+  try {
+    return JSON.parse(localStorage.getItem(ROLE_PERMISSIONS_STORAGE_KEY) || 'null') || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function loadRolesPermissions() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID));
+    rolesPermissionsData = normalizeRolesPermissionsData(snap.exists() ? snap.data() : {});
+  } catch (err) {
+    console.error('[PoolPro] Error loading roles and permissions:', err);
+    rolesPermissionsData = normalizeRolesPermissionsData({});
+  }
+  cacheCurrentAccessProfile();
+  window.setupDropdownVisibility?.();
+  applyDashboardAccessMode();
+  renderRolesPermissionsSettings();
+  return rolesPermissionsData;
+}
+
+async function saveRolesPermissions() {
+  rolesPermissionsData = normalizeRolesPermissionsData(rolesPermissionsData);
+  await setDoc(doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID), rolesPermissionsData, { merge: false });
+  cacheCurrentAccessProfile();
+  window.setupDropdownVisibility?.();
+  applyDashboardAccessMode();
+}
+
+function hasPermission(permissionKey) {
+  if (isDeveloperUser()) return true;
+  const live = getCurrentAccessProfile();
+  if (live.permissions?.[permissionKey]) return true;
+  const cached = readCachedAccessProfile();
+  return !!cached?.permissions?.[permissionKey];
+}
+
+function canAccessPoolChemistryDashboard() {
+  return hasPermission('poolChemistryDashboard');
+}
+
+function canAccessManagerialReport() {
+  return hasPermission('managerialReport');
+}
+
+window.poolProCanAccessManagerialReport = canAccessManagerialReport;
+
 function isLifeguardSession() {
   try {
     restoreLifeguardSessionFromLocalStorage();
@@ -1284,37 +1474,29 @@ function isLifeguardSession() {
 }
 
 function isSupervisor() {
-  try {
-    restoreLifeguardSessionFromLocalStorage();
-    const storedRole = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
-    if (storedRole === 'lifeguard') return false;
-  } catch (_) { /* ignore */ }
-
-  try {
-    const token = localStorage.getItem('loginToken');
-    if (token) {
-      const parsed = JSON.parse(token);
-      if (parsed.expires && Date.now() < parsed.expires) return true;
-    }
-  } catch (_) { /* ignore */ }
-  return false;
+  return isDeveloperUser();
 }
 
 // Show/hide supervisor-only dropdown items based on login state.
 // Called on DOMContentLoaded and exported so training.js can re-call after login.
 window.setupDropdownVisibility = function () {
   const sup = isSupervisor();
+  const canViewChemDashboard = canAccessPoolChemistryDashboard();
   const lifeguard = isLifeguardSession() && !sup;
-  ['dashboard', 'training-setup', 'employees', 'testing', 'settings'].forEach(nav => {
+  ['training-setup', 'employees', 'testing', 'settings'].forEach(nav => {
     document.querySelectorAll(`[data-nav="${nav}"]`).forEach(el => {
       el.style.display = sup ? '' : 'none';
     });
+  });
+  document.querySelectorAll('[data-nav="dashboard"]').forEach((el) => {
+    el.style.display = canViewChemDashboard ? '' : 'none';
+    el.textContent = sup ? 'Supervisor Dashboard' : 'Pool Chemistry Dashboard';
   });
   document.querySelectorAll('.lifeguard-only').forEach((item) => {
     item.style.display = lifeguard ? '' : 'none';
   });
   document.querySelectorAll('.dropdown-menu').forEach((m) => {
-    m.classList.toggle('supervisor-active', sup);
+    m.classList.toggle('supervisor-active', sup || canViewChemDashboard);
     m.classList.toggle('lifeguard-active', lifeguard);
     m.querySelectorAll('.supervisor-only').forEach((item) => {
       item.classList.remove('supervisor-group-start', 'supervisor-group-end');
@@ -1637,6 +1819,7 @@ const PH_RULE_METHODS = ['muriaticAcid', 'noChanges'];
 let dashboardPoolFilter = 'all';
 let dashboardDateFilter = getTodayDateValue();
 let dashboardChemPage = 1;
+let dashboardChemPageByTable = {};
 let dashboardJobPage = 1;
 const DASHBOARD_PAGE_SIZE = 10;
 const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a trickle'];
@@ -2163,6 +2346,7 @@ function renderDashboardFilterBar(container, onChange) {
     dashboardPoolFilter = poolSelect.value || 'all';
     dashboardDateFilter = dateInput.value || getTodayDateValue();
     dashboardChemPage = 1;
+    dashboardChemPageByTable = {};
     dashboardJobPage = 1;
     onChange?.();
   };
@@ -2171,8 +2355,8 @@ function renderDashboardFilterBar(container, onChange) {
   dateInput.addEventListener('change', handleChange);
 }
 
-function renderDashboardPagination(container, { page, totalRows, onPageChange }) {
-  const totalPages = Math.max(1, Math.ceil(totalRows / DASHBOARD_PAGE_SIZE));
+function renderDashboardPagination(container, { page, totalRows, totalPages: suppliedTotalPages, onPageChange }) {
+  const totalPages = suppliedTotalPages || Math.max(1, Math.ceil(totalRows / DASHBOARD_PAGE_SIZE));
   if (totalPages <= 1) return;
 
   const pagination = document.createElement('div');
@@ -2211,6 +2395,11 @@ function renderDashboardPagination(container, { page, totalRows, onPageChange })
 async function loadDashboardData() {
   const container = document.getElementById('dashboardContent');
   if (!container) return;
+  if (!canAccessPoolChemistryDashboard()) {
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view the Pool Chemistry Dashboard.</p>';
+    return;
+  }
+  applyDashboardAccessMode();
   container.innerHTML = '<p style="padding:16px;color:#666;">Loading…</p>';
 
   try {
@@ -2315,6 +2504,24 @@ function getChemistryDetailRows(logs, facilityName, poolDoc) {
       }
     });
   return rows;
+}
+
+function getChemistryLogsForPoolOnDate(logs, facilityName, poolIdx) {
+  const fields = poolFieldNames(poolIdx);
+  return logs
+    .filter((log) => log.poolLocation === facilityName && isDashboardDate(log.timestamp, dashboardDateFilter))
+    .filter((log) => log?.[fields.ph] || log?.[fields.cl]);
+}
+
+function getDashboardChemTablePageKey(market, poolIdx) {
+  return `${market}::pool${poolIdx + 1}`;
+}
+
+function getDashboardChemTablePage(market, poolIdx, totalPages) {
+  const key = getDashboardChemTablePageKey(market, poolIdx);
+  const page = Math.min(Math.max(1, Number(dashboardChemPageByTable[key]) || 1), totalPages);
+  dashboardChemPageByTable[key] = page;
+  return page;
 }
 
 function renderChemistryPoolDetail(container, logs, poolDoc) {
@@ -2423,8 +2630,6 @@ function renderDashboard(logs) {
     return;
   }
 
-  const logsForDate = logs.filter((log) => isDashboardDate(log.timestamp, dashboardDateFilter));
-
   marketsToShow.forEach(market => {
     const marketPools = marketMap[market] || [];
     if (!marketPools.length) return;
@@ -2471,15 +2676,27 @@ function renderDashboard(logs) {
       `;
       const tbody = document.createElement('tbody');
 
-      // Sort facilities alphabetically, then render a row per facility
+      // Sort facilities alphabetically, then render one same-day submission per facility on each page.
       const sortedPools = [...marketPools].sort((a, b) =>
         (a.name || '').localeCompare(b.name || ''));
+      const eligiblePools = sortedPools
+        .filter((poolDoc) => (poolDoc.numPools || poolDoc.poolCount || 1) > i)
+        .map((poolDoc) => {
+          const facilityName = poolDoc.name || poolDoc.id;
+          return {
+            poolDoc,
+            facilityName,
+            sameDayLogs: getChemistryLogsForPoolOnDate(logs, facilityName, i),
+          };
+        });
+      const totalPages = Math.max(1, ...eligiblePools.map(({ sameDayLogs }) => sameDayLogs.length || 1));
+      const currentPage = getDashboardChemTablePage(market, i, totalPages);
+      const pageIndex = currentPage - 1;
+      let renderedRows = 0;
 
-      sortedPools.forEach(poolDoc => {
-        const poolCount = poolDoc.numPools || poolDoc.poolCount || 1;
-        if (poolCount <= i) return; // skip pools that don't have a pool at this index
-        const facilityName = poolDoc.name || poolDoc.id;
-        const log = getLatestChemistryLogForPool(logsForDate, facilityName, i);
+      eligiblePools.forEach(({ poolDoc, facilityName, sameDayLogs }) => {
+        const log = sameDayLogs[pageIndex] || null;
+        if (currentPage > 1 && !log) return;
         const fields = poolFieldNames(i);
         const phVal = log?.[fields.ph] || '';
         const clVal = log?.[fields.cl] || '';
@@ -2536,10 +2753,23 @@ function renderDashboard(logs) {
         });
 
         tbody.appendChild(tr);
+        renderedRows += 1;
       });
+
+      if (!renderedRows) {
+        tbody.innerHTML = '<tr><td colspan="5">No previous same-day submissions for this page.</td></tr>';
+      }
 
       table.appendChild(tbody);
       panel.appendChild(table);
+      renderDashboardPagination(panel, {
+        page: currentPage,
+        totalPages,
+        onPageChange: (nextPage) => {
+          dashboardChemPageByTable[getDashboardChemTablePageKey(market, i)] = nextPage;
+          renderDashboard(logs);
+        },
+      });
       tabPanels.push(panel);
     }
 
@@ -2776,6 +3006,7 @@ async function saveEmployees() {
   try {
     employeesData = employeesData.map(normalizeEmployeeRecord);
     await setDoc(doc(db, 'settings', 'employees'), { employees: employeesData }, { merge: true });
+    renderRolesPermissionsSettings();
   } catch (err) {
     console.error('[ChemLog] Error saving employees:', err);
   }
@@ -3296,6 +3527,245 @@ function setupEmployeeFilters() {
     employeePage = 1;
     renderEmployeesTable();
   });
+}
+
+// ============================================================
+// ROLES AND PERMISSIONS
+// ============================================================
+
+function employeeDisplayName(employee) {
+  const normalized = normalizeEmployeeRecord(employee || {});
+  const name = [normalized.firstName, normalized.lastName].filter(Boolean).join(' ').trim();
+  return name || normalized.email || normalized.username || normalized.id || 'Unnamed employee';
+}
+
+function findEmployeeByRoleKey(roleKey) {
+  const key = normalizeIdentityKey(roleKey);
+  return employeesData.find((employee) => getEmployeeRoleKey(employee) === key) || null;
+}
+
+function ensureRolesPermissionsSettingsSection() {
+  if (document.getElementById('rolesPermissionsSettings')) {
+    renderRolesPermissionsSettings();
+    return;
+  }
+  const employeeSection = document.getElementById('employeeSettings');
+  if (!employeeSection) return;
+
+  const section = document.createElement('section');
+  section.className = 'settings-section settings-group roles-permissions-section';
+  section.id = 'rolesPermissionsSettings';
+  section.innerHTML = `
+    <h3>Roles and Permissions</h3>
+    <p class="section-subtitle">Assign limited site access to existing employees.</p>
+    <div class="roles-add-row">
+      <div class="settings-field">
+        <label for="roleAssignmentSelect">Role</label>
+        <select id="roleAssignmentSelect">
+          <option value="poolManager">Pool Manager</option>
+          <option value="supervisor">Supervisor</option>
+        </select>
+      </div>
+      <div class="settings-field roles-search-field">
+        <label for="roleEmployeeSearch">Employee</label>
+        <input type="text" id="roleEmployeeSearch" autocomplete="off" placeholder="Type a name, email, or username">
+        <div class="roles-search-results" id="roleEmployeeSearchResults"></div>
+      </div>
+    </div>
+    <div class="roles-tables-grid">
+      <div>
+        <h4>Pool Managers</h4>
+        <div class="table-scroll-wrap">
+          <table class="employee-table roles-table">
+            <thead><tr><th>Name</th><th>Email</th><th>Permissions</th><th>Remove</th></tr></thead>
+            <tbody id="poolManagerRoleBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h4>Supervisors</h4>
+        <div class="table-scroll-wrap">
+          <table class="employee-table roles-table">
+            <thead><tr><th>Name</th><th>Email</th><th>Permissions</th><th>Remove</th></tr></thead>
+            <tbody id="supervisorRoleBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="permissions-table-wrap">
+      <h4>Permissions</h4>
+      <div class="table-scroll-wrap">
+        <table class="employee-table roles-permissions-table">
+          <thead><tr><th>Role</th><th>Pool Chemistry Dashboard</th><th>Managerial Report</th></tr></thead>
+          <tbody id="rolePermissionsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  employeeSection.insertAdjacentElement('afterend', section);
+  setupRolesPermissionsSearch();
+  renderRolesPermissionsSettings();
+}
+
+function setupRolesPermissionsSearch() {
+  const input = document.getElementById('roleEmployeeSearch');
+  const results = document.getElementById('roleEmployeeSearchResults');
+  const roleSelect = document.getElementById('roleAssignmentSelect');
+  if (!input || !results || !roleSelect || input.dataset.bound === 'true') return;
+  input.dataset.bound = 'true';
+
+  const renderResults = () => {
+    const term = normalizeIdentityKey(input.value);
+    results.innerHTML = '';
+    if (!term) {
+      results.classList.remove('visible');
+      return;
+    }
+    const matches = employeesData
+      .filter((employee) => {
+        const normalized = normalizeEmployeeRecord(employee);
+        const haystack = [
+          employeeDisplayName(normalized),
+          normalized.email,
+          normalized.username,
+          normalized.id,
+          normalized.homePool,
+        ].join(' ').toLowerCase();
+        return haystack.includes(term);
+      })
+      .slice(0, 8);
+    matches.forEach((employee) => {
+      const normalized = normalizeEmployeeRecord(employee);
+      const key = getEmployeeRoleKey(normalized);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'roles-search-option';
+      button.textContent = `${employeeDisplayName(normalized)}${normalized.email ? ` — ${normalized.email}` : ''}`;
+      button.addEventListener('click', async () => {
+        const role = roleSelect.value || 'poolManager';
+        if (!rolesPermissionsData.roles[role]) rolesPermissionsData.roles[role] = [];
+        if (!rolesPermissionsData.roles[role].includes(key)) {
+          rolesPermissionsData.roles[role].push(key);
+          await saveRolesPermissions();
+          renderRolesPermissionsSettings();
+        }
+        input.value = '';
+        results.innerHTML = '';
+        results.classList.remove('visible');
+      });
+      results.appendChild(button);
+    });
+    results.classList.toggle('visible', matches.length > 0);
+  };
+
+  input.addEventListener('input', renderResults);
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.roles-search-field')) results.classList.remove('visible');
+  });
+}
+
+function renderRoleMembers(roleKey, tbodyId) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const members = rolesPermissionsData.roles[roleKey] || [];
+  if (!members.length) {
+    tbody.innerHTML = '<tr><td colspan="4">No users assigned.</td></tr>';
+    return;
+  }
+  members.forEach((memberKey) => {
+    const employee = findEmployeeByRoleKey(memberKey);
+    const displayName = employee ? employeeDisplayName(employee) : memberKey;
+    const email = normalizeEmployeeRecord(employee || { email: memberKey }).email || memberKey;
+    const individual = rolesPermissionsData.individualPermissions[memberKey] || {};
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${escapeHtml(displayName)}</td>
+      <td>${escapeHtml(email)}</td>
+      <td class="roles-row-permissions"></td>
+      <td class="actions-cell"></td>
+    `;
+    const permissionsCell = tr.querySelector('.roles-row-permissions');
+    const permissionsButton = document.createElement('button');
+    permissionsButton.type = 'button';
+    permissionsButton.className = 'submit-btn roles-permissions-btn';
+    permissionsButton.textContent = 'Permissions';
+    const permissionsPanel = document.createElement('div');
+    permissionsPanel.className = 'roles-individual-permissions hidden';
+    permissionsButton.addEventListener('click', () => {
+      permissionsPanel.classList.toggle('hidden');
+    });
+    permissionsCell.appendChild(permissionsButton);
+    permissionsCell.appendChild(permissionsPanel);
+    PERMISSION_DEFINITIONS.forEach(({ key, label }) => {
+      const labelEl = document.createElement('label');
+      labelEl.className = 'roles-inline-check';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'market-filter-checkbox';
+      checkbox.checked = !!individual[key];
+      checkbox.addEventListener('change', async () => {
+        if (!rolesPermissionsData.individualPermissions[memberKey]) {
+          rolesPermissionsData.individualPermissions[memberKey] = {};
+        }
+        rolesPermissionsData.individualPermissions[memberKey][key] = checkbox.checked;
+        await saveRolesPermissions();
+      });
+      labelEl.appendChild(checkbox);
+      labelEl.appendChild(document.createTextNode(label));
+      permissionsPanel.appendChild(labelEl);
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'submit-btn roles-remove-btn';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', async () => {
+      rolesPermissionsData.roles[roleKey] = (rolesPermissionsData.roles[roleKey] || []).filter((key) => key !== memberKey);
+      await saveRolesPermissions();
+      renderRolesPermissionsSettings();
+    });
+    tr.querySelector('.actions-cell').appendChild(removeBtn);
+    tbody.appendChild(tr);
+  });
+}
+
+function renderRolePermissionsTable() {
+  const tbody = document.getElementById('rolePermissionsBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  ROLE_DEFINITIONS.forEach(({ key: roleKey, label }) => {
+    const tr = document.createElement('tr');
+    const roleTd = document.createElement('td');
+    roleTd.textContent = label;
+    tr.appendChild(roleTd);
+    PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
+      const td = document.createElement('td');
+      td.style.textAlign = 'center';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'market-filter-checkbox';
+      checkbox.checked = !!rolesPermissionsData.permissions[roleKey]?.[permissionKey];
+      checkbox.addEventListener('change', async () => {
+        if (!rolesPermissionsData.permissions[roleKey]) rolesPermissionsData.permissions[roleKey] = {};
+        rolesPermissionsData.permissions[roleKey][permissionKey] = checkbox.checked;
+        await saveRolesPermissions();
+      });
+      td.appendChild(checkbox);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function renderRolesPermissionsSettings() {
+  const section = document.getElementById('rolesPermissionsSettings');
+  if (!section) return;
+  section.style.display = isDeveloperUser() ? '' : 'none';
+  if (!isDeveloperUser()) return;
+  renderRoleMembers('poolManager', 'poolManagerRoleBody');
+  renderRoleMembers('supervisor', 'supervisorRoleBody');
+  renderRolePermissionsTable();
 }
 
 // ============================================================
@@ -4691,9 +5161,11 @@ function checkDashboardAnchor() {
   if (window.location.hash === '#supervisorDashboard') {
     const dashboard = document.getElementById('supervisorDashboard');
     if (dashboard) {
+      if (!canAccessPoolChemistryDashboard()) return;
       const mainForm = document.getElementById('mainForm');
       if (mainForm) mainForm.style.display = 'none';
       dashboard.classList.add('show');
+      applyDashboardAccessMode();
       loadDashboardData();
     }
   }
@@ -4705,6 +5177,7 @@ function checkDashboardAnchor() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   restoreLifeguardSessionFromLocalStorage();
+  await loadRolesPermissions();
   mountUnifiedFooter();
   normalizeSharedHeaderCopy();
   injectOperationalStatusMenuLinks();
@@ -4787,7 +5260,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Employee management
   await loadSecuritySettings();
-  loadEmployees();
+  await loadEmployees();
+  ensureRolesPermissionsSettingsSection();
   await loadResourcesDocuments();
   setupEmployeeManagement();
   setupEmployeeOverlay();
@@ -4815,7 +5289,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Load dashboard data if already on the dashboard and supervisor
   const dashboard = document.getElementById('supervisorDashboard');
-  if (dashboard && dashboard.classList.contains('show') && isSupervisor()) {
+  if (dashboard && dashboard.classList.contains('show') && canAccessPoolChemistryDashboard()) {
     loadDashboardData();
   }
 
@@ -4823,6 +5297,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const dashTabs = document.querySelectorAll('[data-dash-tab]');
   dashTabs.forEach(tab => {
     tab.addEventListener('click', () => {
+      if (!isSupervisor() && tab.dataset.dashTab !== 'chemistry') return;
       dashTabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       const which = tab.dataset.dashTab;
@@ -4848,6 +5323,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadJobFormSubmissions() {
   const container = document.getElementById('jobFormsContent');
   if (!container) return;
+  if (!isSupervisor()) {
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view cleanliness report submissions.</p>';
+    return;
+  }
   container.innerHTML = '<p style="padding:16px;color:#666;">Loading submissions…</p>';
 
   try {

@@ -46,8 +46,11 @@ let graphFilters = {
 };
 const trainingSectionOpenState = {};
 const setSectionOpenState = {};
+const trainingPageState = {};
+const setPageState = {};
 const metricsOpenState = {};
 const metricsTopicEditState = {};
+const EMPLOYEE_TABLE_PAGE_SIZE = 10;
 
 // Training column definitions
 const TRAINING_COLS = [
@@ -445,23 +448,28 @@ function populateMetricsWeekFilter() {
 function setupFilterListeners() {
   document.getElementById('trainingMarketFilter')?.addEventListener('change', e => {
     trainingFilters.market = e.target.value;
+    resetTrainingPagination();
     renderTrainingTables();
   });
   document.getElementById('trainingPoolFilter')?.addEventListener('change', e => {
     trainingFilters.pool = e.target.value;
+    resetTrainingPagination();
     renderTrainingTables();
   });
   document.getElementById('trainingCompletionFilter')?.addEventListener('change', e => {
     trainingFilters.completion = e.target.value;
+    resetTrainingPagination();
     renderTrainingTables();
   });
 
   document.getElementById('setMarketFilter')?.addEventListener('change', e => {
     setFilters.market = e.target.value;
+    resetSetPagination();
     renderSetTables();
   });
   document.getElementById('setPoolFilter')?.addEventListener('change', e => {
     setFilters.pool = e.target.value;
+    resetSetPagination();
     renderSetTables();
   });
 
@@ -573,6 +581,66 @@ function renderAll() {
 // TRAINING COMPLETION TABLES
 // ============================================================
 
+function resetTrainingPagination() {
+  Object.keys(trainingPageState).forEach((key) => delete trainingPageState[key]);
+}
+
+function resetSetPagination() {
+  Object.keys(setPageState).forEach((key) => delete setPageState[key]);
+}
+
+function getClampedPage(state, key, totalRows) {
+  const totalPages = Math.max(1, Math.ceil(totalRows / EMPLOYEE_TABLE_PAGE_SIZE));
+  const current = Math.min(Math.max(1, Number(state[key]) || 1), totalPages);
+  state[key] = current;
+  return { current, totalPages };
+}
+
+function buildEmployeeTablePagination({ totalPages, currentPage, onPageChange }) {
+  if (totalPages <= 1) return null;
+
+  const container = document.createElement('div');
+  container.className = 'emp-pagination-row emp-table-pagination';
+
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'emp-pagination-arrow';
+  backBtn.textContent = '←';
+  if (currentPage > 1) {
+    backBtn.addEventListener('click', () => onPageChange(currentPage - 1));
+  } else {
+    backBtn.style.visibility = 'hidden';
+    backBtn.disabled = true;
+  }
+  container.appendChild(backBtn);
+
+  const select = document.createElement('select');
+  select.className = 'training-filter-select emp-pagination-select';
+  for (let page = 1; page <= totalPages; page++) {
+    const option = document.createElement('option');
+    option.value = String(page);
+    option.textContent = `Page ${page}`;
+    option.selected = page === currentPage;
+    select.appendChild(option);
+  }
+  select.addEventListener('change', () => onPageChange(Number(select.value) || 1));
+  container.appendChild(select);
+
+  const nextBtn = document.createElement('button');
+  nextBtn.type = 'button';
+  nextBtn.className = 'emp-pagination-arrow';
+  nextBtn.textContent = '→';
+  if (currentPage < totalPages) {
+    nextBtn.addEventListener('click', () => onPageChange(currentPage + 1));
+  } else {
+    nextBtn.style.visibility = 'hidden';
+    nextBtn.disabled = true;
+  }
+  container.appendChild(nextBtn);
+
+  return container;
+}
+
 function renderTrainingTables() {
   const container = document.getElementById('trainingTablesContainer');
   if (!container) return;
@@ -621,6 +689,12 @@ function buildTrainingMarketSection(market, employees) {
   const section = document.createElement('div');
   section.className = 'emp-market-section';
   section.dataset.market = market;
+  const pageKey = market;
+  const { current, totalPages } = getClampedPage(trainingPageState, pageKey, employees.length);
+  const pageEmployees = employees.slice(
+    (current - 1) * EMPLOYEE_TABLE_PAGE_SIZE,
+    current * EMPLOYEE_TABLE_PAGE_SIZE
+  );
 
   const heading = document.createElement('button');
   heading.type = 'button';
@@ -658,7 +732,7 @@ function buildTrainingMarketSection(market, employees) {
 
   // Body rows
   const tbody = document.createElement('tbody');
-  employees.forEach(emp => {
+  pageEmployees.forEach(emp => {
     const row = buildTrainingRow(emp);
     tbody.appendChild(row);
   });
@@ -666,6 +740,16 @@ function buildTrainingMarketSection(market, employees) {
 
   tableSection.appendChild(table);
   contentWrap.appendChild(tableSection);
+
+  const pagination = buildEmployeeTablePagination({
+    totalPages,
+    currentPage: current,
+    onPageChange: (nextPage) => {
+      trainingPageState[pageKey] = nextPage;
+      renderTrainingTables();
+    },
+  });
+  if (pagination) contentWrap.appendChild(pagination);
 
   // Edit/Save controls
   const controls = buildEditSaveControls({
@@ -795,6 +879,12 @@ function buildSetMarketSection(market, employees) {
   const section = document.createElement('div');
   section.className = 'emp-market-section';
   section.dataset.market = market;
+  const pageKey = market;
+  const { current, totalPages } = getClampedPage(setPageState, pageKey, employees.length);
+  const pageEmployees = employees.slice(
+    (current - 1) * EMPLOYEE_TABLE_PAGE_SIZE,
+    current * EMPLOYEE_TABLE_PAGE_SIZE
+  );
 
   const heading = document.createElement('button');
   heading.type = 'button';
@@ -831,7 +921,7 @@ function buildSetMarketSection(market, employees) {
 
   // Body
   const tbody = document.createElement('tbody');
-  employees.forEach(emp => {
+  pageEmployees.forEach(emp => {
     const row = buildSetRow(emp);
     tbody.appendChild(row);
   });
@@ -839,6 +929,16 @@ function buildSetMarketSection(market, employees) {
 
   tableSection.appendChild(table);
   contentWrap.appendChild(tableSection);
+
+  const pagination = buildEmployeeTablePagination({
+    totalPages,
+    currentPage: current,
+    onPageChange: (nextPage) => {
+      setPageState[pageKey] = nextPage;
+      renderSetTables();
+    },
+  });
+  if (pagination) contentWrap.appendChild(pagination);
 
   // Edit/Save controls
   const controls = buildEditSaveControls({

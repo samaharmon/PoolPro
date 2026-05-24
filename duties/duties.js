@@ -1,7 +1,10 @@
 // duties.js — Daily Pool Cleanliness Report
-import { db, collection, addDoc, serverTimestamp } from '../firebase.js';
+import { db, auth, collection, addDoc, serverTimestamp, doc, getDoc } from '../firebase.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+
+const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
+const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
 
 // ============================================================
 // INIT
@@ -205,7 +208,9 @@ function initPhotoGroups() {
 function initManagerSectionToggle() {
   const toggle = document.getElementById('dutiesManagerToggle');
   const body = document.getElementById('dutiesManagerBody');
-  if (!toggle || !body) return;
+  const section = document.getElementById('dutiesManagerSection');
+  if (!toggle || !body || !section) return;
+  section.classList.add('hidden');
 
   const setExpanded = (expanded) => {
     toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
@@ -216,6 +221,77 @@ function initManagerSectionToggle() {
   toggle.addEventListener('click', () => {
     setExpanded(toggle.getAttribute('aria-expanded') !== 'true');
   });
+
+  canAccessManagerialReport().then((allowed) => {
+    section.classList.toggle('hidden', !allowed);
+    if (!allowed) return;
+    toggle.style.display = 'none';
+    setExpanded(true);
+    section.classList.add('duties-manager-section-open');
+  });
+}
+
+function normalizeIdentityKey(value) {
+  return (value || '').toString().trim().toLowerCase();
+}
+
+function getStoredSupervisorEmail() {
+  try {
+    const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
+    return normalizeIdentityKey(token?.username || '');
+  } catch (_) {
+    return '';
+  }
+}
+
+function getCurrentIdentityKeys() {
+  const keys = [
+    auth.currentUser?.email,
+    getStoredSupervisorEmail(),
+    sessionStorage.getItem('chemlogEmployeeEmail'),
+    sessionStorage.getItem('chemlogEmployeeId'),
+    sessionStorage.getItem('chemlogEmployeeUsername'),
+  ].map(normalizeIdentityKey).filter(Boolean);
+  return [...new Set(keys)];
+}
+
+function normalizeRolesPermissionsData(data = {}) {
+  const roles = data.roles || {};
+  const permissions = data.permissions || {};
+  const individual = data.individualPermissions || {};
+  return {
+    roles: {
+      poolManager: Array.isArray(roles.poolManager) ? roles.poolManager.map(normalizeIdentityKey).filter(Boolean) : [],
+      supervisor: Array.isArray(roles.supervisor) ? roles.supervisor.map(normalizeIdentityKey).filter(Boolean) : [],
+    },
+    permissions: {
+      poolManager: { managerialReport: !!permissions.poolManager?.managerialReport },
+      supervisor: { managerialReport: !!permissions.supervisor?.managerialReport },
+    },
+    individualPermissions: Object.fromEntries(Object.entries(individual).map(([key, value]) => [
+      normalizeIdentityKey(key),
+      { managerialReport: !!value?.managerialReport },
+    ])),
+  };
+}
+
+async function canAccessManagerialReport() {
+  const keys = getCurrentIdentityKeys();
+  if (keys.includes(SITE_DEVELOPER_EMAIL)) return true;
+  try {
+    const snap = await getDoc(doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID));
+    const roleData = normalizeRolesPermissionsData(snap.exists() ? snap.data() : {});
+    const keySet = new Set(keys);
+    const roleAllowed = ['poolManager', 'supervisor'].some((roleKey) =>
+      (roleData.roles[roleKey] || []).some((memberKey) => keySet.has(memberKey)) &&
+      roleData.permissions[roleKey]?.managerialReport
+    );
+    const individualAllowed = keys.some((key) => roleData.individualPermissions[key]?.managerialReport);
+    return roleAllowed || individualAllowed;
+  } catch (err) {
+    console.error('[Duties] Error loading managerial permissions:', err);
+    return false;
+  }
 }
 
 window.addPhotoSlot = function (groupId) {
