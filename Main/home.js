@@ -818,7 +818,6 @@ async function finalizeLifeguardAccess({ username, account, target, method }) {
 
   markDeviceVerified(account.employeeEmail || account.authEmail || '');
   persistLifeguardSession(buildEmployeeFromAccount(account), username);
-  await signOut(auth).catch(() => {});
   resetVerificationState();
   closeModal();
 

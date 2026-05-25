@@ -5245,7 +5245,17 @@ document.addEventListener('DOMContentLoaded', async () => {
       : (sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole'));
     if (user) {
       if (role === 'lifeguard') {
-        signOut(auth).catch(() => {});
+        await user.reload().catch(() => {});
+        if (!auth.currentUser?.emailVerified) {
+          signOut(auth).catch(() => {});
+          window.setupDropdownVisibility();
+          return;
+        }
+        localStorage.removeItem('loginToken');
+        localStorage.removeItem('ChemLogSupervisor');
+        localStorage.removeItem('trainingSupervisorLoggedIn');
+        localStorage.removeItem('training_supervisor_logged_in_v1');
+        localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
         window.setupDropdownVisibility();
         return;
       }
