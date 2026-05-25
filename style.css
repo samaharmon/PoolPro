@@ -3934,9 +3934,8 @@ td.concern-major {
 }
 
 .dashboard-pagination {
-  justify-content: flex-end;
-  margin: 12px 0 0;
-  gap: 8px;
+  justify-content: center;
+  margin: 14px 0 0;
 }
 
 #supervisorDashboard .container {

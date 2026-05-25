@@ -2406,27 +2406,35 @@ function renderDashboardPagination(container, { page, totalRows, totalPages: sup
   if (totalPages <= 1) return;
 
   const pagination = document.createElement('div');
-  pagination.className = 'pagination dashboard-pagination';
+  pagination.className = 'emp-pagination-row dashboard-pagination';
 
   const prev = document.createElement('button');
   prev.type = 'button';
-  prev.textContent = 'Previous';
-  prev.disabled = page <= 1;
+  prev.className = 'emp-pagination-arrow';
+  prev.textContent = '←';
+  if (page <= 1) {
+    prev.disabled = true;
+    prev.style.visibility = 'hidden';
+  }
 
   const pageSelect = document.createElement('select');
-  pageSelect.className = 'training-filter-select dashboard-page-select';
+  pageSelect.className = 'training-filter-select emp-pagination-select dashboard-page-select';
   for (let i = 1; i <= totalPages; i++) {
     const option = document.createElement('option');
     option.value = String(i);
-    option.textContent = `Page ${i} of ${totalPages}`;
+    option.textContent = `Page ${i}`;
     pageSelect.appendChild(option);
   }
   pageSelect.value = String(page);
 
   const next = document.createElement('button');
   next.type = 'button';
-  next.textContent = 'Next';
-  next.disabled = page >= totalPages;
+  next.className = 'emp-pagination-arrow';
+  next.textContent = '→';
+  if (page >= totalPages) {
+    next.disabled = true;
+    next.style.visibility = 'hidden';
+  }
 
   prev.addEventListener('click', () => onPageChange(Math.max(1, page - 1)));
   next.addEventListener('click', () => onPageChange(Math.min(totalPages, page + 1)));
