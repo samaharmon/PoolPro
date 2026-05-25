@@ -196,10 +196,10 @@ html {
 
 .home-first-time-callout {
   position: relative;
-  display: block;
+  display: inline-block;
   width: fit-content;
   max-width: 100%;
-  margin: 8px 0 14px;
+  margin: 10px 0 16px 44px;
   padding: 9px 12px;
   border: 1px solid #c8a47e;
   background: rgba(200, 164, 126, 0.14);
@@ -208,18 +208,34 @@ html {
   font-weight: 700;
   line-height: 1.35;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
+  isolation: isolate;
+}
+
+.home-first-time-callout::before {
+  content: '';
+  position: absolute;
+  left: -30px;
+  top: -18px;
+  width: 26px;
+  height: 28px;
+  border-left: 2px solid #c8a47e;
+  border-top: 2px solid #c8a47e;
+  border-top-left-radius: 24px;
+  opacity: 0.95;
 }
 
 .home-first-time-callout::after {
-  content: '↝';
+  content: '';
   position: absolute;
-  left: 28px;
-  top: -28px;
-  color: #c8a47e;
-  font-size: 32px;
-  line-height: 1;
-  transform: rotate(210deg);
+  left: -11px;
+  top: -21px;
+  width: 10px;
+  height: 10px;
+  border-top: 2px solid #c8a47e;
+  border-right: 2px solid #c8a47e;
+  transform: rotate(34deg);
   pointer-events: none;
+  opacity: 0.95;
 }
 
 .home-first-time-callout.hidden {
@@ -464,6 +480,22 @@ html {
 
   .home-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .home-first-time-callout {
+    margin-left: 34px;
+  }
+
+  .home-first-time-callout::before {
+    left: -24px;
+    top: -16px;
+    width: 20px;
+    height: 24px;
+  }
+
+  .home-first-time-callout::after {
+    left: -8px;
+    top: -18px;
   }
 
   .home-form-actions {

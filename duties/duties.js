@@ -5,6 +5,11 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstati
 
 const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
 const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
+const DUTY_STORAGE_UPLOAD_TIMEOUT_MS = 2 * 60 * 1000;
+const DUTY_STORAGE_DOWNLOAD_URL_TIMEOUT_MS = 30 * 1000;
+const DUTY_UPLOAD_IMAGE_MAX_SIDE = 1600;
+const DUTY_UPLOAD_IMAGE_QUALITY = 0.82;
+const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
 
 // ============================================================
 // INIT
@@ -477,16 +482,23 @@ function timeoutAfter(ms, label) {
   });
 }
 
-function readFileAsDataURL(file) {
+function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error('Unable to read file.'));
-    reader.readAsDataURL(file);
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Unable to prepare image for upload.'));
+    }, type, quality);
   });
 }
 
-async function compressImageToDataURL(file) {
+async function prepareDutyPhotoForUpload(file) {
+  if (!file || !(file.type || '').startsWith('image/')) {
+    return {
+      body: file,
+      contentType: file?.type || 'application/octet-stream',
+    };
+  }
+
   const objectUrl = URL.createObjectURL(file);
   try {
     const image = await new Promise((resolve, reject) => {
@@ -496,19 +508,36 @@ async function compressImageToDataURL(file) {
       img.src = objectUrl;
     });
 
-    const maxSide = 900;
-    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+    const sourceWidth = image.naturalWidth || image.width || 1;
+    const sourceHeight = image.naturalHeight || image.height || 1;
+    const largestSide = Math.max(sourceWidth, sourceHeight);
+    if (file.size <= DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES && largestSide <= DUTY_UPLOAD_IMAGE_MAX_SIDE) {
+      return {
+        body: file,
+        contentType: file.type || 'image/jpeg',
+      };
+    }
+
+    const scale = Math.min(1, DUTY_UPLOAD_IMAGE_MAX_SIDE / largestSide);
     const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
     const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas is unavailable for image compression.');
     ctx.drawImage(image, 0, 0, width, height);
-    return canvas.toDataURL('image/jpeg', 0.65);
+    const blob = await canvasToBlob(canvas, 'image/jpeg', DUTY_UPLOAD_IMAGE_QUALITY);
+    return {
+      body: blob,
+      contentType: 'image/jpeg',
+    };
   } catch (err) {
-    console.warn('[Duties] Image compression failed; using original file data.', err);
-    return readFileAsDataURL(file);
+    console.warn('[Duties] Image compression failed; using original file upload.', err);
+    return {
+      body: file,
+      contentType: file.type || 'application/octet-stream',
+    };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -518,22 +547,61 @@ async function uploadDutyPhoto({ storage, pool, category, file, index }) {
   const safeName = String(file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
   const path = `dutyPhotos/${pool}/${category}/${Date.now()}_${index}_${safeName}`;
   const storageRef = ref(storage, path);
+  const uploadPayload = await prepareDutyPhotoForUpload(file);
 
-  try {
-    await Promise.race([
-      uploadBytes(storageRef, file),
-      timeoutAfter(5000, 'Firebase Storage upload'),
-    ]);
-    const url = await Promise.race([
-      getDownloadURL(storageRef),
-      timeoutAfter(5000, 'Firebase Storage download URL'),
-    ]);
-    return { index, url, name: file.name, storagePath: path, source: 'storage' };
-  } catch (err) {
-    console.warn('[Duties] Storage upload failed; saving compressed inline photo instead.', err);
-    const dataUrl = await compressImageToDataURL(file);
-    return { index, url: dataUrl, name: file.name, storagePath: '', source: 'inline' };
+  await Promise.race([
+    uploadBytes(storageRef, uploadPayload.body, {
+      contentType: uploadPayload.contentType,
+      cacheControl: 'public,max-age=3600',
+    }),
+    timeoutAfter(DUTY_STORAGE_UPLOAD_TIMEOUT_MS, 'Firebase Storage upload'),
+  ]);
+  const url = await Promise.race([
+    getDownloadURL(storageRef),
+    timeoutAfter(DUTY_STORAGE_DOWNLOAD_URL_TIMEOUT_MS, 'Firebase Storage download URL'),
+  ]);
+  return { index, url, name: file.name, storagePath: path, source: 'storage' };
+}
+
+async function uploadDutyPhotoGroups({ storage, pool, uploadGroups, onProgress }) {
+  const totalPhotos = uploadGroups.reduce((sum, group) => sum + group.files.length, 0);
+  let uploadedCount = 0;
+  const results = {};
+
+  for (const group of uploadGroups) {
+    const groupResults = [];
+    for (let i = 0; i < group.files.length; i += 1) {
+      const file = group.files[i];
+      if (typeof onProgress === 'function') {
+        onProgress({
+          completed: uploadedCount,
+          total: totalPhotos,
+          label: group.label,
+          fileName: file.name || `Photo ${i + 1}`,
+        });
+      }
+      const uploadedPhoto = await uploadDutyPhoto({
+        storage,
+        pool,
+        category: group.category,
+        file,
+        index: i,
+      });
+      groupResults.push(uploadedPhoto);
+      uploadedCount += 1;
+    }
+    results[group.resultKey] = groupResults;
   }
+
+  if (typeof onProgress === 'function' && totalPhotos > 0) {
+    onProgress({
+      completed: totalPhotos,
+      total: totalPhotos,
+      done: true,
+    });
+  }
+
+  return results;
 }
 
 // ============================================================
@@ -593,23 +661,39 @@ window.submitDutiesForm = async function () {
 
   try {
     const storage = getStorage(getApp());
+    const uploadGroups = [
+      { groupId: 'deckUpload', category: 'deck', resultKey: 'deck', label: 'Deck' },
+      { groupId: 'poolUpload', category: 'pool', resultKey: 'pool', label: 'Pool' },
+      { groupId: 'skimmersUpload', category: 'skimmers', resultKey: 'skimmers', label: 'Skimmers' },
+      { groupId: 'damagedUpload', category: 'damaged', resultKey: 'damaged', label: 'Damaged Equipment' },
+      { groupId: 'bleachFeederUpload', category: 'bleachFeeders', resultKey: 'bleachFeeders', label: 'Bleach Feeders' },
+      { groupId: 'fillLinesUpload', category: 'fillLines', resultKey: 'fillLines', label: 'Fill Lines' },
+      { groupId: 'bleachUpload', category: 'bleach', resultKey: 'bleach', label: 'Managers Only' },
+    ].map((group) => ({
+      ...group,
+      files: collectPhotosFromGroup(group.groupId),
+    }));
 
-    function uploadGroup(groupId, category) {
-      const files = collectPhotosFromGroup(groupId);
-      return Promise.all(
-        files.map((file, i) => uploadDutyPhoto({ storage, pool, category, file, index: i }))
-      );
+    const totalPhotos = uploadGroups.reduce((sum, group) => sum + group.files.length, 0);
+    if (msgEl) {
+      msgEl.style.color = '#333';
+      msgEl.textContent = totalPhotos
+        ? `Preparing ${totalPhotos} photo${totalPhotos === 1 ? '' : 's'} for upload...`
+        : 'Submitting...';
     }
 
-    const [deckPhotos, poolPhotos, skimmersPhotos, damagedPhotos, bleachFeederPhotos, fillLinePhotos, bleachPhotos] = await Promise.all([
-      uploadGroup('deckUpload', 'deck'),
-      uploadGroup('poolUpload', 'pool'),
-      uploadGroup('skimmersUpload', 'skimmers'),
-      uploadGroup('damagedUpload', 'damaged'),
-      uploadGroup('bleachFeederUpload', 'bleachFeeders'),
-      uploadGroup('fillLinesUpload', 'fillLines'),
-      uploadGroup('bleachUpload', 'bleach'),
-    ]);
+    const uploadedPhotos = await uploadDutyPhotoGroups({
+      storage,
+      pool,
+      uploadGroups,
+      onProgress: ({ completed, total, label, fileName, done }) => {
+        if (!msgEl || !total) return;
+        msgEl.style.color = '#333';
+        msgEl.textContent = done
+          ? `Uploads complete. Saving report...`
+          : `Uploading photo ${completed + 1} of ${total} for ${label}: ${fileName}`;
+      },
+    });
 
     // Collect CYA readings
     const cyaReadings = {};
@@ -624,13 +708,13 @@ window.submitDutiesForm = async function () {
       pool,
       submitterEmail: submitterEmail || 'unknown',
       photos: {
-        deck: deckPhotos,
-        pool: poolPhotos,
-        skimmers: skimmersPhotos,
-        damaged: damagedPhotos,
-        bleachFeeders: bleachFeederPhotos,
-        fillLines: fillLinePhotos,
-        bleach: bleachPhotos,
+        deck: uploadedPhotos.deck || [],
+        pool: uploadedPhotos.pool || [],
+        skimmers: uploadedPhotos.skimmers || [],
+        damaged: uploadedPhotos.damaged || [],
+        bleachFeeders: uploadedPhotos.bleachFeeders || [],
+        fillLines: uploadedPhotos.fillLines || [],
+        bleach: uploadedPhotos.bleach || [],
       },
       damagedNotes: document.getElementById('damagedNotes')?.value?.trim() || '',
       otherNotes: document.getElementById('dutiesOtherNotes')?.value?.trim() || '',
@@ -648,7 +732,12 @@ window.submitDutiesForm = async function () {
     resetForm();
   } catch (err) {
     console.error('[Duties] Submit error:', err);
-    if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = 'Error submitting form. Please try again.'; }
+    if (msgEl) {
+      msgEl.style.color = '#c0392b';
+      msgEl.textContent = /timed out/i.test(err.message || '')
+        ? 'Photo uploads took too long on this connection. Keep the page open and try submitting again.'
+        : 'Error submitting form. Please try again.';
+    }
   } finally {
     if (submitBtn) submitBtn.disabled = false;
   }

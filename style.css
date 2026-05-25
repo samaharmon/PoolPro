@@ -236,6 +236,8 @@ body.dark-mode .page-content-title {
 .menu-container {
     grid-area: menu;
     position: relative;
+    overflow: visible;
+    z-index: 1200;
 }
 
 .supervisor-login-btn:hover {
@@ -300,24 +302,24 @@ body.dark-mode .page-content-title {
     /* animation pieces */
     opacity: 0;
     visibility: hidden;
-    transform-origin: top;
-    transform: translateY(-8px) scaleY(0.9);
-    max-height: 0;
-    overflow: hidden;
+    transform: translateY(-8px);
+    max-height: min(calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 720px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
     pointer-events: none;
     transition:
         opacity 0.2s ease,
         transform 0.2s ease,
-        max-height 0.25s ease,
-        visibility 0s linear 0.25s;
+        visibility 0s linear 0.2s;
 }
 
 .dropdown-menu.show {
     opacity: 1;
     visibility: visible;
-    transform: translateY(0) scaleY(1);
-    max-height: min(80vh, 720px);
-    overflow-y: auto;
+    transform: translateY(0);
     pointer-events: auto;
     transition-delay: 0s;
 }
