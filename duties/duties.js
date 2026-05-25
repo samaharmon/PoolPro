@@ -275,6 +275,13 @@ function normalizeRolesPermissionsData(data = {}) {
   const roles = data.roles || {};
   const permissions = data.permissions || {};
   const individual = data.individualPermissions || {};
+  const normalizedIndividual = Object.fromEntries(Object.entries(individual).map(([key, value]) => {
+    const permissionOverrides = {};
+    if (Object.prototype.hasOwnProperty.call(value || {}, 'managerialReport')) {
+      permissionOverrides.managerialReport = !!value.managerialReport;
+    }
+    return [normalizeIdentityKey(key), permissionOverrides];
+  }));
   return {
     roles: {
       poolManager: Array.isArray(roles.poolManager) ? roles.poolManager.map(normalizeIdentityKey).filter(Boolean) : [],
@@ -284,10 +291,7 @@ function normalizeRolesPermissionsData(data = {}) {
       poolManager: { managerialReport: !!permissions.poolManager?.managerialReport },
       supervisor: { managerialReport: !!permissions.supervisor?.managerialReport },
     },
-    individualPermissions: Object.fromEntries(Object.entries(individual).map(([key, value]) => [
-      normalizeIdentityKey(key),
-      { managerialReport: !!value?.managerialReport },
-    ])),
+    individualPermissions: normalizedIndividual,
   };
 }
 
@@ -298,12 +302,18 @@ async function canAccessManagerialReport() {
     const snap = await getDoc(doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID));
     const roleData = normalizeRolesPermissionsData(snap.exists() ? snap.data() : {});
     const keySet = new Set(keys);
+    const hasDeniedOverride = keys.some((key) =>
+      Object.prototype.hasOwnProperty.call(roleData.individualPermissions[key] || {}, 'managerialReport') &&
+      roleData.individualPermissions[key].managerialReport === false
+    );
+    if (hasDeniedOverride) return false;
+    const individualAllowed = keys.some((key) => roleData.individualPermissions[key]?.managerialReport === true);
+    if (individualAllowed) return true;
     const roleAllowed = ['poolManager', 'supervisor'].some((roleKey) =>
       (roleData.roles[roleKey] || []).some((memberKey) => keySet.has(memberKey)) &&
       roleData.permissions[roleKey]?.managerialReport
     );
-    const individualAllowed = keys.some((key) => roleData.individualPermissions[key]?.managerialReport);
-    return roleAllowed || individualAllowed;
+    return roleAllowed;
   } catch (err) {
     console.error('[Duties] Error loading managerial permissions:', err);
     return false;

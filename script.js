@@ -1378,6 +1378,15 @@ function normalizeRolesPermissionsData(data = {}) {
   const roles = data.roles || {};
   const permissions = data.permissions || {};
   const individual = data.individualPermissions || {};
+  const normalizedIndividual = Object.fromEntries(Object.entries(individual).map(([key, value]) => {
+    const permissionOverrides = {};
+    PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
+      if (Object.prototype.hasOwnProperty.call(value || {}, permissionKey)) {
+        permissionOverrides[permissionKey] = !!value[permissionKey];
+      }
+    });
+    return [normalizeIdentityKey(key), permissionOverrides];
+  }));
   return {
     roles: {
       poolManager: Array.isArray(roles.poolManager) ? roles.poolManager.map(normalizeIdentityKey).filter(Boolean) : [],
@@ -1393,13 +1402,7 @@ function normalizeRolesPermissionsData(data = {}) {
         managerialReport: !!permissions.supervisor?.managerialReport,
       },
     },
-    individualPermissions: Object.fromEntries(Object.entries(individual).map(([key, value]) => [
-      normalizeIdentityKey(key),
-      {
-        poolChemistryDashboard: !!value?.poolChemistryDashboard,
-        managerialReport: !!value?.managerialReport,
-      },
-    ])),
+    individualPermissions: normalizedIndividual,
   };
 }
 
@@ -1415,12 +1418,16 @@ function getEffectiveRolePermissionsForKeys(keys) {
       }
     });
   });
-  normalizedKeys.forEach((identityKey) => {
-    const individual = rolesPermissionsData.individualPermissions?.[identityKey];
-    if (!individual) return;
-    PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
-      if (individual[permissionKey]) effective[permissionKey] = true;
-    });
+  PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
+    const overrides = Array.from(normalizedKeys)
+      .map((identityKey) => rolesPermissionsData.individualPermissions?.[identityKey])
+      .filter((individual) => Object.prototype.hasOwnProperty.call(individual || {}, permissionKey))
+      .map((individual) => !!individual[permissionKey]);
+    if (overrides.includes(false)) {
+      effective[permissionKey] = false;
+    } else if (overrides.includes(true)) {
+      effective[permissionKey] = true;
+    }
   });
   return effective;
 }
@@ -3585,6 +3592,8 @@ function findEmployeeByRoleKey(roleKey) {
 
 function ensureRolesPermissionsSettingsSection() {
   if (document.getElementById('rolesPermissionsSettings')) {
+    setupSettingsAccordions();
+    setupRolePermissionModalEvents();
     renderRolesPermissionsSettings();
     return;
   }
@@ -3640,10 +3649,24 @@ function ensureRolesPermissionsSettingsSection() {
         </table>
       </div>
     </div>
+    <div class="roles-permission-modal hidden" id="rolePermissionModal" aria-hidden="true">
+      <div class="roles-permission-modal-card" role="dialog" aria-modal="true" aria-labelledby="rolePermissionModalTitle">
+        <button type="button" class="roles-permission-modal-close" id="rolePermissionModalClose" aria-label="Close permissions">&times;</button>
+        <h4 id="rolePermissionModalTitle">Permissions</h4>
+        <p class="section-subtitle" id="rolePermissionModalSubtitle"></p>
+        <div class="roles-permission-modal-checks" id="rolePermissionModalChecks"></div>
+        <p class="roles-permission-modal-message" id="rolePermissionModalMessage"></p>
+      </div>
+    </div>
   `;
   employeeSection.insertAdjacentElement('afterend', section);
+  const permissionModal = section.querySelector('#rolePermissionModal');
+  const settingsModal = document.getElementById('settingsModal');
+  if (permissionModal && settingsModal) settingsModal.appendChild(permissionModal);
   setupRolesPermissionsSearch();
+  setupRolePermissionModalEvents();
   renderRolesPermissionsSettings();
+  setupSettingsAccordions();
 }
 
 function setupRolesPermissionsSearch() {
@@ -3703,6 +3726,100 @@ function setupRolesPermissionsSearch() {
   });
 }
 
+function getRoleDefaultPermission(roleKey, permissionKey) {
+  return !!rolesPermissionsData.permissions?.[roleKey]?.[permissionKey];
+}
+
+function getIndividualPermissionOverride(memberKey, permissionKey) {
+  const individual = rolesPermissionsData.individualPermissions?.[memberKey] || {};
+  if (!Object.prototype.hasOwnProperty.call(individual, permissionKey)) return undefined;
+  return !!individual[permissionKey];
+}
+
+function getMemberPermissionValue(roleKey, memberKey, permissionKey) {
+  const override = getIndividualPermissionOverride(memberKey, permissionKey);
+  return override === undefined ? getRoleDefaultPermission(roleKey, permissionKey) : override;
+}
+
+function cleanupIndividualPermissionOverrides(memberKey) {
+  const individual = rolesPermissionsData.individualPermissions?.[memberKey];
+  if (!individual) return;
+  PERMISSION_DEFINITIONS.forEach(({ key }) => {
+    if (individual[key] === undefined) delete individual[key];
+  });
+  if (!Object.keys(individual).length) {
+    delete rolesPermissionsData.individualPermissions[memberKey];
+  }
+}
+
+function setupRolePermissionModalEvents() {
+  const modal = document.getElementById('rolePermissionModal');
+  if (!modal || modal.dataset.bound === 'true') return;
+  modal.dataset.bound = 'true';
+  const close = () => {
+    modal.classList.add('hidden');
+    modal.setAttribute('aria-hidden', 'true');
+  };
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) close();
+  });
+  document.getElementById('rolePermissionModalClose')?.addEventListener('click', close);
+}
+
+function openRolePermissionModal(roleKey, memberKey) {
+  const modal = document.getElementById('rolePermissionModal');
+  const title = document.getElementById('rolePermissionModalTitle');
+  const subtitle = document.getElementById('rolePermissionModalSubtitle');
+  const checks = document.getElementById('rolePermissionModalChecks');
+  const message = document.getElementById('rolePermissionModalMessage');
+  if (!modal || !title || !subtitle || !checks) return;
+
+  const employee = findEmployeeByRoleKey(memberKey);
+  const roleLabel = ROLE_DEFINITIONS.find((role) => role.key === roleKey)?.label || 'Role';
+  const displayName = employee ? employeeDisplayName(employee) : memberKey;
+  title.textContent = `${displayName} Permissions`;
+  subtitle.textContent = `Checked boxes inherit the ${roleLabel} defaults unless you change them here. Unchecking a default permission removes it for this person only.`;
+  if (message) message.textContent = '';
+  checks.innerHTML = '';
+
+  PERMISSION_DEFINITIONS.forEach(({ key, label }) => {
+    const roleDefault = getRoleDefaultPermission(roleKey, key);
+    const override = getIndividualPermissionOverride(memberKey, key);
+    const row = document.createElement('label');
+    row.className = 'roles-modal-check';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'market-filter-checkbox';
+    checkbox.checked = override === undefined ? roleDefault : override;
+    checkbox.addEventListener('change', async () => {
+      if (!rolesPermissionsData.individualPermissions[memberKey]) {
+        rolesPermissionsData.individualPermissions[memberKey] = {};
+      }
+      if (checkbox.checked === roleDefault) {
+        delete rolesPermissionsData.individualPermissions[memberKey][key];
+      } else {
+        rolesPermissionsData.individualPermissions[memberKey][key] = checkbox.checked;
+      }
+      cleanupIndividualPermissionOverrides(memberKey);
+      await saveRolesPermissions();
+      if (message) message.textContent = 'Saved.';
+    });
+
+    const text = document.createElement('span');
+    text.textContent = label;
+    const inherited = document.createElement('small');
+    inherited.textContent = roleDefault ? 'Role default: on' : 'Role default: off';
+    row.appendChild(checkbox);
+    row.appendChild(text);
+    row.appendChild(inherited);
+    checks.appendChild(row);
+  });
+
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+}
+
 function renderRoleMembers(roleKey, tbodyId) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
@@ -3716,7 +3833,6 @@ function renderRoleMembers(roleKey, tbodyId) {
     const employee = findEmployeeByRoleKey(memberKey);
     const displayName = employee ? employeeDisplayName(employee) : memberKey;
     const email = normalizeEmployeeRecord(employee || { email: memberKey }).email || memberKey;
-    const individual = rolesPermissionsData.individualPermissions[memberKey] || {};
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${escapeHtml(displayName)}</td>
@@ -3729,31 +3845,18 @@ function renderRoleMembers(roleKey, tbodyId) {
     permissionsButton.type = 'button';
     permissionsButton.className = 'submit-btn roles-permissions-btn';
     permissionsButton.textContent = 'Permissions';
-    const permissionsPanel = document.createElement('div');
-    permissionsPanel.className = 'roles-individual-permissions hidden';
-    permissionsButton.addEventListener('click', () => {
-      permissionsPanel.classList.toggle('hidden');
-    });
+    permissionsButton.addEventListener('click', () => openRolePermissionModal(roleKey, memberKey));
     permissionsCell.appendChild(permissionsButton);
-    permissionsCell.appendChild(permissionsPanel);
+    const summary = document.createElement('div');
+    summary.className = 'roles-permission-summary';
     PERMISSION_DEFINITIONS.forEach(({ key, label }) => {
-      const labelEl = document.createElement('label');
-      labelEl.className = 'roles-inline-check';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'market-filter-checkbox';
-      checkbox.checked = !!individual[key];
-      checkbox.addEventListener('change', async () => {
-        if (!rolesPermissionsData.individualPermissions[memberKey]) {
-          rolesPermissionsData.individualPermissions[memberKey] = {};
-        }
-        rolesPermissionsData.individualPermissions[memberKey][key] = checkbox.checked;
-        await saveRolesPermissions();
-      });
-      labelEl.appendChild(checkbox);
-      labelEl.appendChild(document.createTextNode(label));
-      permissionsPanel.appendChild(labelEl);
+      const status = document.createElement('span');
+      const value = getMemberPermissionValue(roleKey, memberKey, key);
+      status.className = `roles-permission-pill ${value ? 'enabled' : 'disabled'}`;
+      status.textContent = `${label}: ${value ? 'On' : 'Off'}`;
+      summary.appendChild(status);
     });
+    permissionsCell.appendChild(summary);
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';

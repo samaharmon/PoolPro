@@ -3231,13 +3231,13 @@ textarea,
 
 .roles-tables-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 24px;
 }
 
 .roles-table,
 .roles-permissions-table {
-  min-width: 620px;
+  min-width: 760px;
 }
 
 .roles-inline-check {
@@ -3253,8 +3253,108 @@ textarea,
   font-size: 0.82rem;
 }
 
-.roles-individual-permissions {
+.roles-permission-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 8px;
+}
+
+.roles-permission-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid #777;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ddd;
+  font-size: 0.74rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.roles-permission-pill.enabled {
+  border-color: #7fbf7f;
+  color: #dff4df;
+}
+
+.roles-permission-pill.disabled {
+  border-color: #a35a52;
+  color: #f0c9c3;
+}
+
+.roles-permission-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10020;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.roles-permission-modal.hidden {
+  display: none !important;
+}
+
+.roles-permission-modal-card {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100dvh - 56px);
+  overflow-y: auto;
+  background: #2f2f2f;
+  color: #fff;
+  border: 2px solid #69140e;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  padding: 22px 24px 24px;
+  position: relative;
+}
+
+.roles-permission-modal-card h4 {
+  margin: 0 34px 10px 0;
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.roles-permission-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  box-shadow: none;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.roles-permission-modal-checks {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.roles-modal-check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #555;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.roles-modal-check small {
+  grid-column: 2;
+  color: #bbb;
+  font-size: 0.76rem;
+}
+
+.roles-permission-modal-message {
+  min-height: 18px;
+  margin: 14px 0 0;
+  color: #9ee39e;
+  font-weight: 700;
 }
 
 .roles-remove-btn {
