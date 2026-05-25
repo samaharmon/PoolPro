@@ -342,6 +342,27 @@ function setModalView(view) {
   if (view === 'login') usernameInput?.focus();
 }
 
+function stabilizeHomeModalViewport() {
+  if (!modal) return;
+  modal.scrollLeft = 0;
+  const modalCard = modal.querySelector('.home-login-modal');
+  if (modalCard) modalCard.scrollLeft = 0;
+}
+
+function setupMobileModalFocusGuards() {
+  if (!modal) return;
+  modal.querySelectorAll('input, select, button').forEach((control) => {
+    control.addEventListener('focus', () => {
+      window.setTimeout(() => {
+        stabilizeHomeModalViewport();
+        control.scrollIntoView({ block: 'center', inline: 'nearest' });
+      }, 250);
+    });
+  });
+  window.visualViewport?.addEventListener('resize', stabilizeHomeModalViewport);
+  window.addEventListener('orientationchange', () => window.setTimeout(stabilizeHomeModalViewport, 250));
+}
+
 function getDestinationPath() {
   return pendingTarget ? DESTINATIONS[pendingTarget] : DESTINATIONS.chem;
 }
@@ -1288,6 +1309,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   populatePoolOptions();
   wireMenu();
   wireRoleToggle();
+  setupMobileModalFocusGuards();
 
   form?.addEventListener('submit', handleSubmit);
   createAccountForm?.addEventListener('submit', handleCreateAccountSubmit);

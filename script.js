@@ -126,7 +126,7 @@ document.addEventListener('click', (e) => {
 function getPagePrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   parts.pop();
-  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
+  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
   const last = parts[parts.length - 1] || '';
   return subDirs.includes(last) ? '../' : '';
 }
@@ -137,14 +137,32 @@ function injectOperationalStatusMenuLinks() {
 
   document.querySelectorAll('.dropdown-menu').forEach((menu) => {
     if (menu.querySelector('[data-nav="operational-status"]')) return;
-    const dutiesLink = menu.querySelector('[data-nav="duties"]');
-    if (!dutiesLink) return;
+    const anchorLink = menu.querySelector('[data-nav="managerial-report"]') || menu.querySelector('[data-nav="duties"]');
+    if (!anchorLink) return;
 
     const link = document.createElement('a');
     link.href = isOperationalPage ? 'operational.html' : `${prefix}operational/operational.html`;
     link.className = `dropdown-item${isOperationalPage ? ' active-page' : ''}`;
     link.dataset.nav = 'operational-status';
     link.textContent = 'Operational Status Log';
+    anchorLink.insertAdjacentElement('afterend', link);
+  });
+}
+
+function injectManagerialReportMenuLinks() {
+  const prefix = getPagePrefix();
+  const isManagerialPage = /\/managerial\/managerial\.html$/i.test(window.location.pathname);
+
+  document.querySelectorAll('.dropdown-menu').forEach((menu) => {
+    if (menu.querySelector('[data-nav="managerial-report"]')) return;
+    const dutiesLink = menu.querySelector('[data-nav="duties"]');
+    if (!dutiesLink) return;
+
+    const link = document.createElement('a');
+    link.href = isManagerialPage ? 'managerial.html' : `${prefix}managerial/managerial.html`;
+    link.className = `dropdown-item${isManagerialPage ? ' active-page' : ''}`;
+    link.dataset.nav = 'managerial-report';
+    link.textContent = 'Managerial Report';
     dutiesLink.insertAdjacentElement('afterend', link);
   });
 }
@@ -553,10 +571,38 @@ async function redactDeletedAccountData(context) {
   await Promise.all([
     redactCollectionIdentity('poolSubmissions', identifiers, ['employeeId', 'email', 'submitterEmail', 'username']),
     redactCollectionIdentity('dutySubmissions', identifiers, ['submitterEmail', 'employeeId', 'email', 'username']),
+    redactCollectionIdentity('managerialReports', identifiers, ['submitterEmail', 'employeeId', 'email', 'username']),
     redactCollectionIdentity('trainingSignups', identifiers, ['employeeId', 'email', 'username']),
     redactCollectionIdentity('operationalStatusLogs', identifiers, ['employeeId', 'email', 'submitterEmail', 'username']),
     redactTrainingScheduleIdentity(identifiers),
   ]);
+}
+
+async function deleteFirebaseAuthCredentialForAccount(context, password = '') {
+  const email = (context?.email || '').trim().toLowerCase();
+  const username = (context?.username || '').trim().toLowerCase();
+  if (!email) return;
+
+  if (auth.currentUser && (auth.currentUser.email || '').trim().toLowerCase() === email) {
+    if (password) {
+      const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
+      await reauthenticateWithCredential(auth.currentUser, credential);
+    }
+    await deleteUser(auth.currentUser);
+    return;
+  }
+
+  if (context?.role !== 'lifeguard' || !username) return;
+
+  const response = await fetch(DELETE_AUTH_USER_FUNCTION_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, username }),
+  });
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail.error || 'Unable to delete Firebase Auth credentials.');
+  }
 }
 
 async function handleDeleteCurrentAccount() {
@@ -592,6 +638,7 @@ async function handleDeleteCurrentAccount() {
     if (passwordRequired) {
       await reauthenticateAccountForDeletion(email, password);
     }
+    await deleteFirebaseAuthCredentialForAccount(context, password);
     await redactDeletedAccountData(context);
 
     if (role === 'lifeguard') {
@@ -600,18 +647,6 @@ async function handleDeleteCurrentAccount() {
     }
 
     await deleteDoc(doc(db, 'userAgreements', getAgreementDocIdForContext(context))).catch(() => {});
-
-    if (auth.currentUser) {
-      try {
-        await deleteUser(auth.currentUser);
-      } catch (deleteErr) {
-        if (role === 'lifeguard' && deleteErr?.code === 'auth/requires-recent-login') {
-          console.warn('[PoolPro] Lifeguard app account was removed, but Firebase Auth requires a recent login before deleting the auth user.', deleteErr);
-        } else {
-          throw deleteErr;
-        }
-      }
-    }
 
     setAccountManagementMessage('Account deleted. Signing out...');
     setTimeout(() => {
@@ -726,7 +761,7 @@ window.logout = async function () {
   } catch (_) { /* ignore */ }
   const _parts = window.location.pathname.split('/').filter(Boolean);
   _parts.pop();
-  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
+  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
   const _last = _parts[_parts.length - 1] || '';
   window.location.href = (_subDirs.includes(_last) ? '../' : '') + 'index.html';
 };
@@ -902,7 +937,7 @@ window.goToEditor = function () {
   // Remove the filename (last element)
   parts.pop();
   // Remove segments that are known subdirectories to find the project root depth
-  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties', 'resources', 'operational'];
+  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties', 'managerial', 'resources', 'operational'];
   const lastPart = parts[parts.length - 1] || '';
   const stepsUp = subDirs.some(d => d.toLowerCase() === lastPart.toLowerCase()) ? 1 : 0;
   const prefix = stepsUp > 0 ? '../' : '';
@@ -932,7 +967,7 @@ window.goToTrainingSetup = function () {
     sessionStorage.setItem('trainingIntentAdmin', '1');
     const parts = window.location.pathname.split('/').filter(Boolean);
     parts.pop();
-    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
+    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
     const lastPart = parts[parts.length - 1] || '';
     const prefix = subDirs.includes(lastPart) ? '../' : '';
     window.location.href = prefix + 'Training/training.html';
@@ -1300,6 +1335,7 @@ function populatePoolSelects(pools) {
 const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
 const ROLE_PERMISSIONS_STORAGE_KEY = 'poolproRolePermissionsProfile';
 const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
+const DELETE_AUTH_USER_FUNCTION_URL = 'https://us-central1-chemlog-43c08.cloudfunctions.net/deleteAuthUserByEmail';
 const ROLE_DEFINITIONS = [
   { key: 'poolManager', label: 'Pool Manager' },
   { key: 'supervisor', label: 'Supervisor' },
@@ -1492,6 +1528,9 @@ window.setupDropdownVisibility = function () {
     el.style.display = canViewChemDashboard ? '' : 'none';
     el.textContent = sup ? 'Supervisor Dashboard' : 'Pool Chemistry Dashboard';
   });
+  document.querySelectorAll('[data-nav="managerial-report"]').forEach((el) => {
+    el.style.display = canAccessManagerialReport() ? '' : 'none';
+  });
   document.querySelectorAll('.lifeguard-only').forEach((item) => {
     item.style.display = lifeguard ? '' : 'none';
   });
@@ -1513,7 +1552,7 @@ window.setupDropdownVisibility = function () {
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const lastDir = parts.length > 1 ? parts[parts.length - 2] : '';
-  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'resources', 'operational', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Employees', 'Testing', 'Resources', 'Operational'];
+  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'managerial', 'resources', 'operational', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Managerial', 'Employees', 'Testing', 'Resources', 'Operational'];
   return subDirs.includes(lastDir) ? '../' : '';
 }
 
@@ -5181,6 +5220,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
   normalizeSharedHeaderCopy();
   injectOperationalStatusMenuLinks();
+  injectManagerialReportMenuLinks();
   injectResourcesMenuLinks();
   injectLifeguardSettingsMenuLinks();
   ensureResourcesSettingsSection();

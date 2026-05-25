@@ -65,6 +65,13 @@ body.dark-mode .duties-group-desc {
   color: #888;
 }
 
+.duties-access-message {
+  min-height: 18px;
+  margin: 0 0 12px;
+  color: #c0392b;
+  font-weight: 700;
+}
+
 /* ============================================================
    Manager-only section
    ============================================================ */
@@ -162,6 +169,10 @@ body.dark-mode .duties-manager-section.duties-section:last-of-type {
   min-height: 0;
   overflow: hidden;
   transition: opacity 0.24s ease, transform 0.32s ease;
+}
+
+.duties-manager-section-open .duties-manager-body-inner {
+  overflow: visible;
 }
 
 .duties-manager-body.collapsed .duties-manager-body-inner {

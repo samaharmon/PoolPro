@@ -37,6 +37,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Managerial report submissions
+    match /managerialReports/{submissionId} {
+      allow read, write: if true;
+    }
+
     // Fill line, hose, and bleach feeder operational status updates
     match /operationalStatusLogs/{logId} {
       allow read, write: if true;

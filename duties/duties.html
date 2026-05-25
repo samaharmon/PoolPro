@@ -138,58 +138,6 @@
         </div>
       </div>
 
-      <!-- Section 3: Manager Only -->
-      <div class="duties-section duties-manager-section" id="dutiesManagerSection">
-        <button type="button" class="duties-manager-toggle" id="dutiesManagerToggle" aria-expanded="false" aria-controls="dutiesManagerBody">
-          <span class="duties-manager-title-text">Other Information <span class="duties-manager-badge">Collected by Pool Managers ONLY</span></span>
-          <span class="duties-manager-caret" aria-hidden="true">▾</span>
-        </button>
-        <div class="duties-manager-body collapsed" id="dutiesManagerBody">
-          <div class="duties-manager-body-inner">
-            <p class="duties-section-desc" style="color:#8b2020;">Complete this section only if you are a pool manager. Record current chemical supply levels for your facility.</p>
-
-            <!-- Bleach Barrels -->
-            <div class="duties-photo-group">
-              <h3 class="duties-photo-group-title">Bleach Barrels <span class="duties-opt-badge">optional photo</span></h3>
-              <p class="duties-group-desc">Upload a photo of the bleach barrel(s) and record the estimated volume remaining.</p>
-              <div class="duties-multi-upload" id="bleachUpload" data-category="bleach" data-min="0" data-max="10"></div>
-              <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('bleachUpload')">+ Add Photo</button>
-              <div class="duties-note-group">
-                <label for="bleachVolume">Bleach volume remaining (%)</label>
-                <input type="number" id="bleachVolume" min="0" max="100" placeholder="0-100" />
-              </div>
-            </div>
-
-            <!-- Muriatic Acid -->
-            <div class="duties-photo-group">
-              <h3 class="duties-photo-group-title">Muriatic Acid</h3>
-              <p class="duties-group-desc">Record the estimated amount of muriatic acid remaining at your facility.</p>
-              <div class="duties-note-group">
-                <label for="muriaticAcid">Volume remaining (gallons)</label>
-                <input type="number" id="muriaticAcid" min="0" placeholder="e.g. 4" />
-              </div>
-            </div>
-
-            <!-- Shock / Granular -->
-            <div class="duties-photo-group">
-              <h3 class="duties-photo-group-title">Shock / Granular</h3>
-              <p class="duties-group-desc">Record the estimated amount of shock or granular chlorine remaining at your facility.</p>
-              <div class="duties-note-group">
-                <label for="shockGranular">Amount remaining (%)</label>
-                <input type="number" id="shockGranular" min="0" max="100" placeholder="0-100" />
-              </div>
-            </div>
-
-            <!-- CYA per pool - auto-populated from top-level pool selection -->
-            <div class="duties-photo-group">
-              <h3 class="duties-photo-group-title">CYA Levels</h3>
-              <p class="duties-group-desc">Enter a CYA reading (0-100) for each pool at the selected facility. Select a pool location at the top of this form first.</p>
-              <div id="cyaPoolFields" class="duties-cya-fields"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <button type="button" class="submit-btn" id="dutiesSubmitBtn" onclick="submitDutiesForm()">Submit Form</button>
       <p id="dutiesMessage" style="margin-top:10px; color:#333;"></p>
     </div>

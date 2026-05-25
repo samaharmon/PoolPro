@@ -26,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 });
 
+function isManagerialReportPage() {
+  return document.body?.dataset.reportType === 'managerial';
+}
+
 // ============================================================
 // SUBMITTER INFO (from session — no email input field)
 // ============================================================
@@ -209,23 +213,35 @@ function initManagerSectionToggle() {
   const toggle = document.getElementById('dutiesManagerToggle');
   const body = document.getElementById('dutiesManagerBody');
   const section = document.getElementById('dutiesManagerSection');
-  if (!toggle || !body || !section) return;
+  if (!section || !body) return;
+  const accessMessage = document.getElementById('managerialAccessMessage');
+  const managerialPage = isManagerialReportPage();
   section.classList.add('hidden');
 
   const setExpanded = (expanded) => {
-    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    if (toggle) toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     body.classList.toggle('collapsed', !expanded);
   };
 
-  setExpanded(false);
-  toggle.addEventListener('click', () => {
-    setExpanded(toggle.getAttribute('aria-expanded') !== 'true');
-  });
+  setExpanded(managerialPage);
+  if (toggle) {
+    toggle.addEventListener('click', () => {
+      setExpanded(toggle.getAttribute('aria-expanded') !== 'true');
+    });
+  }
 
   canAccessManagerialReport().then((allowed) => {
     section.classList.toggle('hidden', !allowed);
-    if (!allowed) return;
-    toggle.style.display = 'none';
+    if (accessMessage) {
+      accessMessage.textContent = allowed ? '' : 'You do not have permission to view the Managerial Report.';
+    }
+    const submitBtn = document.getElementById('dutiesSubmitBtn');
+    if (managerialPage && submitBtn) submitBtn.disabled = !allowed;
+    if (!allowed) {
+      if (managerialPage && submitBtn) submitBtn.title = 'Managerial Report permission is required.';
+      return;
+    }
+    if (toggle) toggle.style.display = 'none';
     setExpanded(true);
     section.classList.add('duties-manager-section-open');
   });
@@ -518,19 +534,30 @@ window.submitDutiesForm = async function () {
   const pool = document.getElementById('dutiesPool')?.value;
   const submitterEmail = getSubmitterEmail();
   const msgEl = document.getElementById('dutiesMessage');
+  const managerialPage = isManagerialReportPage();
 
   if (!pool) {
     if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = 'Please select a pool facility.'; }
     return;
   }
 
+  if (managerialPage) {
+    const allowed = await canAccessManagerialReport();
+    if (!allowed) {
+      if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = 'You do not have permission to submit a managerial report.'; }
+      return;
+    }
+  }
+
   // Validate required photo groups
-  const requiredGroups = [
-    { id: 'deckUpload', label: 'Deck', min: 2 },
-    { id: 'poolUpload', label: 'Pool', min: 2 },
-    { id: 'skimmersUpload', label: 'Skimmers', min: 2 },
-    { id: 'bleachFeederUpload', label: 'Bleach Feeders', min: 1 },
-  ];
+  const requiredGroups = managerialPage
+    ? []
+    : [
+        { id: 'deckUpload', label: 'Deck', min: 2 },
+        { id: 'poolUpload', label: 'Pool', min: 2 },
+        { id: 'skimmersUpload', label: 'Skimmers', min: 2 },
+        { id: 'bleachFeederUpload', label: 'Bleach Feeders', min: 1 },
+      ];
 
   const fillLinesGroup = document.getElementById('fillLinesGroup');
   const fillLinesUpload = document.getElementById('fillLinesUpload');
@@ -582,7 +609,8 @@ window.submitDutiesForm = async function () {
       }
     });
 
-    await addDoc(collection(db, 'dutySubmissions'), {
+    await addDoc(collection(db, managerialPage ? 'managerialReports' : 'dutySubmissions'), {
+      reportType: managerialPage ? 'managerial' : 'cleanliness',
       pool,
       submitterEmail: submitterEmail || 'unknown',
       photos: {
@@ -603,7 +631,10 @@ window.submitDutiesForm = async function () {
       timestamp: serverTimestamp(),
     });
 
-    if (msgEl) { msgEl.style.color = '#1a8a1a'; msgEl.textContent = 'Form submitted successfully!'; }
+    if (msgEl) {
+      msgEl.style.color = '#1a8a1a';
+      msgEl.textContent = managerialPage ? 'Managerial report submitted successfully!' : 'Form submitted successfully!';
+    }
     resetForm();
   } catch (err) {
     console.error('[Duties] Submit error:', err);
@@ -614,7 +645,8 @@ window.submitDutiesForm = async function () {
 };
 
 function resetForm() {
-  document.getElementById('dutiesPool').value = '';
+  const poolSelect = document.getElementById('dutiesPool');
+  if (poolSelect) poolSelect.value = '';
   ['damagedNotes', 'dutiesOtherNotes'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PoolPro</title>
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PoolPro">
+  <meta name="theme-color" content="#202834">
+
+  <link rel="icon" type="image/png" href="../Images/Logos/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="../Images/Logos/favicon.svg" />
+  <link rel="shortcut icon" href="../Images/Logos/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/Images/Logos/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+
+  <link rel="stylesheet" href="../style.css" />
+  <link rel="stylesheet" href="../duties/duties.css" />
+</head>
+
+<body data-report-type="managerial">
+  <div class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <div class="header-title-block">
+          <h1>PoolPro</h1>
+          <p>Capital City Aquatics &amp; Upstate Pool Management</p>
+        </div>
+        <div class="menu-container">
+          <button class="menu-btn" onclick="toggleMenu(this)">
+            <span>≡</span>
+            <span>Menu</span>
+          </button>
+          <div class="dropdown-menu" id="dropdownMenu">
+            <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
+            <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
+            <a href="managerial.html" class="dropdown-item active-page" data-nav="managerial-report">Managerial Report</a>
+            <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
+            <a href="../Training/training.html" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
+            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
+            <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+            <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
+          </div>
+        </div>
+        <div class="header-right">
+          <img id="logo" src="../Images/Logos/logo.png" alt="PoolPro logo" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2 class="page-content-title">Managerial Report</h2>
+
+    <div class="form-container">
+      <div class="duties-section">
+        <h2 class="duties-section-title">Managerial Report</h2>
+        <p class="duties-section-desc">Record manager-only supply levels for the selected facility.</p>
+        <p class="duties-access-message" id="managerialAccessMessage"></p>
+        <div class="duties-pool-row">
+          <label for="dutiesPool">Pool Location</label>
+          <select id="dutiesPool" required>
+            <option value="">What facility are you creating a submission for?</option>
+          </select>
+        </div>
+        <p class="duties-submitter-info" id="dutiesSubmitterInfo"></p>
+      </div>
+
+      <div class="duties-section duties-manager-section" id="dutiesManagerSection">
+        <div class="duties-manager-title">
+          <button type="button" class="duties-manager-toggle" id="dutiesManagerToggle" aria-expanded="true">
+            <span class="duties-manager-title-text">Managerial Report</span>
+            <span class="duties-manager-caret" aria-hidden="true">▾</span>
+          </button>
+        </div>
+        <div class="duties-manager-body" id="dutiesManagerBody">
+          <div class="duties-manager-body-inner">
+            <div class="duties-photo-group">
+              <h3 class="duties-photo-group-title">Bleach Barrels <span class="duties-opt-badge">optional</span></h3>
+              <p class="duties-group-desc">Attach photos of the bleach barrels when reporting bleach volume.</p>
+              <div class="duties-multi-upload" id="bleachUpload" data-category="bleach" data-min="0" data-max="10"></div>
+              <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('bleachUpload')">+ Add Photo</button>
+              <div class="duties-note-group">
+                <label for="bleachVolume">Bleach Volume (%)</label>
+                <input type="number" id="bleachVolume" min="0" max="100" placeholder="0-100">
+              </div>
+            </div>
+
+            <div class="duties-note-group">
+              <label for="muriaticAcid">Muriatic Acid (gal)</label>
+              <input type="number" id="muriaticAcid" min="0" step="0.5" placeholder="Gallons">
+            </div>
+
+            <div class="duties-note-group">
+              <label for="shockGranular">Shock / Granular (%)</label>
+              <input type="number" id="shockGranular" min="0" max="100" placeholder="0-100">
+            </div>
+
+            <div class="duties-photo-group">
+              <h3 class="duties-photo-group-title">CYA Levels</h3>
+              <p class="duties-group-desc">Select a facility to enter a CYA level for each pool.</p>
+              <div class="duties-cya-fields" id="cyaPoolFields"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button type="button" class="submit-btn" id="dutiesSubmitBtn" onclick="submitDutiesForm()">Submit Managerial Report</button>
+      <p id="dutiesMessage" style="margin-top:10px; color:#333;"></p>
+    </div>
+  </div>
+
+  <div class="footer">
+    <em>Developed by Sam Harmon | 2025<br>v1.0</em>
+  </div>
+
+  <script type="module" src="../script.js"></script>
+  <script type="module" src="../duties/duties.js"></script>
+</body>
+</html>
