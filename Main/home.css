@@ -196,11 +196,14 @@ html {
 
 .home-first-time-callout {
   position: relative;
-  display: inline-block;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
   width: fit-content;
   max-width: 100%;
-  margin: 10px 0 16px 44px;
-  padding: 9px 12px;
+  margin: 10px 0 16px;
+  padding: 12px 14px;
   border: 1px solid #c8a47e;
   background: rgba(200, 164, 126, 0.14);
   color: #fff;
@@ -208,34 +211,10 @@ html {
   font-weight: 700;
   line-height: 1.35;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.28);
-  isolation: isolate;
 }
 
-.home-first-time-callout::before {
-  content: '';
-  position: absolute;
-  left: -30px;
-  top: -18px;
-  width: 26px;
-  height: 28px;
-  border-left: 2px solid #c8a47e;
-  border-top: 2px solid #c8a47e;
-  border-top-left-radius: 24px;
-  opacity: 0.95;
-}
-
-.home-first-time-callout::after {
-  content: '';
-  position: absolute;
-  left: -11px;
-  top: -21px;
-  width: 10px;
-  height: 10px;
-  border-top: 2px solid #c8a47e;
-  border-right: 2px solid #c8a47e;
-  transform: rotate(34deg);
-  pointer-events: none;
-  opacity: 0.95;
+.home-first-time-callout-text {
+  display: block;
 }
 
 .home-first-time-callout.hidden {
@@ -334,22 +313,23 @@ html {
 }
 
 .home-create-link-btn {
-  margin-top: -2px;
-  margin-bottom: 6px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: #f0c9b6;
+  margin: 0;
+  margin-bottom: 0;
+  padding: 8px 14px;
+  border: 1px solid #c8a47e;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff4d7;
   font-size: 13px;
   font-family: "Franklin Gothic Medium", Arial, sans-serif;
   text-align: left;
   cursor: pointer;
-  transition: color 0.2s ease, opacity 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }
 
 .home-create-link-btn:hover {
   color: #ffffff;
-  opacity: 0.9;
+  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 #homeForgotPasswordBtn {
@@ -482,22 +462,6 @@ html {
     grid-template-columns: 1fr;
   }
 
-  .home-first-time-callout {
-    margin-left: 34px;
-  }
-
-  .home-first-time-callout::before {
-    left: -24px;
-    top: -16px;
-    width: 20px;
-    height: 24px;
-  }
-
-  .home-first-time-callout::after {
-    left: -8px;
-    top: -18px;
-  }
-
   .home-form-actions {
     flex-direction: column;
   }
@@ -510,4 +474,3 @@ html {
     flex-direction: column;
     align-items: stretch;
   }
-}

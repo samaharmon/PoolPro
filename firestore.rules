@@ -37,6 +37,15 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Cleanliness report photos stored in Firestore chunks when browser Storage uploads are blocked
+    match /dutySubmissionMedia/{submissionId}/photos/{photoId} {
+      allow read, write: if true;
+    }
+
+    match /dutySubmissionMedia/{submissionId}/photos/{photoId}/chunks/{chunkId} {
+      allow read, write: if true;
+    }
+
     // Managerial report submissions
     match /managerialReports/{submissionId} {
       allow read, write: if true;
@@ -67,19 +76,4 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Signed user agreement acknowledgments
-    match /userAgreements/{agreementId} {
-      allow read, write: if true;
-    }
-
-    // Auditing form submissions
-    match /testingResults/{resultId} {
-      allow read, write: if true;
-    }
-
-    // Deny everything else
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
+    // Signed

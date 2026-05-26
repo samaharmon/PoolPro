@@ -1,14 +1,12 @@
 // duties.js — Daily Pool Cleanliness Report
-import { db, auth, collection, addDoc, serverTimestamp, doc, getDoc } from '../firebase.js';
-import { getApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
+import { db, auth, collection, serverTimestamp, doc, getDoc, setDoc, writeBatch } from '../firebase.js';
 
 const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
 const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
-const DUTY_STORAGE_UPLOAD_TIMEOUT_MS = 2 * 60 * 1000;
-const DUTY_STORAGE_DOWNLOAD_URL_TIMEOUT_MS = 30 * 1000;
-const DUTY_UPLOAD_IMAGE_MAX_SIDE = 1600;
-const DUTY_UPLOAD_IMAGE_QUALITY = 0.82;
+const DUTY_FIRESTORE_STORAGE = 'firestoreDutyPhoto';
+const DUTY_FIRESTORE_CHUNK_SIZE = 350000;
+const DUTY_UPLOAD_IMAGE_MAX_SIDE = 1280;
+const DUTY_UPLOAD_IMAGE_QUALITY = 0.72;
 const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
 
 // ============================================================
@@ -476,18 +474,21 @@ function collectPhotosFromGroup(groupId) {
   return files;
 }
 
-function timeoutAfter(ms, label) {
-  return new Promise((_, reject) => {
-    setTimeout(() => reject(new Error(`${label} timed out`)), ms);
-  });
-}
-
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob) resolve(blob);
       else reject(new Error('Unable to prepare image for upload.'));
     }, type, quality);
+  });
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file.'));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -543,27 +544,60 @@ async function prepareDutyPhotoForUpload(file) {
   }
 }
 
-async function uploadDutyPhoto({ storage, pool, category, file, index }) {
+async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
   const safeName = String(file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = `dutyPhotos/${pool}/${category}/${Date.now()}_${index}_${safeName}`;
-  const storageRef = ref(storage, path);
   const uploadPayload = await prepareDutyPhotoForUpload(file);
+  const photoId = `${Date.now()}_${index}_${safeName}`;
+  const photoDoc = doc(db, 'dutySubmissionMedia', submissionId, 'photos', photoId);
+  const dataUrl = await readFileAsDataURL(uploadPayload.body);
+  const [prefix, encoded = ''] = String(dataUrl || '').split(',');
+  if (!encoded) throw new Error(`Unable to encode ${file.name || 'photo'} for upload.`);
 
-  await Promise.race([
-    uploadBytes(storageRef, uploadPayload.body, {
-      contentType: uploadPayload.contentType,
-      cacheControl: 'public,max-age=3600',
-    }),
-    timeoutAfter(DUTY_STORAGE_UPLOAD_TIMEOUT_MS, 'Firebase Storage upload'),
-  ]);
-  const url = await Promise.race([
-    getDownloadURL(storageRef),
-    timeoutAfter(DUTY_STORAGE_DOWNLOAD_URL_TIMEOUT_MS, 'Firebase Storage download URL'),
-  ]);
-  return { index, url, name: file.name, storagePath: path, source: 'storage' };
+  const chunks = [];
+  for (let i = 0; i < encoded.length; i += DUTY_FIRESTORE_CHUNK_SIZE) {
+    chunks.push(encoded.slice(i, i + DUTY_FIRESTORE_CHUNK_SIZE));
+  }
+
+  await setDoc(photoDoc, {
+    submissionId,
+    pool,
+    category,
+    index,
+    fileName: file.name || safeName,
+    contentType: uploadPayload.contentType,
+    chunkCount: chunks.length,
+    dataUrlPrefix: prefix,
+    storedAt: serverTimestamp(),
+  });
+
+  for (let i = 0; i < chunks.length; i += 400) {
+    const batch = writeBatch(db);
+    chunks.slice(i, i + 400).forEach((chunk, offset) => {
+      const chunkIndex = i + offset;
+      const chunkId = String(chunkIndex).padStart(4, '0');
+      batch.set(doc(db, 'dutySubmissionMedia', submissionId, 'photos', photoId, 'chunks', chunkId), {
+        index: chunkIndex,
+        data: chunk,
+      });
+    });
+    await batch.commit();
+  }
+
+  return {
+    index,
+    url: `${DUTY_FIRESTORE_STORAGE}:${submissionId}:${photoId}`,
+    name: file.name,
+    storagePath: '',
+    source: DUTY_FIRESTORE_STORAGE,
+    contentType: uploadPayload.contentType,
+    dataUrlPrefix: prefix,
+    chunkCount: chunks.length,
+    photoId,
+    submissionId,
+  };
 }
 
-async function uploadDutyPhotoGroups({ storage, pool, uploadGroups, onProgress }) {
+async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgress }) {
   const totalPhotos = uploadGroups.reduce((sum, group) => sum + group.files.length, 0);
   let uploadedCount = 0;
   const results = {};
@@ -581,7 +615,7 @@ async function uploadDutyPhotoGroups({ storage, pool, uploadGroups, onProgress }
         });
       }
       const uploadedPhoto = await uploadDutyPhoto({
-        storage,
+        submissionId,
         pool,
         category: group.category,
         file,
@@ -623,149 +657,4 @@ window.submitDutiesForm = async function () {
     const allowed = await canAccessManagerialReport();
     if (!allowed) {
       if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = 'You do not have permission to submit a managerial report.'; }
-      return;
-    }
-  }
-
-  // Validate required photo groups
-  const requiredGroups = managerialPage
-    ? []
-    : [
-        { id: 'deckUpload', label: 'Deck', min: 2 },
-        { id: 'poolUpload', label: 'Pool', min: 2 },
-        { id: 'skimmersUpload', label: 'Skimmers', min: 2 },
-        { id: 'bleachFeederUpload', label: 'Bleach Feeders', min: 1 },
-      ];
-
-  const fillLinesGroup = document.getElementById('fillLinesGroup');
-  const fillLinesUpload = document.getElementById('fillLinesUpload');
-  if (fillLinesGroup && fillLinesUpload && !fillLinesGroup.classList.contains('hidden')) {
-    requiredGroups.push({
-      id: 'fillLinesUpload',
-      label: 'Fill Lines',
-      min: parseInt(fillLinesUpload.dataset.min || '1', 10),
-    });
-  }
-
-  for (const g of requiredGroups) {
-    const photos = collectPhotosFromGroup(g.id);
-    if (photos.length < g.min) {
-      if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = `Please upload at least ${g.min} photos for ${g.label}.`; }
-      return;
-    }
-  }
-
-  const submitBtn = document.getElementById('dutiesSubmitBtn');
-  if (submitBtn) submitBtn.disabled = true;
-  if (msgEl) { msgEl.style.color = '#333'; msgEl.textContent = 'Submitting…'; }
-
-  try {
-    const storage = getStorage(getApp());
-    const uploadGroups = [
-      { groupId: 'deckUpload', category: 'deck', resultKey: 'deck', label: 'Deck' },
-      { groupId: 'poolUpload', category: 'pool', resultKey: 'pool', label: 'Pool' },
-      { groupId: 'skimmersUpload', category: 'skimmers', resultKey: 'skimmers', label: 'Skimmers' },
-      { groupId: 'damagedUpload', category: 'damaged', resultKey: 'damaged', label: 'Damaged Equipment' },
-      { groupId: 'bleachFeederUpload', category: 'bleachFeeders', resultKey: 'bleachFeeders', label: 'Bleach Feeders' },
-      { groupId: 'fillLinesUpload', category: 'fillLines', resultKey: 'fillLines', label: 'Fill Lines' },
-      { groupId: 'bleachUpload', category: 'bleach', resultKey: 'bleach', label: 'Managers Only' },
-    ].map((group) => ({
-      ...group,
-      files: collectPhotosFromGroup(group.groupId),
-    }));
-
-    const totalPhotos = uploadGroups.reduce((sum, group) => sum + group.files.length, 0);
-    if (msgEl) {
-      msgEl.style.color = '#333';
-      msgEl.textContent = totalPhotos
-        ? `Preparing ${totalPhotos} photo${totalPhotos === 1 ? '' : 's'} for upload...`
-        : 'Submitting...';
-    }
-
-    const uploadedPhotos = await uploadDutyPhotoGroups({
-      storage,
-      pool,
-      uploadGroups,
-      onProgress: ({ completed, total, label, fileName, done }) => {
-        if (!msgEl || !total) return;
-        msgEl.style.color = '#333';
-        msgEl.textContent = done
-          ? `Uploads complete. Saving report...`
-          : `Uploading photo ${completed + 1} of ${total} for ${label}: ${fileName}`;
-      },
-    });
-
-    // Collect CYA readings
-    const cyaReadings = {};
-    document.querySelectorAll('.cya-input').forEach(input => {
-      if (input.value !== '') {
-        cyaReadings[`pool${input.dataset.poolIndex}`] = parseFloat(input.value);
-      }
-    });
-
-    await addDoc(collection(db, managerialPage ? 'managerialReports' : 'dutySubmissions'), {
-      reportType: managerialPage ? 'managerial' : 'cleanliness',
-      pool,
-      submitterEmail: submitterEmail || 'unknown',
-      photos: {
-        deck: uploadedPhotos.deck || [],
-        pool: uploadedPhotos.pool || [],
-        skimmers: uploadedPhotos.skimmers || [],
-        damaged: uploadedPhotos.damaged || [],
-        bleachFeeders: uploadedPhotos.bleachFeeders || [],
-        fillLines: uploadedPhotos.fillLines || [],
-        bleach: uploadedPhotos.bleach || [],
-      },
-      damagedNotes: document.getElementById('damagedNotes')?.value?.trim() || '',
-      otherNotes: document.getElementById('dutiesOtherNotes')?.value?.trim() || '',
-      bleachVolume: document.getElementById('bleachVolume')?.value || null,
-      muriaticAcid: document.getElementById('muriaticAcid')?.value || null,
-      shockGranular: document.getElementById('shockGranular')?.value || null,
-      cyaReadings,
-      timestamp: serverTimestamp(),
-    });
-
-    if (msgEl) {
-      msgEl.style.color = '#1a8a1a';
-      msgEl.textContent = managerialPage ? 'Managerial report submitted successfully!' : 'Form submitted successfully!';
-    }
-    resetForm();
-  } catch (err) {
-    console.error('[Duties] Submit error:', err);
-    if (msgEl) {
-      msgEl.style.color = '#c0392b';
-      msgEl.textContent = /timed out/i.test(err.message || '')
-        ? 'Photo uploads took too long on this connection. Keep the page open and try submitting again.'
-        : 'Error submitting form. Please try again.';
-    }
-  } finally {
-    if (submitBtn) submitBtn.disabled = false;
-  }
-};
-
-function resetForm() {
-  const poolSelect = document.getElementById('dutiesPool');
-  if (poolSelect) poolSelect.value = '';
-  ['damagedNotes', 'dutiesOtherNotes'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  ['bleachVolume', 'muriaticAcid', 'shockGranular'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = '';
-  });
-  document.querySelectorAll('.cya-input').forEach(el => { el.value = ''; });
-
-  // Reset all photo groups
-  ['deckUpload', 'poolUpload', 'skimmersUpload', 'damagedUpload', 'bleachFeederUpload', 'bleachUpload'].forEach(groupId => {
-    const group = document.getElementById(groupId);
-    if (!group) return;
-    group.innerHTML = '';
-    slotCounters[groupId] = 0;
-    const min = parseInt(group.dataset.min || '0', 10);
-    const initialSlots = Math.max(min, 1);
-    for (let i = 0; i < initialSlots; i++) addPhotoSlotToGroup(group);
-    updateAddBtn(groupId);
-  });
-  updateFillLinesFields('');
-}
+      retur

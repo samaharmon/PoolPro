@@ -3931,9 +3931,12 @@ let resourcePagePoolFilter = 'all';
 let resourceSettingsMarketFilter = 'all';
 let resourceSettingsPoolFilter = 'all';
 const resourceDataUrlMap = new Map();
+const dutyPhotoDataUrlMap = new Map();
 const RESOURCE_FILTER_ALL_VALUE = 'all';
 const RESOURCE_ALL_FACILITIES_VALUE = 'All';
 const FIRESTORE_RESOURCE_STORAGE = 'firestoreChunks';
+const FIRESTORE_DUTY_PHOTO_STORAGE = 'firestoreDutyPhoto';
+const EMPTY_INLINE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=';
 const RESOURCE_FIRESTORE_CHUNK_SIZE = 650000;
 const RESOURCE_FIRESTORE_MAX_FILE_SIZE = 20 * 1024 * 1024;
 const RESOURCE_STORAGE_UPLOAD_TIMEOUT_MS = 12000;
@@ -5739,6 +5742,72 @@ function dutyScaleHtml(label, value, unit, type) {
   `;
 }
 
+function isFirestoreDutyPhoto(photo) {
+  const url = String(photo?.url || '');
+  return photo?.source === FIRESTORE_DUTY_PHOTO_STORAGE || url.startsWith(`${FIRESTORE_DUTY_PHOTO_STORAGE}:`);
+}
+
+function getDutyPhotoCacheKey(photo) {
+  const url = String(photo?.url || '');
+  if (url.startsWith(`${FIRESTORE_DUTY_PHOTO_STORAGE}:`)) return url;
+  if (photo?.submissionId && photo?.photoId) {
+    return `${FIRESTORE_DUTY_PHOTO_STORAGE}:${photo.submissionId}:${photo.photoId}`;
+  }
+  return url || `${photo?.submissionId || ''}:${photo?.photoId || ''}`;
+}
+
+async function getFirestoreDutyPhotoDataUrl(photo) {
+  const cacheKey = getDutyPhotoCacheKey(photo);
+  if (dutyPhotoDataUrlMap.has(cacheKey)) return dutyPhotoDataUrlMap.get(cacheKey);
+
+  let submissionId = String(photo?.submissionId || '');
+  let photoId = String(photo?.photoId || '');
+  if ((!submissionId || !photoId) && cacheKey.startsWith(`${FIRESTORE_DUTY_PHOTO_STORAGE}:`)) {
+    const parts = cacheKey.split(':');
+    submissionId = submissionId || parts[1] || '';
+    photoId = photoId || parts[2] || '';
+  }
+  if (!submissionId || !photoId) throw new Error('Duty photo reference is incomplete.');
+
+  const chunksSnap = await getDocs(collection(db, 'dutySubmissionMedia', submissionId, 'photos', photoId, 'chunks'));
+  const chunks = chunksSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
+    .sort((a, b) => Number(a.index ?? a.id) - Number(b.index ?? b.id))
+    .map((chunk) => chunk.data || '');
+
+  if (!chunks.length) throw new Error('Duty photo chunks were not found.');
+
+  const prefix = photo.dataUrlPrefix || `data:${photo.contentType || 'image/jpeg'};base64`;
+  const dataUrl = `${prefix},${chunks.join('')}`;
+  dutyPhotoDataUrlMap.set(cacheKey, dataUrl);
+  return dataUrl;
+}
+
+async function hydrateDutyReportPhotos(root) {
+  if (!root) return;
+  const images = Array.from(root.querySelectorAll('[data-duty-photo-meta]'));
+  await Promise.all(images.map(async (img) => {
+    try {
+      const meta = JSON.parse(decodeURIComponent(img.dataset.dutyPhotoMeta || ''));
+      const fullUrl = isFirestoreDutyPhoto(meta)
+        ? await getFirestoreDutyPhotoDataUrl(meta)
+        : (meta.url || img.getAttribute('src') || '');
+      if (!fullUrl) throw new Error('Duty photo URL is missing.');
+      img.src = fullUrl;
+      img.dataset.fullUrl = fullUrl;
+      img.title = meta.name || 'photo';
+      img.classList.remove('duty-report-photo--loading', 'duty-report-photo--error');
+      img.onclick = () => window.openPhotoModal(fullUrl);
+    } catch (err) {
+      console.error('[Duties] Could not load submitted photo:', err);
+      img.classList.remove('duty-report-photo--loading');
+      img.classList.add('duty-report-photo--error');
+      img.removeAttribute('onclick');
+      img.title = 'Unable to load photo';
+    }
+  }));
+}
+
 function openDutyFormModal(sub) {
   let modal = document.getElementById('dutyFormModal');
   if (!modal) {
@@ -5756,83 +5825,18 @@ function openDutyFormModal(sub) {
   const photoSectionHtml = (label, photos) => {
     if (!photos?.length) return '';
     const imgs = photos.map((p) => {
-      const encodedUrl = encodeURIComponent(p.url || '');
-      return `<img src="${esc(p.url)}" alt="photo" class="duty-report-photo"
-           onclick="window.openPhotoModal(decodeURIComponent('${encodedUrl}'))" />`;
+      const meta = encodeURIComponent(JSON.stringify({
+        url: p.url || '',
+        name: p.name || '',
+        source: p.source || '',
+        contentType: p.contentType || '',
+        dataUrlPrefix: p.dataUrlPrefix || '',
+        photoId: p.photoId || '',
+        submissionId: p.submissionId || sub.id || '',
+      }));
+      const initialSrc = isFirestoreDutyPhoto(p) ? EMPTY_INLINE_IMAGE : esc(p.url || EMPTY_INLINE_IMAGE);
+      const loadingClass = isFirestoreDutyPhoto(p) ? ' duty-report-photo--loading' : '';
+      return `<img src="${initialSrc}" alt="photo" class="duty-report-photo${loadingClass}"
+           data-duty-photo-meta="${meta}" />`;
     }).join('');
-    return `<section class="duty-report-photo-section">
-      <h4>${esc(label)}</h4>
-      <div class="duty-report-photo-grid">${imgs}</div>
-    </section>`;
-  };
-
-  const photos = sub.photos || {};
-  const hasValue = (value) => value !== null && value !== undefined && value !== '';
-  const hasManagerData = hasValue(sub.bleachVolume) || hasValue(sub.muriaticAcid) ||
-    hasValue(sub.shockGranular) || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
-    photos.bleach?.length;
-
-  let cyaHtml = '';
-  if (sub.cyaReadings && Object.keys(sub.cyaReadings).length) {
-    const rows = Object.entries(sub.cyaReadings).map(([k, v]) => {
-      const label = k.replace('pool', 'Pool ');
-      return dutyScaleHtml(`${label} CYA`, v, '', 'cya');
-    }).join('');
-    cyaHtml = `<div class="duty-scale-group"><h4>CYA Levels</h4>${rows}</div>`;
-  }
-
-  modal.innerHTML = `
-    <div class="duty-report-modal-card">
-      <div class="modal-header duty-report-modal-header">
-        <h2>Cleanliness Report</h2>
-        <button type="button" class="close" onclick="document.getElementById('dutyFormModal').style.display='none'">&times;</button>
-      </div>
-      <div class="duty-report-modal-scroll">
-        <div class="duty-report-meta">
-          <p><strong>Pool:</strong> ${esc(sub.pool)}</p>
-          <p><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
-          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
-        </div>
-
-        ${photoSectionHtml('Deck', photos.deck)}
-        ${photoSectionHtml('Pool', photos.pool)}
-        ${photoSectionHtml('Skimmers', photos.skimmers)}
-        ${photoSectionHtml('Damaged Equipment', photos.damaged)}
-        ${photoSectionHtml('Bleach Feeders', photos.bleachFeeders)}
-        ${photoSectionHtml('Fill Lines', photos.fillLines)}
-
-        ${sub.damagedNotes ? `<div class="duty-report-notes"><strong>Damaged Equipment Notes:</strong><span>${esc(sub.damagedNotes)}</span></div>` : ''}
-        ${sub.otherNotes ? `<div class="duty-report-notes"><strong>Other Notes:</strong><span>${esc(sub.otherNotes)}</span></div>` : ''}
-
-        ${hasManagerData ? `
-        <section class="duty-report-manager-panel">
-          <h3>Managers Only</h3>
-          ${photoSectionHtml('Bleach Barrels', photos.bleach)}
-          ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
-          ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}
-          ${dutyScaleHtml('Shock / Granular', sub.shockGranular, '%', 'linear')}
-          ${cyaHtml}
-        </section>` : ''}
-      </div>
-    </div>`;
-
-  modal.style.display = 'flex';
-}
-
-// Photo modal for job form submissions
-window.openPhotoModal = function(url) {
-  let overlay = document.getElementById('photoViewOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'photoViewOverlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
-    overlay.addEventListener('click', () => overlay.style.display = 'none');
-    const img = document.createElement('img');
-    img.id = 'photoViewImg';
-    img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;box-shadow:0 0 20px rgba(0,0,0,0.5);';
-    overlay.appendChild(img);
-    document.body.appendChild(overlay);
-  }
-  document.getElementById('photoViewImg').src = url;
-  overlay.style.display = 'flex';
-};
+    return `<s

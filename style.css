@@ -4712,6 +4712,19 @@ body.dark-mode .dash-value-popover {
   background: #1f1f1f;
 }
 
+.duty-report-photo--loading {
+  background:
+    linear-gradient(135deg, rgba(105, 20, 14, 0.35), rgba(255, 255, 255, 0.08)),
+    #1f1f1f;
+  opacity: 0.65;
+}
+
+.duty-report-photo--error {
+  background:
+    repeating-linear-gradient(45deg, rgba(105, 20, 14, 0.55), rgba(105, 20, 14, 0.55) 10px, rgba(31, 31, 31, 0.92) 10px, rgba(31, 31, 31, 0.92) 20px);
+  cursor: default;
+}
+
 .duty-report-notes {
   margin-bottom: 16px;
   line-height: 1.45;
@@ -4880,93 +4893,4 @@ body.dark-mode .dash-value-popover {
   display: flex !important;
   flex-direction: column;
   box-sizing: border-box;
-  height: 100%;
-  max-height: 100% !important;
-  overflow: hidden !important;
-  padding: 0 !important;
-  border: 4px solid #69140e;
-}
-
-#settingsModal .modal-header {
-  flex: 0 0 auto;
-  margin: 0 !important;
-  position: relative;
-  top: auto;
-}
-
-#settingsModal .settings-modal-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 20px;
-  padding-bottom: 48px;
-}
-
-#settingsModal .settings-field-label {
-  font-weight: bold;
-  margin-right: 10px;
-}
-
-#settingsModal.lifeguard-settings-view {
-  width: min(520px, calc(100vw - 24px));
-  max-width: calc(100vw - 24px);
-  height: auto;
-  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
-}
-
-#settingsModal.lifeguard-settings-view .settings-modal-content {
-  height: auto;
-  min-height: 0;
-  max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
-}
-
-#settingsModal.lifeguard-settings-view .settings-modal-scroll {
-  flex: 0 1 auto;
-  padding-bottom: 20px;
-}
-
-#settingsModal.lifeguard-settings-view .account-management-section {
-  margin-top: 0;
-}
-
-#settingsModal.lifeguard-settings-view .account-management-section .settings-section-toggle {
-  pointer-events: none;
-  cursor: default;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-#settingsModal.lifeguard-settings-view .account-management-section .settings-section-caret {
-  display: none;
-}
-
-#settingsModal.lifeguard-settings-view .account-management-section .settings-section-body,
-#settingsModal.lifeguard-settings-view .account-management-section .settings-section-body-inner {
-  max-height: none;
-  opacity: 1;
-  transform: none;
-  overflow: visible;
-}
-
-@media (max-width: 768px) {
-  #settingsModal {
-    height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
-    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
-  }
-
-  #settingsModal.lifeguard-settings-view {
-    width: calc(100vw - 16px);
-    max-width: calc(100vw - 16px);
-    height: auto;
-  }
-
-  #settingsModal .settings-modal-content {
-    max-height: 100% !important;
-  }
-
-  #settingsModal .settings-modal-scroll {
-    padding: 14px;
-  }
-}
+  height
