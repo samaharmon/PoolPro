@@ -66,10 +66,12 @@
           </div>
         </div>
       </div>
-      <div id="operationalStatusCards" class="operational-status-grid"></div>
-      <div class="operational-status-actions">
-        <button type="button" id="operationalStatusSubmit" class="submit-btn" disabled>Submit Status</button>
-        <p id="operationalStatusMessage" class="form-message operational-status-message"></p>
+      <div class="form-container operational-status-panel-wrap">
+        <div id="operationalStatusCards" class="operational-status-grid"></div>
+        <div class="operational-status-actions">
+          <button type="button" id="operationalStatusSubmit" class="submit-btn" disabled>Submit Status</button>
+          <p id="operationalStatusMessage" class="form-message operational-status-message"></p>
+        </div>
       </div>
     </div>
 
@@ -79,6 +81,20 @@
   </div>
 
   <div class="modal-overlay" id="settingsOverlay"></div>
+  <div class="modal-overlay" id="operationalClosureOverlay"></div>
+
+  <div id="operationalClosureModal" class="feedback-modal operational-closure-modal" aria-hidden="true" style="display:none;">
+    <button type="button" class="close-btn" id="operationalClosureCloseBtn" aria-label="Close closure reminder">&times;</button>
+    <div class="feedback-content operational-closure-content">
+      <h2 id="operationalClosureTitle">Pool Closure Reminder</h2>
+      <p class="modal-facility-name" id="operationalClosurePool"></p>
+      <p class="operational-closure-message">Notify a supervisor of the closure if you haven't already.</p>
+      <div id="operationalClosureChecklist" class="operational-closure-checklist"></div>
+      <div class="operational-closure-actions">
+        <button type="button" class="submit-btn" id="operationalClosureConfirmBtn">OK</button>
+      </div>
+    </div>
+  </div>
 
   <div id="settingsModal">
     <div class="modal-content settings-modal-content">

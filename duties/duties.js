@@ -17,7 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initSubmitterInfo();
   initPhotoGroups();
   initManagerSectionToggle();
-  setTimeout(populatePools, 800);
+  window.addEventListener('poolpro:pools-ready', populatePools);
+  populatePools();
   // Wire main pool selector to update CYA fields
   const poolSel = document.getElementById('dutiesPool');
   if (poolSel) {
@@ -53,14 +54,32 @@ function getSubmitterEmail() {
 // POOL DROPDOWN
 // ============================================================
 
+let poolPopulateRetryId = null;
+
+function schedulePoolPopulateRetry() {
+  if (poolPopulateRetryId) return;
+  poolPopulateRetryId = window.setTimeout(() => {
+    poolPopulateRetryId = null;
+    populatePools();
+  }, 500);
+}
+
 function populatePools() {
   const sel = document.getElementById('dutiesPool');
   if (!sel) return;
-  if (sel.querySelectorAll('optgroup').length > 0) return;
+  const current = sel.value;
+  while (sel.options.length > 1) sel.remove(1);
+  Array.from(sel.querySelectorAll('optgroup')).forEach((group) => group.remove());
   const pools = window._poolsForDuties || [];
   if (!pools.length) {
-    setTimeout(populatePools, 600);
+    schedulePoolPopulateRetry();
+    populateCYAFields('');
+    updateFillLinesFields('');
     return;
+  }
+  if (poolPopulateRetryId) {
+    window.clearTimeout(poolPopulateRetryId);
+    poolPopulateRetryId = null;
   }
   const map = {};
   pools.forEach(p => {
@@ -79,6 +98,9 @@ function populatePools() {
     });
     sel.appendChild(group);
   });
+  if (current) sel.value = current;
+  populateCYAFields(sel.value || '');
+  updateFillLinesFields(sel.value || '');
 }
 
 function getSelectedPoolDoc(poolValue) {
@@ -366,6 +388,7 @@ function addPhotoSlotToGroup(group) {
   fileInput.multiple = true;
   fileInput.style.display = 'none';
   fileInput.id = inputId;
+  fileInput.name = inputId;
   fileInput.addEventListener('change', (e) => {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -657,4 +680,147 @@ window.submitDutiesForm = async function () {
     const allowed = await canAccessManagerialReport();
     if (!allowed) {
       if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = 'You do not have permission to submit a managerial report.'; }
-      retur
+      return;
+    }
+  }
+
+  // Validate required photo groups
+  const requiredGroups = managerialPage
+    ? []
+    : [
+        { id: 'deckUpload', label: 'Deck', min: 2 },
+        { id: 'poolUpload', label: 'Pool', min: 2 },
+        { id: 'skimmersUpload', label: 'Skimmers', min: 2 },
+        { id: 'bleachFeederUpload', label: 'Bleach Feeders', min: 1 },
+      ];
+
+  const fillLinesGroup = document.getElementById('fillLinesGroup');
+  const fillLinesUpload = document.getElementById('fillLinesUpload');
+  if (fillLinesGroup && fillLinesUpload && !fillLinesGroup.classList.contains('hidden')) {
+    requiredGroups.push({
+      id: 'fillLinesUpload',
+      label: 'Fill Lines',
+      min: parseInt(fillLinesUpload.dataset.min || '1', 10),
+    });
+  }
+
+  for (const g of requiredGroups) {
+    const photos = collectPhotosFromGroup(g.id);
+    if (photos.length < g.min) {
+      if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = `Please upload at least ${g.min} photos for ${g.label}.`; }
+      return;
+    }
+  }
+
+  const submitBtn = document.getElementById('dutiesSubmitBtn');
+  if (submitBtn) submitBtn.disabled = true;
+  if (msgEl) { msgEl.style.color = '#333'; msgEl.textContent = 'Submitting…'; }
+
+  try {
+    const submissionRef = doc(collection(db, managerialPage ? 'managerialReports' : 'dutySubmissions'));
+    const uploadGroups = [
+      { groupId: 'deckUpload', category: 'deck', resultKey: 'deck', label: 'Deck' },
+      { groupId: 'poolUpload', category: 'pool', resultKey: 'pool', label: 'Pool' },
+      { groupId: 'skimmersUpload', category: 'skimmers', resultKey: 'skimmers', label: 'Skimmers' },
+      { groupId: 'damagedUpload', category: 'damaged', resultKey: 'damaged', label: 'Damaged Equipment' },
+      { groupId: 'bleachFeederUpload', category: 'bleachFeeders', resultKey: 'bleachFeeders', label: 'Bleach Feeders' },
+      { groupId: 'fillLinesUpload', category: 'fillLines', resultKey: 'fillLines', label: 'Fill Lines' },
+      { groupId: 'bleachUpload', category: 'bleach', resultKey: 'bleach', label: 'Managers Only' },
+    ].map((group) => ({
+      ...group,
+      files: collectPhotosFromGroup(group.groupId),
+    }));
+
+    const totalPhotos = uploadGroups.reduce((sum, group) => sum + group.files.length, 0);
+    if (msgEl) {
+      msgEl.style.color = '#333';
+      msgEl.textContent = totalPhotos
+        ? `Preparing ${totalPhotos} photo${totalPhotos === 1 ? '' : 's'} for upload...`
+        : 'Submitting...';
+    }
+
+    const uploadedPhotos = await uploadDutyPhotoGroups({
+      submissionId: submissionRef.id,
+      pool,
+      uploadGroups,
+      onProgress: ({ completed, total, label, fileName, done }) => {
+        if (!msgEl || !total) return;
+        msgEl.style.color = '#333';
+        msgEl.textContent = done
+          ? `Uploads complete. Saving report...`
+          : `Uploading photo ${completed + 1} of ${total} for ${label}: ${fileName}`;
+      },
+    });
+
+    // Collect CYA readings
+    const cyaReadings = {};
+    document.querySelectorAll('.cya-input').forEach(input => {
+      if (input.value !== '') {
+        cyaReadings[`pool${input.dataset.poolIndex}`] = parseFloat(input.value);
+      }
+    });
+
+    await setDoc(submissionRef, {
+      reportType: managerialPage ? 'managerial' : 'cleanliness',
+      pool,
+      submitterEmail: submitterEmail || 'unknown',
+      photos: {
+        deck: uploadedPhotos.deck || [],
+        pool: uploadedPhotos.pool || [],
+        skimmers: uploadedPhotos.skimmers || [],
+        damaged: uploadedPhotos.damaged || [],
+        bleachFeeders: uploadedPhotos.bleachFeeders || [],
+        fillLines: uploadedPhotos.fillLines || [],
+        bleach: uploadedPhotos.bleach || [],
+      },
+      damagedNotes: document.getElementById('damagedNotes')?.value?.trim() || '',
+      otherNotes: document.getElementById('dutiesOtherNotes')?.value?.trim() || '',
+      bleachVolume: document.getElementById('bleachVolume')?.value || null,
+      muriaticAcid: document.getElementById('muriaticAcid')?.value || null,
+      shockGranular: document.getElementById('shockGranular')?.value || null,
+      cyaReadings,
+      timestamp: serverTimestamp(),
+    });
+
+    if (msgEl) {
+      msgEl.style.color = '#1a8a1a';
+      msgEl.textContent = managerialPage ? 'Managerial report submitted successfully!' : 'Form submitted successfully!';
+    }
+    resetForm();
+  } catch (err) {
+    console.error('[Duties] Submit error:', err);
+    if (msgEl) {
+      msgEl.style.color = '#c0392b';
+      msgEl.textContent = 'Error submitting form. Please try again.';
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+};
+
+function resetForm() {
+  const poolSelect = document.getElementById('dutiesPool');
+  if (poolSelect) poolSelect.value = '';
+  ['damagedNotes', 'dutiesOtherNotes'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['bleachVolume', 'muriaticAcid', 'shockGranular'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.querySelectorAll('.cya-input').forEach(el => { el.value = ''; });
+
+  // Reset all photo groups
+  ['deckUpload', 'poolUpload', 'skimmersUpload', 'damagedUpload', 'bleachFeederUpload', 'bleachUpload'].forEach(groupId => {
+    const group = document.getElementById(groupId);
+    if (!group) return;
+    group.innerHTML = '';
+    slotCounters[groupId] = 0;
+    const min = parseInt(group.dataset.min || '0', 10);
+    const initialSlots = Math.max(min, 1);
+    for (let i = 0; i < initialSlots; i++) addPhotoSlotToGroup(group);
+    updateAddBtn(groupId);
+  });
+  updateFillLinesFields('');
+}

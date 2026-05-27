@@ -1128,6 +1128,9 @@ function groupPoolsByMarket(pools) {
 function populatePoolSelects(pools) {
   poolsCache = pools || [];
   window._poolsForDuties = pools || []; // expose for duties.js
+  window.dispatchEvent(new CustomEvent('poolpro:pools-ready', {
+    detail: { pools: poolsCache },
+  }));
   const groups = groupPoolsByMarket(pools);
 
   // Chemistry form pool select — grouped by market, value = pool.id
@@ -1870,6 +1873,13 @@ let dashboardJobPage = 1;
 const DASHBOARD_PAGE_SIZE = 10;
 const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a trickle'];
 const BLEACH_FEEDER_STATUS_OPTIONS = ['Not applicable', 'Off', '0 or L', '1', '1.5', '1.75', '2', '2.25', '2.5', '3', '4', '5', '6', '7', '8', '9', '10'];
+const POOL_CLOSURE_OPTIONS = ['Open', 'Weather', 'Contamination', 'Chemical Imbalance', 'System Malfunction', 'Other'];
+const POOL_CLOSURE_TODOS = {
+  Weather: ['Close and tie shut all umbrellas, then remove any equipment that may be damaged.'],
+  Contamination: ['Do not make any changes until instructed by a supervisor.'],
+  'Chemical Imbalance': ['Do not make any changes until instructed by a supervisor.'],
+  'System Malfunction': ['Do not make any changes until instructed by a supervisor.'],
+};
 let operationalStatusLogs = [];
 let operationalStatusLatestMap = {};
 let operationalStatusPageReady = false;
@@ -2129,6 +2139,9 @@ function getLogRespondentName(log) {
 function normalizeOperationalStatusRecord(rawDoc, idOverride = '') {
   const data = rawDoc || {};
   const poolIndex = Number(data.poolIndex ?? data.poolIdx ?? 0);
+  const closureReason = (data.closureReason || data.poolClosureReason || '').toString().trim();
+  const closureStatus = (data.closureStatus || data.poolClosureStatus || '').toString().trim()
+    || (closureReason && closureReason !== 'Open' ? 'Closed' : (closureReason === 'Open' ? 'Open' : ''));
   return {
     id: idOverride || data.id || '',
     facilityId: (data.facilityId || '').toString().trim(),
@@ -2138,6 +2151,8 @@ function normalizeOperationalStatusRecord(rawDoc, idOverride = '') {
     poolLabel: (data.poolLabel || '').toString().trim(),
     fillStatus: (data.fillStatus || '').toString().trim(),
     bleachStatus: (data.bleachStatus || '').toString().trim(),
+    closureStatus,
+    closureReason: closureReason || closureStatus,
     firstName: (data.firstName || '').toString().trim(),
     lastName: (data.lastName || '').toString().trim(),
     employeeId: (data.employeeId || '').toString().trim(),
@@ -2161,6 +2176,10 @@ function refreshOperationalStatusLatestMap() {
       const key = operationalStatusKey(log.facilityName, log.poolIndex, 'bleach');
       if (!next[key]) next[key] = log;
     }
+    if (log.closureStatus || log.closureReason) {
+      const key = operationalStatusKey(log.facilityName, log.poolIndex, 'closure');
+      if (!next[key]) next[key] = log;
+    }
   });
   operationalStatusLatestMap = next;
 }
@@ -2181,6 +2200,19 @@ async function loadOperationalStatusLogs() {
 
 function getLatestOperationalStatus(facilityName, poolIdx, type) {
   return operationalStatusLatestMap[operationalStatusKey(facilityName, poolIdx, type)] || null;
+}
+
+function getOperationalClosureDisplayValue(statusLog) {
+  if (!statusLog) return '—';
+  return statusLog.closureStatus === 'Closed' ? 'Closed' : 'Open';
+}
+
+function getOperationalClosureSummary(statusLog) {
+  if (!statusLog) return 'Not recorded';
+  if (statusLog.closureStatus === 'Closed') {
+    return `Closed${statusLog.closureReason ? ` (${statusLog.closureReason})` : ''}`;
+  }
+  return 'Open';
 }
 
 function getPoolRuleName(poolDoc, poolIdx) {
@@ -2242,7 +2274,13 @@ function getBleachFeederConcernLevel(statusLog) {
   return 'none';
 }
 
-function createDashboardValueControl({ value, log, includeElapsed = false }) {
+function createDashboardValueControl({
+  value,
+  log,
+  includeElapsed = false,
+  elapsedPosition = 'end',
+  extraRows = [],
+} = {}) {
   const wrapper = document.createElement('span');
   wrapper.className = 'dash-value-cell';
 
@@ -2258,7 +2296,14 @@ function createDashboardValueControl({ value, log, includeElapsed = false }) {
     ['Timestamp', formatTimestampDisplay(log?.timestamp)],
     ['Respondent', getLogRespondentName(log)],
   ];
-  if (includeElapsed) rows.push(['Time Elapsed', formatElapsedSince(log?.timestamp)]);
+  if (includeElapsed && elapsedPosition === 'second') {
+    rows.splice(1, 0, ['Time Elapsed', formatElapsedSince(log?.timestamp)]);
+  } else if (includeElapsed) {
+    rows.push(['Time Elapsed', formatElapsedSince(log?.timestamp)]);
+  }
+  if (Array.isArray(extraRows) && extraRows.length) {
+    rows.push(...extraRows);
+  }
   popover.innerHTML = rows.map(([label, rowValue]) =>
     `<div><strong>${escapeHtml(label)}:</strong> ${escapeHtml(rowValue)}</div>`
   ).join('');
@@ -2266,11 +2311,24 @@ function createDashboardValueControl({ value, log, includeElapsed = false }) {
   return wrapper;
 }
 
-function fillDashboardValueCell(cell, { value, log, concern = 'none', includeElapsed = false } = {}) {
+function fillDashboardValueCell(cell, {
+  value,
+  log,
+  concern = 'none',
+  includeElapsed = false,
+  elapsedPosition = 'end',
+  extraRows = [],
+} = {}) {
   if (!cell) return;
   cell.innerHTML = '';
   cell.className = concernClass(concern);
-  cell.appendChild(createDashboardValueControl({ value: value || '—', log, includeElapsed }));
+  cell.appendChild(createDashboardValueControl({
+    value: value || '—',
+    log,
+    includeElapsed,
+    elapsedPosition,
+    extraRows,
+  }));
 }
 
 function getLatestChemistryLogForPool(logs, facilityName, poolIdx) {
@@ -2603,24 +2661,27 @@ function renderChemistryPoolDetail(container, logs, poolDoc) {
       <th>Cl</th>
       <th>Fill Line/Hose</th>
       <th>Bleach Feeder Rate</th>
+      <th>Open/Closed</th>
     </tr></thead>
   `;
   const tbody = document.createElement('tbody');
 
   if (!pageRows.length) {
-    tbody.innerHTML = '<tr><td colspan="6">No pool chemistry submissions match the selected filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7">No pool chemistry submissions match the selected filters.</td></tr>';
   } else {
     pageRows.forEach(({ log, poolIdx, phVal, clVal }) => {
       const phConcern = phVal ? getPhConcernLevel(facilityName, poolIdx, phVal) : 'none';
       const clConcern = clVal ? getClConcernLevel(facilityName, poolIdx, clVal) : 'none';
       const fillLog = getLatestOperationalStatus(facilityName, poolIdx, 'fill');
       const bleachLog = getLatestOperationalStatus(facilityName, poolIdx, 'bleach');
+      const closureLog = getLatestOperationalStatus(facilityName, poolIdx, 'closure');
       const fillConcern = getFillLineConcernLevel(poolDoc, poolIdx, fillLog);
       const bleachConcern = getBleachFeederConcernLevel(bleachLog);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHtml(facilityName)}</td>
         <td>Pool ${poolIdx + 1}</td>
+        <td></td>
         <td></td>
         <td></td>
         <td></td>
@@ -2634,12 +2695,19 @@ function renderChemistryPoolDetail(container, logs, poolDoc) {
         log: fillLog,
         concern: fillConcern,
         includeElapsed: true,
+        elapsedPosition: 'second',
       });
       fillDashboardValueCell(cells[5], {
         value: bleachLog?.bleachStatus || '—',
         log: bleachLog,
         concern: bleachConcern,
         includeElapsed: true,
+      });
+      fillDashboardValueCell(cells[6], {
+        value: getOperationalClosureDisplayValue(closureLog),
+        log: closureLog,
+        concern: closureLog?.closureStatus === 'Closed' ? 'major' : 'none',
+        extraRows: [['Type', closureLog?.closureReason || '—']],
       });
       tbody.appendChild(tr);
     });
@@ -2726,6 +2794,7 @@ function renderDashboard(logs) {
           <th>Cl</th>
           <th>Fill Line/Hose</th>
           <th>Bleach Feeder Rate</th>
+          <th>Open/Closed</th>
         </tr></thead>
       `;
       const tbody = document.createElement('tbody');
@@ -2756,6 +2825,7 @@ function renderDashboard(logs) {
         const clVal = log?.[fields.cl] || '';
         const fillLog = getLatestOperationalStatus(facilityName, i, 'fill');
         const bleachLog = getLatestOperationalStatus(facilityName, i, 'bleach');
+        const closureLog = getLatestOperationalStatus(facilityName, i, 'closure');
 
         const phConcern = phVal ? getPhConcernLevel(facilityName, i, phVal) : 'none';
         const clConcern = clVal ? getClConcernLevel(facilityName, i, clVal) : 'none';
@@ -2784,6 +2854,7 @@ function renderDashboard(logs) {
           <td></td>
           <td></td>
           <td></td>
+          <td></td>
         `;
 
         if (hasConsecutiveMajor) {
@@ -2798,6 +2869,7 @@ function renderDashboard(logs) {
           log: fillLog,
           concern: fillConcern,
           includeElapsed: true,
+          elapsedPosition: 'second',
         });
         fillDashboardValueCell(cells[4], {
           value: bleachLog?.bleachStatus || '—',
@@ -2805,13 +2877,19 @@ function renderDashboard(logs) {
           concern: bleachConcern,
           includeElapsed: true,
         });
+        fillDashboardValueCell(cells[5], {
+          value: getOperationalClosureDisplayValue(closureLog),
+          log: closureLog,
+          concern: closureLog?.closureStatus === 'Closed' ? 'major' : 'none',
+          extraRows: [['Type', closureLog?.closureReason || '—']],
+        });
 
         tbody.appendChild(tr);
         renderedRows += 1;
       });
 
       if (!renderedRows) {
-        tbody.innerHTML = '<tr><td colspan="5">No previous same-day submissions for this page.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6">No previous same-day submissions for this page.</td></tr>';
       }
 
       table.appendChild(tbody);
@@ -2849,17 +2927,26 @@ function renderDashboard(logs) {
 // OPERATIONAL STATUS LOG
 // ============================================================
 
-function buildOperationalOptionGroup({ name, options, selected }) {
+function buildOperationalOptionGroup({ name, options, selected, variant = '', onChange = null }) {
   const group = document.createElement('div');
-  group.className = 'operational-switch-group';
+  group.className = `operational-switch-group${variant ? ` operational-switch-group--${variant}` : ''}`;
   options.forEach((option) => {
     const label = document.createElement('label');
     label.className = 'operational-switch-option';
+    if (variant === 'closure' && option === 'Open') {
+      label.classList.add('operational-switch-option--open');
+    }
     const input = document.createElement('input');
     input.type = 'radio';
     input.name = name;
     input.value = option;
     input.checked = option === selected;
+    input.id = `${name}_${option.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+    if (typeof onChange === 'function') {
+      input.addEventListener('change', () => {
+        if (input.checked) onChange(option);
+      });
+    }
     const text = document.createElement('span');
     text.textContent = option;
     label.appendChild(input);
@@ -2875,6 +2962,56 @@ function setOperationalMessage(message, isError = false) {
   el.textContent = message || '';
   el.classList.toggle('error', !!message && isError);
   el.classList.toggle('success', !!message && !isError);
+}
+
+function closeOperationalClosureModal() {
+  const modal = document.getElementById('operationalClosureModal');
+  const overlay = document.getElementById('operationalClosureOverlay');
+  if (modal) {
+    modal.classList.remove('visible');
+    modal.setAttribute('aria-hidden', 'true');
+    modal.style.display = 'none';
+  }
+  if (overlay) {
+    overlay.classList.remove('visible');
+    overlay.style.display = 'none';
+  }
+}
+
+function openOperationalClosureModal(poolLabel, closureReason) {
+  const modal = document.getElementById('operationalClosureModal');
+  const overlay = document.getElementById('operationalClosureOverlay');
+  const title = document.getElementById('operationalClosureTitle');
+  const poolEl = document.getElementById('operationalClosurePool');
+  const checklist = document.getElementById('operationalClosureChecklist');
+  if (!modal || !overlay || !title || !poolEl || !checklist) return;
+
+  title.textContent = closureReason === 'Open' ? 'Pool Status Updated' : 'Pool Closure Reminder';
+  poolEl.textContent = poolLabel || 'Selected pool';
+  checklist.innerHTML = '';
+
+  const items = POOL_CLOSURE_TODOS[closureReason] || [];
+  items.forEach((item, index) => {
+    const row = document.createElement('label');
+    row.className = 'checkbox-item';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = `operational_closure_check_${index}`;
+    checkbox.name = `operational_closure_check_${index}`;
+    const text = document.createElement('span');
+    text.textContent = item;
+    row.appendChild(checkbox);
+    row.appendChild(text);
+    checklist.appendChild(row);
+  });
+
+  overlay.style.display = 'block';
+  modal.style.display = 'block';
+  requestAnimationFrame(() => {
+    overlay.classList.add('visible');
+    modal.classList.add('visible');
+    modal.setAttribute('aria-hidden', 'false');
+  });
 }
 
 function getOperationalSelectedFacility() {
@@ -2905,6 +3042,7 @@ function renderOperationalStatusLog() {
   for (let idx = 0; idx < poolCount; idx++) {
     const fillLog = getLatestOperationalStatus(facilityName, idx, 'fill');
     const bleachLog = getLatestOperationalStatus(facilityName, idx, 'bleach');
+    const closureLog = getLatestOperationalStatus(facilityName, idx, 'closure');
     const poolLabel = getPoolSimpleLabel(poolDoc, idx);
 
     const card = document.createElement('section');
@@ -2943,8 +3081,29 @@ function renderOperationalStatusLog() {
       selected: bleachLog?.bleachStatus || 'Not applicable',
     }));
 
+    const closureBlock = document.createElement('div');
+    closureBlock.className = 'operational-control-block';
+    closureBlock.innerHTML = `
+      <div class="operational-control-heading">
+        <span>Open / Closed</span>
+        <small>Current: ${escapeHtml(getOperationalClosureSummary(closureLog))}</small>
+      </div>
+    `;
+    closureBlock.appendChild(buildOperationalOptionGroup({
+      name: `operational_closure_${idx}`,
+      options: POOL_CLOSURE_OPTIONS,
+      selected: closureLog?.closureReason || 'Open',
+      variant: 'closure',
+      onChange: (selectedOption) => {
+        if (selectedOption !== 'Open') {
+          openOperationalClosureModal(poolLabel, selectedOption);
+        }
+      },
+    }));
+
     card.appendChild(fillBlock);
     card.appendChild(bleachBlock);
+    card.appendChild(closureBlock);
     cards.appendChild(card);
   }
 }
@@ -2974,11 +3133,14 @@ async function saveOperationalStatusLog() {
     for (let idx = 0; idx < poolCount; idx++) {
       const fillStatus = document.querySelector(`input[name="operational_fill_${idx}"]:checked`)?.value || '';
       const bleachStatus = document.querySelector(`input[name="operational_bleach_${idx}"]:checked`)?.value || '';
+      const closureReason = document.querySelector(`input[name="operational_closure_${idx}"]:checked`)?.value || 'Open';
       const latestFill = getLatestOperationalStatus(facilityName, idx, 'fill');
       const latestBleach = getLatestOperationalStatus(facilityName, idx, 'bleach');
+      const latestClosure = getLatestOperationalStatus(facilityName, idx, 'closure');
       const fillChanged = fillStatus && fillStatus !== (latestFill?.fillStatus || '');
       const bleachChanged = bleachStatus && bleachStatus !== (latestBleach?.bleachStatus || '');
-      if (!fillChanged && !bleachChanged) continue;
+      const closureChanged = closureReason !== (latestClosure?.closureReason || '');
+      if (!fillChanged && !bleachChanged && !closureChanged) continue;
 
       const payload = {
         timestamp: Timestamp.now(),
@@ -2993,6 +3155,10 @@ async function saveOperationalStatusLog() {
       };
       if (fillChanged) payload.fillStatus = fillStatus;
       if (bleachChanged) payload.bleachStatus = bleachStatus;
+      if (closureChanged) {
+        payload.closureReason = closureReason;
+        payload.closureStatus = closureReason === 'Open' ? 'Open' : 'Closed';
+      }
       writes.push(addDoc(collection(db, 'operationalStatusLogs'), payload));
     }
 
@@ -3024,6 +3190,9 @@ function setupOperationalStatusLog() {
   const submitBtn = document.getElementById('operationalStatusSubmit');
   if (!select || !submitBtn || operationalStatusPageReady) return;
   operationalStatusPageReady = true;
+  document.getElementById('operationalClosureCloseBtn')?.addEventListener('click', closeOperationalClosureModal);
+  document.getElementById('operationalClosureConfirmBtn')?.addEventListener('click', closeOperationalClosureModal);
+  document.getElementById('operationalClosureOverlay')?.addEventListener('click', closeOperationalClosureModal);
   select.addEventListener('change', renderOperationalStatusLog);
   submitBtn.addEventListener('click', saveOperationalStatusLog);
   loadOperationalStatusLogs().then(renderOperationalStatusLog);
@@ -5839,4 +6008,82 @@ function openDutyFormModal(sub) {
       return `<img src="${initialSrc}" alt="photo" class="duty-report-photo${loadingClass}"
            data-duty-photo-meta="${meta}" />`;
     }).join('');
-    return `<s
+    return `<section class="duty-report-photo-section">
+      <h4>${esc(label)}</h4>
+      <div class="duty-report-photo-grid">${imgs}</div>
+    </section>`;
+  };
+
+  const photos = sub.photos || {};
+  const hasValue = (value) => value !== null && value !== undefined && value !== '';
+  const hasManagerData = hasValue(sub.bleachVolume) || hasValue(sub.muriaticAcid) ||
+    hasValue(sub.shockGranular) || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
+    photos.bleach?.length;
+
+  let cyaHtml = '';
+  if (sub.cyaReadings && Object.keys(sub.cyaReadings).length) {
+    const rows = Object.entries(sub.cyaReadings).map(([k, v]) => {
+      const label = k.replace('pool', 'Pool ');
+      return dutyScaleHtml(`${label} CYA`, v, '', 'cya');
+    }).join('');
+    cyaHtml = `<div class="duty-scale-group"><h4>CYA Levels</h4>${rows}</div>`;
+  }
+
+  modal.innerHTML = `
+    <div class="duty-report-modal-card">
+      <div class="modal-header duty-report-modal-header">
+        <h2>Cleanliness Report</h2>
+        <button type="button" class="close" onclick="document.getElementById('dutyFormModal').style.display='none'">&times;</button>
+      </div>
+      <div class="duty-report-modal-scroll">
+        <div class="duty-report-meta">
+          <p><strong>Pool:</strong> ${esc(sub.pool)}</p>
+          <p><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
+          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
+        </div>
+
+        ${photoSectionHtml('Deck', photos.deck)}
+        ${photoSectionHtml('Pool', photos.pool)}
+        ${photoSectionHtml('Skimmers', photos.skimmers)}
+        ${photoSectionHtml('Damaged Equipment', photos.damaged)}
+        ${photoSectionHtml('Bleach Feeders', photos.bleachFeeders)}
+        ${photoSectionHtml('Fill Lines', photos.fillLines)}
+
+        ${sub.damagedNotes ? `<div class="duty-report-notes"><strong>Damaged Equipment Notes:</strong><span>${esc(sub.damagedNotes)}</span></div>` : ''}
+        ${sub.otherNotes ? `<div class="duty-report-notes"><strong>Other Notes:</strong><span>${esc(sub.otherNotes)}</span></div>` : ''}
+
+        ${hasManagerData ? `
+        <section class="duty-report-manager-panel">
+          <h3>Managers Only</h3>
+          ${photoSectionHtml('Bleach Barrels', photos.bleach)}
+          ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
+          ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}
+          ${dutyScaleHtml('Shock / Granular', sub.shockGranular, '%', 'linear')}
+          ${cyaHtml}
+        </section>` : ''}
+      </div>
+    </div>`;
+
+  modal.style.display = 'flex';
+  hydrateDutyReportPhotos(modal).catch((err) => {
+    console.error('[Duties] Could not hydrate submitted photos:', err);
+  });
+}
+
+// Photo modal for job form submissions
+window.openPhotoModal = function(url) {
+  let overlay = document.getElementById('photoViewOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'photoViewOverlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+    overlay.addEventListener('click', () => overlay.style.display = 'none');
+    const img = document.createElement('img');
+    img.id = 'photoViewImg';
+    img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;box-shadow:0 0 20px rgba(0,0,0,0.5);';
+    overlay.appendChild(img);
+    document.body.appendChild(overlay);
+  }
+  document.getElementById('photoViewImg').src = url;
+  overlay.style.display = 'flex';
+};
