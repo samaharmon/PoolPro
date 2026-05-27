@@ -248,7 +248,7 @@ function updateVerifyCooldownUi() {
   if (verifyResendBtn) verifyResendBtn.disabled = coolingDown;
   if (verifyCooldownText) {
     verifyCooldownText.textContent = coolingDown
-      ? `You can resend the verification email in ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}.`
+      ? `Resend available in ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'}.`
       : '';
   }
 
@@ -289,7 +289,7 @@ function resetVerificationState() {
   if (verifyForm) verifyForm.reset();
   if (verifySubtitleEl) verifySubtitleEl.textContent = '';
   if (verifyHintEl) {
-    verifyHintEl.textContent = 'Check your junk/spam folders if you do not see the email within 60 seconds. Otherwise, click below to resend the verification email.';
+    verifyHintEl.textContent = 'Check spam if it does not arrive within 60 seconds. Use resend if needed.';
   }
   if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification';
   verifyCooldownUntil = 0;
@@ -659,7 +659,7 @@ async function getLifeguardAccount(usernameRaw) {
       return repairedAccount;
     }
 
-    throw new Error('Username not found. Create an account first, or ask your supervisor to confirm your Employees entry has the correct username.');
+    throw new Error('Username not found. Create an account first, then ask your supervisor for help if the issue persists.');
   }
   return { username, ...accountSnap.data() };
 }
@@ -754,7 +754,7 @@ async function resumeInterruptedSignup({ username, email, password, accountRef, 
   } catch (signInError) {
     const code = signInError.code || '';
     if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-      throw new Error('That email is already registered. If this signup was interrupted, enter the same password you used earlier, or use "Forgot Password?" to reset it.');
+      throw new Error('That email already has an account. Sign in or use "Forgot Password?"');
     }
     throw signInError;
   }
@@ -763,19 +763,19 @@ async function resumeInterruptedSignup({ username, email, password, accountRef, 
   const existingUsername = normalizeUsername(existingEmailAccount?.username || '');
   if (existingUsername && existingUsername !== username) {
     await signOut(auth).catch(() => {});
-    throw new Error(`That email is already linked to username "${existingUsername}". Sign in with that username, or use "Forgot Password?" to reset the password.`);
+    throw new Error(`That email is linked to username "${existingUsername}". Sign in with that username.`);
   }
 
   if (auth.currentUser?.emailVerified) {
     await signOut(auth).catch(() => {});
-    throw new Error('That email is already verified for an existing login. Sign in instead, or use "Forgot Password?" to reset the password.');
+    throw new Error('That email already belongs to an existing account. Sign in instead.');
   }
 
   await saveSignupRecords(accountRef, accountData, employeeRecord);
   showSignupVerification(
     username,
     accountData,
-    'Your account setup was resumed. Check your email and click the verification link. Then return to PoolPro and sign in with your username and password.'
+    'Setup resumed. Check your email, verify it, then sign in.'
   );
 }
 
@@ -783,7 +783,7 @@ async function requireVerifiedCurrentUserForAccount(account) {
   const expectedEmail = (account?.employeeEmail || getAuthEmail(account) || '').trim().toLowerCase();
   const currentUser = auth.currentUser;
   if (!currentUser) {
-    throw new Error('Please sign in again and complete email verification before accessing PoolPro.');
+    throw new Error('Sign in again, then finish email verification.');
   }
 
   await currentUser.reload();
@@ -792,12 +792,12 @@ async function requireVerifiedCurrentUserForAccount(account) {
   if (expectedEmail && currentEmail && currentEmail !== expectedEmail) {
     await signOut(auth).catch(() => {});
     clearLifeguardSession();
-    throw new Error('The verified Firebase user does not match this PoolPro account. Sign in again with the correct username.');
+    throw new Error('This verified email does not match this PoolPro account. Sign in again.');
   }
 
   if (!refreshedUser?.emailVerified) {
     clearLifeguardSession();
-    throw new Error('Email verification is required before accessing PoolPro.');
+    throw new Error('Verify your email before opening PoolPro.');
   }
 }
 
@@ -894,10 +894,10 @@ function openVerificationView({
   });
 
   if (verifySubtitleEl) {
-    verifySubtitleEl.textContent = `Email verification is required to access PoolPro. Check the inbox for ${maskEmail(email)} and open the verification email. After the email is verified, return here and sign in with your username and password.`;
+    verifySubtitleEl.textContent = `Verify the email sent to ${maskEmail(email)}. Then return and sign in with your username and password.`;
   }
   if (verifyHintEl) {
-    verifyHintEl.textContent = 'Check your junk/spam folders if you do not see the email within 60 seconds. Otherwise, click below to resend the verification email.';
+    verifyHintEl.textContent = 'Check spam if it does not arrive within 60 seconds. Use resend if needed.';
   }
   if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification';
   setMessage(
@@ -937,11 +937,11 @@ function openVerificationView({
     console.error('Unable to send initial verification email:', err);
     const code = err.code || '';
     const friendly = code === 'auth/operation-not-allowed'
-      ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
+      ? 'Email/password sign-in is not enabled yet.'
       : code === 'auth/too-many-requests'
-        ? 'Firebase temporarily rate-limited verification emails for this account. Wait a few minutes, then resend the verification email.'
+        ? 'Too many attempts. Wait a few minutes, then resend.'
       : code === 'auth/invalid-email'
-        ? 'This account email is invalid in Firebase. Update the employee email and try again.'
+        ? 'That email address is invalid.'
       : (err.message || 'Unable to send the verification email.');
     setMessage(verifyMessageEl, friendly, true);
   });
@@ -984,7 +984,15 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
   const authEmail = getAuthEmail(account);
   if (!authEmail) throw new Error('This account is missing an email address. Please contact your supervisor.');
 
-  await signInWithEmailAndPassword(auth, authEmail, password);
+  try {
+    await signInWithEmailAndPassword(auth, authEmail, password);
+  } catch (err) {
+    const code = err.code || '';
+    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      throw new Error('Incorrect password. Try again or use "Forgot Password?"');
+    }
+    throw err;
+  }
   const user = auth.currentUser;
 
   if (!user?.emailVerified) {
@@ -1011,17 +1019,17 @@ async function sendVerificationEmail({ isResend = false } = {}) {
   if (!pendingVerification) throw new Error('No verification session is active.');
   const email = (pendingVerification.account.employeeEmail || getAuthEmail(pendingVerification.account) || '').trim().toLowerCase();
   if (!email) throw new Error('This account does not have an email address on file.');
-  if (!auth.currentUser) throw new Error('Please sign in again before requesting a verification email.');
+  if (!auth.currentUser) throw new Error('Sign in again before requesting another verification email.');
   await auth.currentUser.reload();
   const currentEmail = (auth.currentUser?.email || '').trim().toLowerCase();
   if (currentEmail && currentEmail !== email) {
     await signOut(auth).catch(() => {});
-    throw new Error('The signed-in Firebase user does not match this PoolPro account. Sign in again before requesting verification.');
+    throw new Error('This signed-in email does not match the account. Sign in again.');
   }
-  if (auth.currentUser.emailVerified) throw new Error('This email is already verified. Sign in with your username to continue.');
+  if (auth.currentUser.emailVerified) throw new Error('This email is already verified. Sign in to continue.');
   if (isResend && Date.now() < verifyCooldownUntil) {
     const remainingSeconds = Math.ceil((verifyCooldownUntil - Date.now()) / 1000);
-    throw new Error(`Please wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending the verification email.`);
+    throw new Error(`Wait ${remainingSeconds} more second${remainingSeconds === 1 ? '' : 's'} before resending.`);
   }
 
   auth.useDeviceLanguage();
@@ -1045,18 +1053,18 @@ async function sendVerificationEmail({ isResend = false } = {}) {
   startVerifyCooldown();
   setMessage(
     verifyMessageEl,
-    `${isResend ? 'Verification email resent' : 'Verification email sent'} to ${maskEmail(email)}. After verifying, sign in with your username and password.`
+    `${isResend ? 'Verification email resent' : 'Verification email sent'} to ${maskEmail(email)}. Verify it, then sign in.`
   );
 }
 
 async function confirmVerifiedEmail() {
   if (!pendingVerification) throw new Error('No verification session is active.');
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('Please sign in again to finish verification.');
+  if (!currentUser) throw new Error('Sign in again to finish verification.');
 
   await currentUser.reload();
   if (!currentUser.emailVerified) {
-    throw new Error('Your email is not verified yet. Open the verification email, click the link, then try again.');
+    throw new Error('Your email is not verified yet. Open the email, click the link, then try again.');
   }
 
   await requirePasswordLoginAfterVerification('Your email has been verified. Sign in with your username and password to continue.');
@@ -1096,12 +1104,12 @@ async function handleEmailVerificationRedirect() {
     resetVerificationState();
     await signOut(auth).catch(() => {});
     openModal(targetKeyFromDestinationPath(target));
-    setMessage(messageEl, 'Your email has been verified. Sign in with your username and password to continue.', false);
+    setMessage(messageEl, 'Email verified. Sign in with your username and password.', false);
   } catch (err) {
     console.error('Email verification redirect failed:', err);
     window.history.replaceState({}, document.title, window.location.pathname);
     openModal('chem');
-    setMessage(messageEl, err.message || 'That verification link is invalid or expired. Sign in again to get a new email.', true);
+    setMessage(messageEl, err.message || 'That verification link is invalid or expired. Sign in again for a new one.', true);
   }
 
   return true;
@@ -1132,7 +1140,9 @@ async function handleSubmit(event) {
     console.error('Home login failed:', err);
     const code = err.code || '';
     const friendly = code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential'
-      ? (currentRole === 'lifeguard' ? 'Incorrect username or password.' : 'Incorrect email or password.')
+      ? (currentRole === 'lifeguard'
+        ? 'Username not found. Create an account first, then ask your supervisor for help if the issue persists.'
+        : 'Email or password not recognized.')
       : code === 'agreement/required'
         ? 'You must accept the user agreement before using PoolPro.'
       : (err.message || 'Login failed. Please try again.');
@@ -1185,14 +1195,14 @@ async function handleCreateAccountSubmit(event) {
     await auth.currentUser?.reload();
     if (auth.currentUser?.emailVerified) {
       await signOut(auth).catch(() => {});
-      throw new Error('This email is already verified for an existing login. Sign in instead of creating a new account.');
+      throw new Error('This email already belongs to an existing account. Sign in instead.');
     }
     await saveSignupRecords(accountRef, accountData, employeeRecord);
 
     showSignupVerification(
       username,
       accountData,
-      'Check your email and click the verification link. After verification, return to PoolPro and sign in with your username and password.'
+      'Check your email, verify it, then return and sign in.'
     );
   } catch (err) {
     console.error('Create account failed:', err);
@@ -1221,19 +1231,19 @@ async function handleCreateAccountSubmit(event) {
       } catch (resumeError) {
         await signOut(auth).catch(() => {});
         console.error('Interrupted signup recovery failed:', resumeError);
-        setMessage(createMessageEl, resumeError.message || 'That email is already registered. Use "Forgot Password?" to reset the password and sign in.', true);
+        setMessage(createMessageEl, resumeError.message || 'That email already has an account. Use "Forgot Password?" if needed.', true);
         return;
       }
     }
 
     await signOut(auth).catch(() => {});
     const friendly = code === 'auth/operation-not-allowed'
-      ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
+      ? 'Email/password sign-in is not enabled yet.'
       : code === 'permission-denied'
-        ? 'Firebase permissions blocked the account save. Publish the updated Firestore rules, then try again.'
+        ? 'The account could not be saved right now. Try again in a moment.'
         : code === 'auth/invalid-email'
           ? 'Please enter a valid email address.'
-          : (err.message || 'Unable to create your account right now.');
+        : (err.message || 'Unable to create your account right now.');
     setMessage(createMessageEl, friendly, true);
   } finally {
     setCreateAccountSubmitting(false);
@@ -1257,7 +1267,7 @@ async function handleResetPasswordSubmit(event) {
       if (!resetEmail) throw new Error('No email address found for this username. Contact your supervisor.');
     }
     await sendPasswordResetEmail(auth, resetEmail);
-    setMessage(resetMessageEl, 'Password reset email sent. Check your inbox and follow the link to set a new password.', false);
+    setMessage(resetMessageEl, 'Password reset email sent. Check your inbox.', false);
     if (resetFieldInput) resetFieldInput.value = '';
   } catch (err) {
     const code = err.code || '';
@@ -1344,9 +1354,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) {
       const code = err.code || '';
       const friendly = code === 'auth/operation-not-allowed'
-        ? 'Enable Email/Password sign-in in Firebase Authentication, then try again.'
+        ? 'Email/password sign-in is not enabled yet.'
         : code === 'auth/too-many-requests'
-          ? 'Firebase temporarily rate-limited verification emails for this account. Wait a few minutes, then resend the verification email.'
+          ? 'Too many attempts. Wait a few minutes, then resend.'
         : (err.message || 'Unable to resend the verification email.');
       setMessage(verifyMessageEl, friendly, true);
     }

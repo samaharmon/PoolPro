@@ -198,10 +198,9 @@ html {
   position: relative;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 10px;
-  width: fit-content;
-  max-width: 100%;
+  width: 100%;
   margin: 10px 0 16px;
   padding: 12px 14px;
   border: 1px solid #c8a47e;
@@ -321,7 +320,7 @@ html {
   color: #fff4d7;
   font-size: 13px;
   font-family: "Franklin Gothic Medium", Arial, sans-serif;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
 }

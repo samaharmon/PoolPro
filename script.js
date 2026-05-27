@@ -3207,7 +3207,172 @@ let editingEmployeeIdx = -1;
 let employeeMarketFilter = 'all';
 let employeePoolFilter = 'all';
 let employeePage = 1;
+let employeeTableEditable = false;
+let employeeUndoState = null;
 const EMPLOYEES_PER_PAGE = 10;
+
+function ensureEmployeeSettingsUi() {
+  const tableSection = document.getElementById('employeeTableSection');
+  if (!tableSection) return;
+
+  if (!document.getElementById('employeeControls')) {
+    const controlsRow = document.createElement('div');
+    controlsRow.className = 'toggle-btn employee-toggle-row';
+    controlsRow.innerHTML = `
+      <div id="employeeControls" class="sanitation-controls">
+        <div class="sanitation-controls-thumb"></div>
+        <button type="button" class="editAndSave active" id="employeeEditBtn">Edit</button>
+        <button type="button" class="editAndSave" id="employeeSaveBtn" disabled>Save</button>
+      </div>
+    `;
+    tableSection.parentElement?.insertBefore(controlsRow, tableSection);
+  }
+
+  const table = tableSection.querySelector('.employee-table');
+  if (table && !table.closest('.table-scroll-wrap')) {
+    const shell = document.createElement('div');
+    shell.className = 'table-scroll-shell';
+    const wrap = document.createElement('div');
+    wrap.className = 'table-scroll-wrap';
+    wrap.style.setProperty('--table-min-width', '900px');
+    tableSection.insertBefore(shell, table);
+    shell.appendChild(wrap);
+    wrap.appendChild(table);
+  }
+
+  const headerRow = tableSection.querySelector('.employee-table thead tr');
+  while (headerRow && headerRow.children.length > 5) {
+    headerRow.lastElementChild?.remove();
+  }
+
+  const addRow = document.querySelector('.employee-add-btn-row');
+  if (addRow) {
+    addRow.classList.add('employee-action-row');
+
+    if (!document.getElementById('employeeDeleteBtn')) {
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.id = 'employeeDeleteBtn';
+      deleteBtn.className = 'submit-btn button-shadow employee-action-btn hidden';
+      deleteBtn.textContent = 'Delete';
+      addRow.appendChild(deleteBtn);
+    }
+
+    if (!document.getElementById('employeeUndoBtn')) {
+      const undoBtn = document.createElement('button');
+      undoBtn.type = 'button';
+      undoBtn.id = 'employeeUndoBtn';
+      undoBtn.className = 'submit-btn button-shadow employee-action-btn hidden';
+      undoBtn.textContent = 'Undo';
+      addRow.appendChild(undoBtn);
+    }
+  }
+}
+
+function populateEmployeeForm(employee) {
+  const normalized = normalizeEmployeeRecord(employee || {});
+  const emailField = document.getElementById('employeeIdInput');
+  const firstNameField = document.getElementById('employeeFirstNameInput');
+  const lastNameField = document.getElementById('employeeLastNameInput');
+  const phoneField = document.getElementById('employeePhoneInput');
+  const homePoolField = document.getElementById('employeeHomePoolInput');
+  if (emailField) emailField.value = normalized.email || normalized.id || '';
+  if (firstNameField) firstNameField.value = normalized.firstName || '';
+  if (lastNameField) lastNameField.value = normalized.lastName || '';
+  if (phoneField) phoneField.value = normalized.phone || '';
+  if (homePoolField) homePoolField.value = normalized.homePool || '';
+}
+
+function clearEmployeeForm() {
+  ['employeeIdInput', 'employeeFirstNameInput', 'employeeLastNameInput', 'employeePhoneInput'].forEach((fieldId) => {
+    const field = document.getElementById(fieldId);
+    if (field) field.value = '';
+  });
+  const homePoolField = document.getElementById('employeeHomePoolInput');
+  if (homePoolField) homePoolField.value = '';
+}
+
+function syncEmployeeActionButtons() {
+  ensureEmployeeSettingsUi();
+  const addBtn = document.getElementById('employeeAddBtn');
+  const deleteBtn = document.getElementById('employeeDeleteBtn');
+  const undoBtn = document.getElementById('employeeUndoBtn');
+  const hasSelectedRow = employeeTableEditable && editingEmployeeIdx >= 0 && !!employeesData[editingEmployeeIdx];
+
+  if (addBtn) addBtn.textContent = hasSelectedRow ? 'Save' : 'Add';
+  if (deleteBtn) deleteBtn.classList.toggle('hidden', !hasSelectedRow);
+  if (undoBtn) undoBtn.classList.toggle('hidden', !employeeUndoState);
+}
+
+function selectEmployeeRow(sourceIndex) {
+  if (!employeeTableEditable) return;
+  const employee = employeesData[sourceIndex];
+  if (!employee) return;
+  editingEmployeeIdx = sourceIndex;
+  populateEmployeeForm(employee);
+  syncEmployeeActionButtons();
+  renderEmployeesTable();
+}
+
+function setEmployeeUndoAction(action) {
+  employeeUndoState = action || null;
+  syncEmployeeActionButtons();
+}
+
+async function undoLastEmployeeAction() {
+  if (!employeeUndoState) return;
+  const { type, employee, index } = employeeUndoState;
+  const normalized = normalizeEmployeeRecord(employee);
+
+  if (type === 'add') {
+    const matchIndex = employeesData.findIndex((item, itemIndex) => itemIndex === index
+      || normalizeEmployeeRecord(item).email === normalized.email);
+    if (matchIndex >= 0) {
+      employeesData.splice(matchIndex, 1);
+      await saveEmployees();
+    }
+    editingEmployeeIdx = -1;
+    populateEmployeeForm(normalized);
+  } else if (type === 'delete') {
+    const insertAt = Math.max(0, Math.min(index, employeesData.length));
+    employeesData.splice(insertAt, 0, normalized);
+    await saveEmployees();
+    if (!employeeTableEditable) setEmployeeTableEditable(true);
+    editingEmployeeIdx = insertAt;
+    populateEmployeeForm(normalized);
+  }
+
+  setEmployeeUndoAction(null);
+  renderEmployeesTable();
+}
+
+function setEmployeeTableEditable(editable) {
+  ensureEmployeeSettingsUi();
+  employeeTableEditable = !!editable;
+  const editBtn = document.getElementById('employeeEditBtn');
+  const saveBtn = document.getElementById('employeeSaveBtn');
+  const section = document.getElementById('employeeTableSection');
+  const controls = document.getElementById('employeeControls');
+
+  if (section) section.classList.toggle('overlay-disabled', !employeeTableEditable);
+  if (editBtn) {
+    editBtn.classList.toggle('active', !employeeTableEditable);
+    editBtn.disabled = employeeTableEditable;
+  }
+  if (saveBtn) {
+    saveBtn.classList.toggle('active', employeeTableEditable);
+    saveBtn.disabled = !employeeTableEditable;
+  }
+  setSegmentedToggleThumb(controls, employeeTableEditable ? 'save' : 'edit');
+
+  if (!employeeTableEditable) {
+    editingEmployeeIdx = -1;
+    clearEmployeeForm();
+  }
+
+  syncEmployeeActionButtons();
+  renderEmployeesTable();
+}
 
 async function loadEmployees() {
   try {
@@ -3418,6 +3583,7 @@ function normalizeEmployeeRecord(rawEmployee) {
 }
 
 function renderEmployeesTable() {
+  ensureEmployeeSettingsUi();
   const tbody = document.getElementById('employeesTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
@@ -3451,66 +3617,29 @@ function renderEmployeesTable() {
   const pageStart = (employeePage - 1) * EMPLOYEES_PER_PAGE;
   const pageEmployees = filteredEmployees.slice(pageStart, pageStart + EMPLOYEES_PER_PAGE);
 
+  if (!pageEmployees.length) {
+    tbody.innerHTML = '<tr><td colspan="5">No employees match the current filters.</td></tr>';
+  }
+
   pageEmployees.forEach(({ emp, index: sourceIndex }) => {
     const tr = document.createElement('tr');
+    tr.dataset.employeeIndex = String(sourceIndex);
+    if (employeeTableEditable) tr.classList.add('employee-row-clickable');
+    if (employeeTableEditable && sourceIndex === editingEmployeeIdx) {
+      tr.classList.add('employee-row-selected');
+    }
     tr.innerHTML = `
       <td>${emp.firstName || ''}</td>
       <td>${emp.lastName || ''}</td>
       <td>${emp.email || emp.id || ''}</td>
       <td>${formatPhoneDisplay(emp.phone)}</td>
       <td>${emp.homePool || ''}</td>
-      <td class="actions-cell"></td>
     `;
-    const actionsCell = tr.querySelector('.actions-cell');
-
-    actionsCell.style.cssText = 'text-align:center;vertical-align:middle;padding:4px 6px;';
-    const btnWrap = document.createElement('div');
-    btnWrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;';
-
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.textContent = 'Edit';
-    editBtn.className = 'submit-btn';
-    editBtn.style.cssText = 'padding:3px 10px;font-size:0.82rem;width:70px;';
-    editBtn.addEventListener('click', () => {
-      editingEmployeeIdx = sourceIndex;
-      document.getElementById('employeeIdInput').value = emp.email || emp.id || '';
-      document.getElementById('employeeFirstNameInput').value = emp.firstName || '';
-      document.getElementById('employeeLastNameInput').value = emp.lastName || '';
-      const homePoolSel = document.getElementById('employeeHomePoolInput');
-      if (homePoolSel) homePoolSel.value = emp.homePool || '';
-      document.getElementById('employeePhoneInput').value = emp.phone || '';
-      const addBtn = document.getElementById('employeeAddBtn');
-      if (addBtn) addBtn.textContent = 'Save';
-      // Remove overlay so form and table are editable
-      const section = document.getElementById('employeeTableSection');
-      if (section) section.classList.remove('overlay-disabled');
-      const eBtn = document.getElementById('employeeEditBtn');
-      const sBtn = document.getElementById('employeeSaveBtn');
-      if (eBtn) { eBtn.classList.remove('active'); eBtn.disabled = true; }
-      if (sBtn) { sBtn.classList.add('active'); sBtn.disabled = false; }
-    });
-
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.textContent = 'Remove';
-    removeBtn.className = 'submit-btn';
-    removeBtn.style.cssText = 'padding:3px 10px;font-size:0.82rem;width:70px;';
-    removeBtn.addEventListener('click', async () => {
-      if (!confirm(`Remove ${emp.firstName || ''} ${emp.lastName || ''} (${emp.email || emp.id || ''})?`)) return;
-      const idxToRemove = sourceIndex;
-      if (idxToRemove < 0 || idxToRemove >= employeesData.length) return;
-      employeesData.splice(idxToRemove, 1);
-      await saveEmployees();
-      renderEmployeesTable();
-    });
-
-    btnWrap.appendChild(editBtn);
-    btnWrap.appendChild(removeBtn);
-    actionsCell.appendChild(btnWrap);
+    tr.addEventListener('click', () => selectEmployeeRow(sourceIndex));
     tbody.appendChild(tr);
   });
 
+  syncEmployeeActionButtons();
   renderEmployeePagination(totalPages);
 }
 
@@ -3562,9 +3691,11 @@ function renderEmployeePagination(totalPages) {
 }
 
 function setupEmployeeManagement() {
+  ensureEmployeeSettingsUi();
   // Add single employee
   const addBtn = document.getElementById('employeeAddBtn');
-  if (addBtn) {
+  if (addBtn && !addBtn.dataset.bound) {
+    addBtn.dataset.bound = 'true';
     addBtn.addEventListener('click', async () => {
       const email = (document.getElementById('employeeIdInput')?.value.trim() || '').toLowerCase();
       const firstName = document.getElementById('employeeFirstNameInput')?.value.trim() || '';
@@ -3587,32 +3718,59 @@ function setupEmployeeManagement() {
       });
       if (wasEditing) {
         employeesData[editingEmployeeIdx] = nextEmployee;
-        editingEmployeeIdx = -1;
       } else {
+        const insertIndex = employeesData.length;
         employeesData.push(nextEmployee);
+        setEmployeeUndoAction({
+          type: 'add',
+          employee: nextEmployee,
+          index: insertIndex,
+        });
       }
-      addBtn.textContent = 'Add';
+      await saveEmployees();
+      if (wasEditing) {
+        editingEmployeeIdx = employeesData.findIndex((employee) => normalizeEmployeeRecord(employee).email === nextEmployee.email);
+        populateEmployeeForm(nextEmployee);
+      } else {
+        editingEmployeeIdx = -1;
+        clearEmployeeForm();
+      }
+      renderEmployeesTable();
+    });
+  }
+
+  const deleteBtn = document.getElementById('employeeDeleteBtn');
+  if (deleteBtn && !deleteBtn.dataset.bound) {
+    deleteBtn.dataset.bound = 'true';
+    deleteBtn.addEventListener('click', async () => {
+      if (editingEmployeeIdx < 0 || !employeesData[editingEmployeeIdx]) return;
+      const removed = normalizeEmployeeRecord(employeesData[editingEmployeeIdx]);
+      const removedIndex = editingEmployeeIdx;
+      employeesData.splice(removedIndex, 1);
+      editingEmployeeIdx = -1;
+      clearEmployeeForm();
+      setEmployeeUndoAction({
+        type: 'delete',
+        employee: removed,
+        index: removedIndex,
+      });
       await saveEmployees();
       renderEmployeesTable();
-      // Re-apply overlay after save (whether adding or editing)
-      const empSection = document.getElementById('employeeTableSection');
-      if (empSection) empSection.classList.add('overlay-disabled');
-      const eBtn2 = document.getElementById('employeeEditBtn');
-      const sBtn2 = document.getElementById('employeeSaveBtn');
-      if (eBtn2) { eBtn2.classList.add('active'); eBtn2.disabled = false; }
-      if (sBtn2) { sBtn2.classList.remove('active'); sBtn2.disabled = true; }
-      ['employeeIdInput', 'employeeFirstNameInput', 'employeeLastNameInput', 'employeePhoneInput'].forEach(fid => {
-        const el = document.getElementById(fid);
-        if (el) el.value = '';
-      });
-      const homePoolSelClear = document.getElementById('employeeHomePoolInput');
-      if (homePoolSelClear) homePoolSelClear.value = '';
+    });
+  }
+
+  const undoBtn = document.getElementById('employeeUndoBtn');
+  if (undoBtn && !undoBtn.dataset.bound) {
+    undoBtn.dataset.bound = 'true';
+    undoBtn.addEventListener('click', async () => {
+      await undoLastEmployeeAction();
     });
   }
 
   // Import from Excel/CSV — auto-import on file selection
   const fileInput = document.getElementById('employeeFileInput');
-  if (fileInput) {
+  if (fileInput && !fileInput.dataset.bound) {
+    fileInput.dataset.bound = 'true';
     fileInput.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -5162,29 +5320,23 @@ function setupSanitationControls() {}
 // ============================================================
 
 function setupEmployeeOverlay() {
+  ensureEmployeeSettingsUi();
   const editBtn = document.getElementById('employeeEditBtn');
   const saveBtn = document.getElementById('employeeSaveBtn');
-  const section = document.getElementById('employeeTableSection');
-  if (!editBtn || !saveBtn || !section) return;
-
-  editBtn.addEventListener('click', () => {
-    section.classList.remove('overlay-disabled');
-    editBtn.classList.remove('active');
-    saveBtn.classList.add('active');
-    editBtn.disabled = true;
-    saveBtn.disabled = false;
-  });
-
-  saveBtn.addEventListener('click', () => {
-    section.classList.add('overlay-disabled');
-    saveBtn.classList.remove('active');
-    editBtn.classList.add('active');
-    saveBtn.disabled = true;
-    editBtn.disabled = false;
-    editingEmployeeIdx = -1;
-    const addBtn = document.getElementById('employeeAddBtn');
-    if (addBtn) addBtn.textContent = 'Add';
-  });
+  if (!editBtn || !saveBtn) return;
+  if (!editBtn.dataset.bound) {
+    editBtn.dataset.bound = 'true';
+    editBtn.addEventListener('click', () => setEmployeeTableEditable(true));
+  }
+  if (!saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = 'true';
+    saveBtn.addEventListener('click', () => setEmployeeTableEditable(false));
+  }
+  if (!employeeTableEditable) {
+    const section = document.getElementById('employeeTableSection');
+    section?.classList.add('overlay-disabled');
+  }
+  setEmployeeTableEditable(employeeTableEditable);
 }
 
 function setSegmentedToggleThumb(container, activeSide) {

@@ -2993,7 +2993,15 @@ textarea,
 }
 
 .employee-add-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   margin: 12px 0 4px;
+}
+
+.employee-toggle-row {
+  margin: 18px 0 10px;
 }
 
 .employee-add-row .settings-field label {
@@ -3138,6 +3146,39 @@ textarea,
 #employeeTableSection {
   margin-top: 12px;
   margin-bottom: 14px;
+  overflow: visible;
+}
+
+#employeeTableSection .table-scroll-shell {
+  width: 100%;
+}
+
+#employeeTableSection .table-scroll-wrap {
+  max-height: min(52vh, 460px);
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#employeeTableSection .employee-table {
+  margin-top: 0;
+}
+
+.employee-row-clickable {
+  cursor: pointer;
+}
+
+.employee-row-selected td {
+  border-top: 4px solid #69140e !important;
+  border-bottom: 4px solid #69140e !important;
+}
+
+.employee-row-selected td:first-child {
+  border-left: 4px solid #69140e !important;
+}
+
+.employee-row-selected td:last-child {
+  border-right: 4px solid #69140e !important;
 }
 
 #employeeFilterBar {
