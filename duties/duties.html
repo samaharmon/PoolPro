@@ -119,6 +119,14 @@
           <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('bleachFeederUpload')">+ Add Photo</button>
         </div>
 
+        <!-- DES Logbooks -->
+        <div class="duties-photo-group hidden" id="desLogbooksGroup">
+          <h3 class="duties-photo-group-title">DES Logbooks <span class="duties-req-badge" id="desLogbooksBadge">1 required</span></h3>
+          <p class="duties-group-desc" id="desLogbooksDesc">Submit image(s) of the current page of all DES logbooks for your facility. Make sure that the entire page is clearly visible in the photos.</p>
+          <div class="duties-multi-upload" id="desLogbooksUpload" data-category="desLogbooks" data-min="0" data-max="2"></div>
+          <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('desLogbooksUpload')">+ Add Photo</button>
+        </div>
+
         <!-- Fill Lines -->
         <div class="duties-photo-group hidden" id="fillLinesGroup">
           <h3 class="duties-photo-group-title">Fill Lines <span class="duties-req-badge" id="fillLinesBadge">1 required</span></h3>
@@ -285,6 +293,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script type="module" src="../script.js"></script>
-  <script type="module" src="duties.js"></script>
+  <script type="module" src="duties.js?v=20260527b"></script>
 </body>
 </html>

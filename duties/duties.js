@@ -25,8 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     poolSel.addEventListener('change', () => {
       populateCYAFields(poolSel.value);
       updateFillLinesFields(poolSel.value);
+      updateDESLogbooksFields(poolSel.value);
     });
     updateFillLinesFields(poolSel.value);
+    updateDESLogbooksFields(poolSel.value);
   }
 });
 
@@ -75,6 +77,7 @@ function populatePools() {
     schedulePoolPopulateRetry();
     populateCYAFields('');
     updateFillLinesFields('');
+    updateDESLogbooksFields('');
     return;
   }
   if (poolPopulateRetryId) {
@@ -101,6 +104,7 @@ function populatePools() {
   if (current) sel.value = current;
   populateCYAFields(sel.value || '');
   updateFillLinesFields(sel.value || '');
+  updateDESLogbooksFields(sel.value || '');
 }
 
 function getSelectedPoolDoc(poolValue) {
@@ -123,7 +127,10 @@ function resetPhotoGroup(groupId, options = {}) {
   slotCounters[groupId] = 0;
 
   const min = parseInt(group.dataset.min || '0', 10);
-  const initialSlots = options.empty ? 0 : Math.max(min, 1);
+  const configuredInitialSlots = Number.isFinite(Number(options.initialSlots))
+    ? Number(options.initialSlots)
+    : min;
+  const initialSlots = options.empty ? 0 : Math.max(configuredInitialSlots, min, 1);
   for (let i = 0; i < initialSlots; i++) {
     addPhotoSlotToGroup(group);
   }
@@ -165,6 +172,43 @@ function updateFillLinesFields(poolValue) {
     badge.textContent = '1 required, 2 max';
     resetPhotoGroup('fillLinesUpload', { min: 1, max: 2 });
   }
+}
+
+function updateDESLogbooksFields(poolValue) {
+  const groupWrap = document.getElementById('desLogbooksGroup');
+  const group = document.getElementById('desLogbooksUpload');
+  const badge = document.getElementById('desLogbooksBadge');
+  const desc = document.getElementById('desLogbooksDesc');
+  if (!groupWrap || !group || !badge || !desc) return;
+
+  desc.textContent = 'Submit image(s) of the current page of all DES logbooks for your facility. Make sure that the entire page is clearly visible in the photos.';
+  const poolDoc = getSelectedPoolDoc(poolValue);
+  const poolName = normalizeFacilityName(poolDoc?.name || poolValue);
+
+  let config = null;
+  if (poolName.includes('columbia country club') || poolName.includes('columbia cc')) {
+    config = { min: 1, max: 2, badge: '1 required, 2 max', initialSlots: 2 };
+  } else if (poolName.includes('camden country club') || poolName.includes('camden cc')) {
+    config = { min: 1, max: 1, badge: '1 required', initialSlots: 1 };
+  } else if (
+    poolName.includes('forest lake') ||
+    poolName.includes('rockbridge') ||
+    poolName.includes('wildewood') ||
+    poolName.includes('winchester')
+  ) {
+    config = { min: 2, max: 2, badge: '2 required', initialSlots: 2 };
+  }
+
+  if (!config) {
+    groupWrap.classList.add('hidden');
+    badge.textContent = '1 required';
+    resetPhotoGroup('desLogbooksUpload', { min: 0, max: 2, empty: true });
+    return;
+  }
+
+  groupWrap.classList.remove('hidden');
+  badge.textContent = config.badge;
+  resetPhotoGroup('desLogbooksUpload', config);
 }
 
 // ============================================================
@@ -704,6 +748,16 @@ window.submitDutiesForm = async function () {
     });
   }
 
+  const desLogbooksGroup = document.getElementById('desLogbooksGroup');
+  const desLogbooksUpload = document.getElementById('desLogbooksUpload');
+  if (desLogbooksGroup && desLogbooksUpload && !desLogbooksGroup.classList.contains('hidden')) {
+    requiredGroups.push({
+      id: 'desLogbooksUpload',
+      label: 'DES Logbooks',
+      min: parseInt(desLogbooksUpload.dataset.min || '1', 10),
+    });
+  }
+
   for (const g of requiredGroups) {
     const photos = collectPhotosFromGroup(g.id);
     if (photos.length < g.min) {
@@ -724,6 +778,7 @@ window.submitDutiesForm = async function () {
       { groupId: 'skimmersUpload', category: 'skimmers', resultKey: 'skimmers', label: 'Skimmers' },
       { groupId: 'damagedUpload', category: 'damaged', resultKey: 'damaged', label: 'Damaged Equipment' },
       { groupId: 'bleachFeederUpload', category: 'bleachFeeders', resultKey: 'bleachFeeders', label: 'Bleach Feeders' },
+      { groupId: 'desLogbooksUpload', category: 'desLogbooks', resultKey: 'desLogbooks', label: 'DES Logbooks' },
       { groupId: 'fillLinesUpload', category: 'fillLines', resultKey: 'fillLines', label: 'Fill Lines' },
       { groupId: 'bleachUpload', category: 'bleach', resultKey: 'bleach', label: 'Managers Only' },
     ].map((group) => ({
@@ -770,6 +825,7 @@ window.submitDutiesForm = async function () {
         skimmers: uploadedPhotos.skimmers || [],
         damaged: uploadedPhotos.damaged || [],
         bleachFeeders: uploadedPhotos.bleachFeeders || [],
+        desLogbooks: uploadedPhotos.desLogbooks || [],
         fillLines: uploadedPhotos.fillLines || [],
         bleach: uploadedPhotos.bleach || [],
       },
@@ -812,7 +868,7 @@ function resetForm() {
   document.querySelectorAll('.cya-input').forEach(el => { el.value = ''; });
 
   // Reset all photo groups
-  ['deckUpload', 'poolUpload', 'skimmersUpload', 'damagedUpload', 'bleachFeederUpload', 'bleachUpload'].forEach(groupId => {
+  ['deckUpload', 'poolUpload', 'skimmersUpload', 'damagedUpload', 'bleachFeederUpload', 'desLogbooksUpload', 'bleachUpload'].forEach(groupId => {
     const group = document.getElementById(groupId);
     if (!group) return;
     group.innerHTML = '';
@@ -823,4 +879,5 @@ function resetForm() {
     updateAddBtn(groupId);
   });
   updateFillLinesFields('');
+  updateDESLogbooksFields('');
 }

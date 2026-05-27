@@ -488,6 +488,50 @@ async function removeEmployeeRecordForAccount(email) {
   }
 }
 
+async function findLinkedLifeguardAccountsByEmail(email) {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  if (!normalizedEmail) return [];
+
+  const snap = await getDocs(collection(db, 'lifeguardAccounts'));
+  const matches = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() || {};
+    const emails = [
+      data.authEmail,
+      data.employeeEmail,
+      data.email,
+      data.id,
+    ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean);
+    if (emails.includes(normalizedEmail)) {
+      matches.push({
+        username: docSnap.id,
+        data,
+      });
+    }
+  });
+  return matches;
+}
+
+async function deleteLinkedLifeguardAccessForEmployee(employee) {
+  const normalizedEmployee = normalizeEmployeeRecord(employee || {});
+  const email = (normalizedEmployee.email || normalizedEmployee.id || '').trim().toLowerCase();
+  if (!email) return;
+
+  const linkedAccounts = await findLinkedLifeguardAccountsByEmail(email);
+  if (!linkedAccounts.length) return;
+
+  const authTarget = linkedAccounts.find((account) => account.username) || linkedAccounts[0];
+  await deleteFirebaseAuthCredentialForAccount({
+    email,
+    username: authTarget.username,
+    role: 'lifeguard',
+  });
+
+  await Promise.all(
+    linkedAccounts.map((account) => deleteDoc(doc(db, 'lifeguardAccounts', account.username)))
+  );
+}
+
 function isDeletedAccountMatch(value, identifiers) {
   const normalized = (value || '').toString().trim().toLowerCase();
   return !!normalized && identifiers.has(normalized);
@@ -1875,7 +1919,7 @@ const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a tr
 const BLEACH_FEEDER_STATUS_OPTIONS = ['Not applicable', 'Off', '0 or L', '1', '1.5', '1.75', '2', '2.25', '2.5', '3', '4', '5', '6', '7', '8', '9', '10'];
 const POOL_CLOSURE_OPTIONS = ['Open', 'Weather', 'Contamination', 'Chemical Imbalance', 'System Malfunction', 'Other'];
 const POOL_CLOSURE_TODOS = {
-  Weather: ['Close and tie shut all umbrellas, then remove any equipment that may be damaged.'],
+  Weather: ['Close and tie shut all umbrellas, then remove any equipment that may be damaged by the storm.'],
   Contamination: ['Do not make any changes until instructed by a supervisor.'],
   'Chemical Imbalance': ['Do not make any changes until instructed by a supervisor.'],
   'System Malfunction': ['Do not make any changes until instructed by a supervisor.'],
@@ -2459,9 +2503,9 @@ function renderDashboardFilterBar(container, onChange) {
   dateInput.addEventListener('change', handleChange);
 }
 
-function renderDashboardPagination(container, { page, totalRows, totalPages: suppliedTotalPages, onPageChange }) {
+function renderDashboardPagination(container, { page, totalRows, totalPages: suppliedTotalPages, onPageChange, alwaysRender = false }) {
   const totalPages = suppliedTotalPages || Math.max(1, Math.ceil(totalRows / DASHBOARD_PAGE_SIZE));
-  if (totalPages <= 1) return;
+  if (!alwaysRender && totalPages <= 1) return;
 
   const pagination = document.createElement('div');
   pagination.className = 'emp-pagination-row dashboard-pagination';
@@ -2718,6 +2762,7 @@ function renderChemistryPoolDetail(container, logs, poolDoc) {
   renderDashboardPagination(section, {
     page: dashboardChemPage,
     totalRows: rows.length,
+    alwaysRender: true,
     onPageChange: (nextPage) => {
       dashboardChemPage = nextPage;
       renderDashboard(logs);
@@ -2897,6 +2942,7 @@ function renderDashboard(logs) {
       renderDashboardPagination(panel, {
         page: currentPage,
         totalPages,
+        alwaysRender: true,
         onPageChange: (nextPage) => {
           dashboardChemPageByTable[getDashboardChemTablePageKey(market, i)] = nextPage;
           renderDashboard(logs);
@@ -3023,6 +3069,7 @@ function getOperationalSelectedFacility() {
 function renderOperationalStatusLog() {
   const cards = document.getElementById('operationalStatusCards');
   const submitBtn = document.getElementById('operationalStatusSubmit');
+  const panel = document.getElementById('operationalStatusPanel');
   if (!cards) return;
 
   const poolDoc = getOperationalSelectedFacility();
@@ -3030,11 +3077,13 @@ function renderOperationalStatusLog() {
   setOperationalMessage('');
 
   if (!poolDoc) {
+    if (panel) panel.hidden = true;
     cards.innerHTML = '<p class="operational-empty-state">Select a facility to update fill line, hose, and bleach feeder statuses.</p>';
     if (submitBtn) submitBtn.disabled = true;
     return;
   }
 
+  if (panel) panel.hidden = false;
   if (submitBtn) submitBtn.disabled = false;
   const facilityName = getPoolName(poolDoc);
   const poolCount = Math.max(1, Number(poolDoc.numPools || poolDoc.poolCount || 1));
@@ -3321,7 +3370,7 @@ function setEmployeeUndoAction(action) {
 
 async function undoLastEmployeeAction() {
   if (!employeeUndoState) return;
-  const { type, employee, index } = employeeUndoState;
+  const { type, employee } = employeeUndoState;
   const normalized = normalizeEmployeeRecord(employee);
 
   if (type === 'add') {
@@ -3334,11 +3383,8 @@ async function undoLastEmployeeAction() {
     editingEmployeeIdx = -1;
     populateEmployeeForm(normalized);
   } else if (type === 'delete') {
-    const insertAt = Math.max(0, Math.min(index, employeesData.length));
-    employeesData.splice(insertAt, 0, normalized);
-    await saveEmployees();
     if (!employeeTableEditable) setEmployeeTableEditable(true);
-    editingEmployeeIdx = insertAt;
+    editingEmployeeIdx = -1;
     populateEmployeeForm(normalized);
   }
 
@@ -3746,6 +3792,13 @@ function setupEmployeeManagement() {
       if (editingEmployeeIdx < 0 || !employeesData[editingEmployeeIdx]) return;
       const removed = normalizeEmployeeRecord(employeesData[editingEmployeeIdx]);
       const removedIndex = editingEmployeeIdx;
+      try {
+        await deleteLinkedLifeguardAccessForEmployee(removed);
+      } catch (err) {
+        console.error('[ChemLog] Could not delete linked lifeguard access:', err);
+        alert('Unable to delete the linked PoolPro login right now. The employee record was not removed.');
+        return;
+      }
       employeesData.splice(removedIndex, 1);
       editingEmployeeIdx = -1;
       clearEmployeeForm();
@@ -6199,6 +6252,7 @@ function openDutyFormModal(sub) {
         ${photoSectionHtml('Skimmers', photos.skimmers)}
         ${photoSectionHtml('Damaged Equipment', photos.damaged)}
         ${photoSectionHtml('Bleach Feeders', photos.bleachFeeders)}
+        ${photoSectionHtml('DES Logbooks', photos.desLogbooks)}
         ${photoSectionHtml('Fill Lines', photos.fillLines)}
 
         ${sub.damagedNotes ? `<div class="duty-report-notes"><strong>Damaged Equipment Notes:</strong><span>${esc(sub.damagedNotes)}</span></div>` : ''}
