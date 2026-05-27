@@ -28,6 +28,9 @@ const VERIFY_EMAIL_RESEND_MS = 60 * 1000;
 const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
 const DEVICE_VERIFIED_KEY = 'poolproDeviceVerified';
+const LOGIN_ATTEMPT_STORAGE_KEY = 'poolproLoginAttempts';
+const MAX_LOGIN_ATTEMPTS = 6;
+const LOGIN_ATTEMPT_LOCKOUT_MS = 15 * 60 * 1000;
 
 let pendingTarget = null;
 let currentRole = 'lifeguard';
@@ -202,6 +205,103 @@ function clearPendingVerificationContext() {
   try {
     localStorage.removeItem(VERIFY_CONTEXT_KEY);
   } catch (_) { /* ignore */ }
+}
+
+function getLoginAttemptStorage() {
+  try {
+    const raw = localStorage.getItem(LOGIN_ATTEMPT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveLoginAttemptStorage(store) {
+  try {
+    localStorage.setItem(LOGIN_ATTEMPT_STORAGE_KEY, JSON.stringify(store || {}));
+  } catch (_) { /* ignore */ }
+}
+
+function normalizeLoginAttemptIdentifier(identifier) {
+  return String(identifier || '').trim().toLowerCase();
+}
+
+function getLoginAttemptKey(role, identifier) {
+  const normalizedIdentifier = normalizeLoginAttemptIdentifier(identifier);
+  return normalizedIdentifier ? `${role}:${normalizedIdentifier}` : '';
+}
+
+function formatLoginLockoutMessage(waitMs) {
+  const remainingMinutes = Math.max(1, Math.ceil(Number(waitMs || 0) / 60000));
+  return `Too many login attempts. Wait ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}, then try again.`;
+}
+
+function createLoginLockoutError(waitMs) {
+  const err = new Error(formatLoginLockoutMessage(waitMs));
+  err.code = 'poolpro/too-many-login-attempts';
+  return err;
+}
+
+function getLoginAttemptState(role, identifier) {
+  const key = getLoginAttemptKey(role, identifier);
+  const store = getLoginAttemptStorage();
+  if (!key) {
+    return { key: '', store, count: 0, lastFailedAt: 0, blockedUntil: 0 };
+  }
+
+  const rawState = store[key] || {};
+  const now = Date.now();
+  const count = Number(rawState.count || 0);
+  const lastFailedAt = Number(rawState.lastFailedAt || 0);
+  const blockedUntil = Number(rawState.blockedUntil || 0);
+  const shouldReset =
+    !count ||
+    (blockedUntil && now >= blockedUntil) ||
+    (lastFailedAt && (now - lastFailedAt) >= LOGIN_ATTEMPT_LOCKOUT_MS);
+
+  if (shouldReset) {
+    delete store[key];
+    saveLoginAttemptStorage(store);
+    return { key, store, count: 0, lastFailedAt: 0, blockedUntil: 0 };
+  }
+
+  return { key, store, count, lastFailedAt, blockedUntil };
+}
+
+function assertLoginAttemptsRemaining(role, identifier) {
+  const state = getLoginAttemptState(role, identifier);
+  if (!state.key) return;
+
+  const now = Date.now();
+  if (state.blockedUntil && state.blockedUntil > now) {
+    throw createLoginLockoutError(state.blockedUntil - now);
+  }
+}
+
+function recordLoginFailure(role, identifier, options = {}) {
+  const { lockImmediately = false } = options;
+  const state = getLoginAttemptState(role, identifier);
+  if (!state.key) {
+    return { count: 0, lastFailedAt: 0, blockedUntil: 0 };
+  }
+
+  const now = Date.now();
+  const nextCount = lockImmediately ? MAX_LOGIN_ATTEMPTS : (Number(state.count || 0) + 1);
+  const blockedUntil = nextCount >= MAX_LOGIN_ATTEMPTS ? now + LOGIN_ATTEMPT_LOCKOUT_MS : 0;
+  state.store[state.key] = {
+    count: nextCount,
+    lastFailedAt: now,
+    blockedUntil,
+  };
+  saveLoginAttemptStorage(state.store);
+  return state.store[state.key];
+}
+
+function clearLoginFailures(role, identifier) {
+  const state = getLoginAttemptState(role, identifier);
+  if (!state.key || !state.store[state.key]) return;
+  delete state.store[state.key];
+  saveLoginAttemptStorage(state.store);
 }
 
 function sanitizeTarget(target) {
@@ -966,12 +1066,37 @@ async function authenticateSupervisor(email, password) {
   const e = (email || '').trim();
   const p = password || '';
   if (!e || !p) throw new Error('Please enter your email and password.');
+  assertLoginAttemptsRemaining('supervisor', e);
 
-  if (window.supervisorSignIn) {
-    await window.supervisorSignIn(e, p);
-  } else {
-    await signInWithEmailAndPassword(auth, e, p);
-    markSupervisorLoggedIn(e);
+  try {
+    if (window.supervisorSignIn) {
+      await window.supervisorSignIn(e, p);
+    } else {
+      await signInWithEmailAndPassword(auth, e, p);
+      markSupervisorLoggedIn(e);
+    }
+    clearLoginFailures('supervisor', e);
+  } catch (err) {
+    const code = err.code || '';
+    if (code === 'agreement/required') {
+      clearLoginFailures('supervisor', e);
+      throw err;
+    }
+    if (
+      code === 'auth/wrong-password' ||
+      code === 'auth/user-not-found' ||
+      code === 'auth/invalid-credential' ||
+      code === 'auth/too-many-requests'
+    ) {
+      const state = recordLoginFailure('supervisor', e, {
+        lockImmediately: code === 'auth/too-many-requests',
+      });
+      if (state.blockedUntil && state.blockedUntil > Date.now()) {
+        throw createLoginLockoutError(state.blockedUntil - Date.now());
+      }
+      throw new Error('Email or password not recognized.');
+    }
+    throw err;
   }
 }
 
@@ -979,6 +1104,7 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
   const username = normalizeUsername(usernameRaw);
   const password = passwordRaw || '';
   if (!username || !password) throw new Error('Please enter your username and password.');
+  assertLoginAttemptsRemaining('lifeguard', username);
 
   const account = await getLifeguardAccount(username);
   const authEmail = getAuthEmail(account);
@@ -988,11 +1114,22 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
     await signInWithEmailAndPassword(auth, authEmail, password);
   } catch (err) {
     const code = err.code || '';
-    if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+    if (
+      code === 'auth/wrong-password' ||
+      code === 'auth/invalid-credential' ||
+      code === 'auth/too-many-requests'
+    ) {
+      const state = recordLoginFailure('lifeguard', username, {
+        lockImmediately: code === 'auth/too-many-requests',
+      });
+      if (state.blockedUntil && state.blockedUntil > Date.now()) {
+        throw createLoginLockoutError(state.blockedUntil - Date.now());
+      }
       throw new Error('Incorrect password. Try again or use "Forgot Password?"');
     }
     throw err;
   }
+  clearLoginFailures('lifeguard', username);
   const user = auth.currentUser;
 
   if (!user?.emailVerified) {
