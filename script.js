@@ -13,6 +13,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  limit,
   Timestamp,
   serverTimestamp,
   writeBatch,
@@ -38,6 +39,8 @@ let filteredSubmissions = [];
 let allSubmissions = [];
 let filteredData = [];
 let paginatedData = [];
+let allDutyReports = [];
+let allManagerialReports = [];
 let currentPage = 1;
 const itemsPerPage = 20;
 let isLoggedIn = false;
@@ -61,6 +64,12 @@ const FEEDBACK_RESPONSES_ENABLED = true;
 const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 const LIFEGUARD_SESSION_VERIFICATION_VERSION = 1;
+const CHEM_AUTO_CONTROLLER_STORAGE = 'firestoreChemControllerPhoto';
+const CHEM_CONTROLLER_CHUNK_SIZE = 350000;
+const CHEM_CONTROLLER_IMAGE_MAX_SIDE = 1280;
+const CHEM_CONTROLLER_IMAGE_QUALITY = 0.72;
+const CHEM_CONTROLLER_COMPRESS_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
+const CHEM_AUTO_CONTROLLER_REUSE_WINDOW_MS = 30 * 60 * 1000;
 window.trainingSchedule = trainingSchedule;
 window.addEventListener('load', () => {
   document.body.classList.add('page-loaded');
@@ -753,6 +762,9 @@ function applyDashboardAccessMode() {
   const title = dashboard.querySelector('.page-content-title');
   const chemPanel = document.getElementById('dashboardContent');
   const jobPanel = document.getElementById('jobFormsContent');
+  const managerialPanel = document.getElementById('managerialFormsContent');
+  const operationalPanel = document.getElementById('operationalDashboardContent');
+  const metricsPanel = document.getElementById('dashboardMetricsContent');
   if (!canViewChemDashboard) return;
   if (tabs) tabs.style.display = fullAccess ? '' : 'none';
   if (title) title.textContent = fullAccess ? 'Supervisor Dashboard' : 'Pool Chemistry Dashboard';
@@ -760,7 +772,66 @@ function applyDashboardAccessMode() {
     document.querySelectorAll('[data-dash-tab]').forEach((tab) => tab.classList.toggle('active', tab.dataset.dashTab === 'chemistry'));
     if (chemPanel) chemPanel.style.display = '';
     if (jobPanel) jobPanel.style.display = 'none';
+    if (managerialPanel) managerialPanel.style.display = 'none';
+    if (operationalPanel) operationalPanel.style.display = 'none';
+    if (metricsPanel) metricsPanel.style.display = 'none';
   }
+}
+
+function getActiveDashboardTab() {
+  return document.querySelector('[data-dash-tab].active')?.dataset.dashTab || 'chemistry';
+}
+
+function showDashboardTabPanel(which) {
+  Object.entries(DASHBOARD_PANEL_IDS).forEach(([key, id]) => {
+    const panel = document.getElementById(id);
+    if (panel) panel.style.display = key === which ? '' : 'none';
+  });
+}
+
+async function renderActiveDashboardTab() {
+  const activeTab = !isSupervisor() ? 'chemistry' : getActiveDashboardTab();
+  showDashboardTabPanel(activeTab);
+
+  if (!dashboardDataLoaded) {
+    await loadDashboardData();
+    return;
+  }
+
+  if (activeTab === 'chemistry') {
+    renderDashboard(allLogs);
+    return;
+  }
+
+  if (activeTab === 'jobforms') {
+    loadJobFormSubmissions();
+    return;
+  }
+
+  if (activeTab === 'managerial') {
+    loadManagerialFormSubmissions();
+    return;
+  }
+
+  if (activeTab === 'operational') {
+    renderOperationalDashboard();
+    return;
+  }
+
+  if (activeTab === 'metrics') {
+    renderDashboardMetrics();
+  }
+}
+
+function activateDashboardTab(which) {
+  const target = !isSupervisor() ? 'chemistry' : (which || 'chemistry');
+  document.querySelectorAll('[data-dash-tab]').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.dashTab === target);
+  });
+  showDashboardTabPanel(target);
+  renderActiveDashboardTab().catch((err) => {
+    console.error('[PoolPro] Unable to render dashboard tab:', err);
+  });
 }
 
 window.goToDashboard = function () {
@@ -1072,6 +1143,7 @@ function resetChemistryFormFields() {
   const poolLocation = document.getElementById('poolLocation');
   if (poolLocation) poolLocation.value = '';
   updateVisiblePoolSections(2);
+  updatePoolSectionTitles(null);
 }
 
 window.showSupervisorNotify = function () {
@@ -1689,6 +1761,328 @@ function updatePoolSectionTitles(pool) {
   });
 }
 
+function getChemSectionIds() {
+  return ['mainPoolSection', 'secondaryPoolSection', 'pool3Section', 'pool4Section', 'pool5Section'];
+}
+
+function getChemPoolOrdinalLabel(idx, fallbackTitle = '') {
+  if (idx === 0) return 'Primary Pool';
+  if (idx === 1) return 'Secondary Pool';
+  const title = String(fallbackTitle || '').trim();
+  return title || `Pool ${idx + 1}`;
+}
+
+function ensureChemAutoControllerUploadSections() {
+  getChemSectionIds().forEach((sectionId, idx) => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    const content = section.querySelector('.pool-section-content');
+    if (!content || content.querySelector('.chem-auto-controller-group')) return;
+
+    const group = document.createElement('div');
+    group.className = 'chem-auto-controller-group hidden';
+    group.dataset.poolIndex = String(idx);
+    group.innerHTML = `
+      <div class="chem-auto-controller-copy">
+        <h4 class="chem-auto-controller-title">Auto Controller <span class="duties-req-badge">1 required</span></h4>
+        <p class="chem-auto-controller-desc"></p>
+        <p class="chem-auto-controller-note hidden"></p>
+      </div>
+      <div class="chem-auto-controller-slot">
+        <div class="chem-auto-controller-upload-area" role="button" tabindex="0">
+          <div class="chem-auto-controller-placeholder">
+            <span class="chem-auto-controller-icon">&#128247;</span>
+            <span>Tap to add</span>
+          </div>
+          <img class="chem-auto-controller-preview" alt="Auto controller preview" />
+          <input type="file" class="chem-auto-controller-input" accept="image/*" hidden>
+        </div>
+        <button type="button" class="chem-auto-controller-remove duties-clear-btn">Remove</button>
+      </div>
+    `;
+
+    const uploadArea = group.querySelector('.chem-auto-controller-upload-area');
+    const fileInput = group.querySelector('.chem-auto-controller-input');
+    const preview = group.querySelector('.chem-auto-controller-preview');
+    const placeholder = group.querySelector('.chem-auto-controller-placeholder');
+    const removeBtn = group.querySelector('.chem-auto-controller-remove');
+
+    const clearFile = () => {
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput._selectedFile = null;
+      }
+      if (preview) {
+        preview.removeAttribute('src');
+        preview.style.display = 'none';
+      }
+      if (placeholder) placeholder.style.display = 'flex';
+      if (removeBtn) removeBtn.style.display = 'none';
+    };
+
+    const setFile = (file) => {
+      if (!fileInput || !preview || !placeholder || !removeBtn || !file) return;
+      try {
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileInput.files = transfer.files;
+      } catch (_) {
+        fileInput._selectedFile = file;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        preview.src = event.target?.result || '';
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+        removeBtn.style.display = 'inline-flex';
+      };
+      reader.readAsDataURL(file);
+    };
+
+    uploadArea?.addEventListener('click', () => fileInput?.click());
+    uploadArea?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        fileInput?.click();
+      }
+    });
+    fileInput?.addEventListener('change', () => {
+      const file = fileInput.files?.[0] || fileInput._selectedFile;
+      if (file) setFile(file);
+    });
+    removeBtn?.addEventListener('click', () => clearFile());
+
+    clearFile();
+    content.appendChild(group);
+  });
+}
+
+function getChemAutoControllerPhotoFile(poolIdx) {
+  const input = document.querySelector(`.chem-auto-controller-group[data-pool-index="${poolIdx}"] .chem-auto-controller-input`);
+  return input?.files?.[0] || input?._selectedFile || null;
+}
+
+function clearChemAutoControllerPhoto(poolIdx) {
+  const group = document.querySelector(`.chem-auto-controller-group[data-pool-index="${poolIdx}"]`);
+  if (!group) return;
+  const input = group.querySelector('.chem-auto-controller-input');
+  const preview = group.querySelector('.chem-auto-controller-preview');
+  const placeholder = group.querySelector('.chem-auto-controller-placeholder');
+  const removeBtn = group.querySelector('.chem-auto-controller-remove');
+  if (input) {
+    input.value = '';
+    input._selectedFile = null;
+  }
+  if (preview) {
+    preview.removeAttribute('src');
+    preview.style.display = 'none';
+  }
+  if (placeholder) placeholder.style.display = 'flex';
+  if (removeBtn) removeBtn.style.display = 'none';
+}
+
+async function hasRecentChemSubmissionForFacility(poolName) {
+  if (!poolName) return false;
+  try {
+    const snap = await getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'), limit(25)));
+    const cutoff = Date.now() - CHEM_AUTO_CONTROLLER_REUSE_WINDOW_MS;
+    return snap.docs.some((docSnap) => {
+      const data = docSnap.data() || {};
+      if (String(data.poolLocation || '').trim() !== String(poolName).trim()) return false;
+      const ts = toDateObject(data.timestamp);
+      return !!ts && ts.getTime() >= cutoff;
+    });
+  } catch (err) {
+    console.warn('[ChemLog] Unable to check recent chemistry submissions for auto-controller reuse.', err);
+    return false;
+  }
+}
+
+async function updateChemAutoControllerSections(poolDoc) {
+  ensureChemAutoControllerUploadSections();
+  const poolName = getPoolName(poolDoc);
+  const recentSubmission = await hasRecentChemSubmissionForFacility(poolName);
+
+  getChemSectionIds().forEach((sectionId, idx) => {
+    const section = document.getElementById(sectionId);
+    const group = section?.querySelector('.chem-auto-controller-group');
+    if (!section || !group) return;
+
+    const sectionVisible = idx < Number(poolDoc?.numPools || poolDoc?.poolCount || 2);
+    const rulesPool = poolDoc?.rules?.pools?.[idx];
+    const enabled = !!rulesPool?.autoController && sectionVisible;
+    group.classList.toggle('hidden', !enabled);
+    if (!enabled) {
+      clearChemAutoControllerPhoto(idx);
+      return;
+    }
+
+    const titleText = section.querySelector('h3')?.textContent?.trim() || `Pool ${idx + 1}`;
+    const desc = group.querySelector('.chem-auto-controller-desc');
+    const note = group.querySelector('.chem-auto-controller-note');
+    if (desc) {
+      desc.textContent = `Upload an image of the ${getChemPoolOrdinalLabel(idx, titleText)} auto controller.`;
+    }
+    if (note) {
+      note.textContent = recentSubmission
+        ? 'A recent chemistry submission was made within the last 30 minutes, so this photo is optional right now.'
+        : 'This image is required unless another chemistry submission was recorded for this facility within the last 30 minutes.';
+      note.classList.toggle('hidden', false);
+    }
+  });
+}
+
+function getChemControllerPhotoRows(entry, poolDoc) {
+  const rows = [];
+  const poolCount = Math.max(1, Number(poolDoc?.numPools || poolDoc?.poolCount || 1));
+  for (let idx = 0; idx < poolCount; idx += 1) {
+    const fields = poolFieldNames(idx);
+    const hasReading = !!(entry?.[fields.ph] || entry?.[fields.cl]);
+    if (!hasReading) continue;
+    if (!poolDoc?.rules?.pools?.[idx]?.autoController) continue;
+    rows.push({
+      poolIdx: idx,
+      label: getFacilityPoolLabel(poolDoc, idx),
+      file: getChemAutoControllerPhotoFile(idx),
+    });
+  }
+  return rows;
+}
+
+function resetChemAutoControllerUploads() {
+  getChemSectionIds().forEach((_, idx) => clearChemAutoControllerPhoto(idx));
+}
+
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Unable to prepare image for upload.'));
+    }, type, quality);
+  });
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function prepareChemControllerPhotoForUpload(file) {
+  if (!file || !(file.type || '').startsWith('image/')) {
+    return { body: file, contentType: file?.type || 'application/octet-stream' };
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Unable to prepare auto controller preview.'));
+      img.src = objectUrl;
+    });
+
+    const sourceWidth = image.naturalWidth || image.width || 1;
+    const sourceHeight = image.naturalHeight || image.height || 1;
+    const largestSide = Math.max(sourceWidth, sourceHeight);
+    if (file.size <= CHEM_CONTROLLER_COMPRESS_THRESHOLD_BYTES && largestSide <= CHEM_CONTROLLER_IMAGE_MAX_SIDE) {
+      return { body: file, contentType: file.type || 'image/jpeg' };
+    }
+
+    const scale = Math.min(1, CHEM_CONTROLLER_IMAGE_MAX_SIDE / largestSide);
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas is unavailable for auto controller compression.');
+    ctx.drawImage(image, 0, 0, width, height);
+    const blob = await canvasToBlob(canvas, 'image/jpeg', CHEM_CONTROLLER_IMAGE_QUALITY);
+    return { body: blob, contentType: 'image/jpeg' };
+  } catch (err) {
+    console.warn('[ChemLog] Auto controller compression failed; using original file.', err);
+    return { body: file, contentType: file.type || 'application/octet-stream' };
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+async function uploadChemControllerPhoto({ submissionId, poolName, poolIdx, file }) {
+  const safeName = String(file.name || 'auto-controller.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const uploadPayload = await prepareChemControllerPhotoForUpload(file);
+  const photoId = `${Date.now()}_${poolIdx}_${safeName}`;
+  const photoDoc = doc(db, 'chemSubmissionMedia', submissionId, 'photos', photoId);
+  const dataUrl = await readFileAsDataURL(uploadPayload.body);
+  const [prefix, encoded = ''] = String(dataUrl || '').split(',');
+  if (!encoded) throw new Error(`Unable to encode ${file.name || 'auto controller image'} for upload.`);
+
+  const chunks = [];
+  for (let i = 0; i < encoded.length; i += CHEM_CONTROLLER_CHUNK_SIZE) {
+    chunks.push(encoded.slice(i, i + CHEM_CONTROLLER_CHUNK_SIZE));
+  }
+
+  await setDoc(photoDoc, {
+    submissionId,
+    poolName,
+    poolIdx,
+    fileName: file.name || safeName,
+    contentType: uploadPayload.contentType,
+    chunkCount: chunks.length,
+    dataUrlPrefix: prefix,
+    storedAt: serverTimestamp(),
+  });
+
+  for (let i = 0; i < chunks.length; i += 400) {
+    const batch = writeBatch(db);
+    chunks.slice(i, i + 400).forEach((chunk, offset) => {
+      const chunkIndex = i + offset;
+      batch.set(doc(db, 'chemSubmissionMedia', submissionId, 'photos', photoId, 'chunks', String(chunkIndex).padStart(4, '0')), {
+        index: chunkIndex,
+        data: chunk,
+      });
+    });
+    await batch.commit();
+  }
+
+  return {
+    poolIdx,
+    url: `${CHEM_AUTO_CONTROLLER_STORAGE}:${submissionId}:${photoId}`,
+    name: file.name || safeName,
+    source: CHEM_AUTO_CONTROLLER_STORAGE,
+    contentType: uploadPayload.contentType,
+    dataUrlPrefix: prefix,
+    chunkCount: chunks.length,
+    photoId,
+    submissionId,
+  };
+}
+
+async function uploadChemControllerPhotos({ submissionId, poolName, photoRows, onProgress }) {
+  const uploaded = {};
+  for (let i = 0; i < photoRows.length; i += 1) {
+    const row = photoRows[i];
+    if (!row.file) continue;
+    onProgress?.({
+      completed: i,
+      total: photoRows.length,
+      label: row.label,
+      fileName: row.file.name || `Photo ${i + 1}`,
+    });
+    uploaded[`pool${row.poolIdx + 1}`] = [await uploadChemControllerPhoto({
+      submissionId,
+      poolName,
+      poolIdx: row.poolIdx,
+      file: row.file,
+    })];
+  }
+  if (photoRows.length) onProgress?.({ completed: photoRows.length, total: photoRows.length, done: true });
+  return uploaded;
+}
+
 // ============================================================
 // CHEMISTRY FORM — submit to Firestore
 // ============================================================
@@ -1723,14 +2117,22 @@ function getLoggedInEmployeeName() {
 function setupChemForm() {
   const submitBtn = document.getElementById('submitBtn');
   if (!submitBtn) return;
+  ensureChemAutoControllerUploadSections();
 
   // Show/hide pool sections when location changes
   const locationSelect = document.getElementById('poolLocation');
   if (locationSelect) {
-    locationSelect.addEventListener('change', () => {
+    locationSelect.addEventListener('change', async () => {
       const pool = poolsCache.find(p => p.id === locationSelect.value);
       updateVisiblePoolSections(pool ? (pool.numPools || 2) : 2);
       updatePoolSectionTitles(pool);
+      await updateChemAutoControllerSections(pool || null);
+    });
+    const initialPool = poolsCache.find(p => p.id === locationSelect.value);
+    updateVisiblePoolSections(initialPool ? (initialPool.numPools || 2) : 2);
+    updatePoolSectionTitles(initialPool || null);
+    updateChemAutoControllerSections(initialPool || null).catch((err) => {
+      console.warn('[ChemLog] Unable to initialize auto-controller upload sections.', err);
     });
   }
 
@@ -1747,6 +2149,7 @@ function setupChemForm() {
 
     const pool = poolsCache.find(p => p.id === poolId);
     const poolName = pool?.name || poolId;
+    const submissionRef = doc(collection(db, 'poolSubmissions'));
 
     const entry = {
       timestamp: Timestamp.now(),
@@ -1772,12 +2175,38 @@ function setupChemForm() {
     try {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Submitting…';
-      await addDoc(collection(db, 'poolSubmissions'), entry);
+      const recentSubmission = await hasRecentChemSubmissionForFacility(poolName);
+      const autoControllerRows = getChemControllerPhotoRows(entry, pool);
+      const missingAutoControllerPhoto = !recentSubmission && autoControllerRows.some((row) => !row.file);
+      if (missingAutoControllerPhoto) {
+        alert('Please upload each required auto controller image before submitting.');
+        return;
+      }
+
+      let uploadedControllerPhotos = {};
+      const controllerRowsToUpload = autoControllerRows.filter((row) => row.file);
+      if (controllerRowsToUpload.length) {
+        uploadedControllerPhotos = await uploadChemControllerPhotos({
+          submissionId: submissionRef.id,
+          poolName,
+          photoRows: controllerRowsToUpload,
+          onProgress: ({ completed, total, label, fileName, done }) => {
+            submitBtn.textContent = done
+              ? 'Saving…'
+              : `Uploading ${label} (${completed + 1}/${total})`;
+          },
+        });
+      }
+
+      entry.autoControllerPhotos = uploadedControllerPhotos;
+      entry.autoControllerPhotoWindowBypassed = recentSubmission;
+      await setDoc(submissionRef, entry);
 
       if (!FEEDBACK_RESPONSES_ENABLED) {
         forceCloseFeedbackModal();
         alert('Chemistry log submitted successfully!');
         resetChemistryFormFields();
+        resetChemAutoControllerUploads();
         return;
       }
 
@@ -1896,6 +2325,8 @@ function setupChemForm() {
 
       // Reset form fields
       resetChemistryFormFields();
+      resetChemAutoControllerUploads();
+      await updateChemAutoControllerSections(null);
 
     } catch (err) {
       console.error('[ChemLog] Error submitting chemistry log:', err);
@@ -1919,7 +2350,17 @@ let dashboardDateFilter = getTodayDateValue();
 let dashboardChemPage = 1;
 let dashboardChemPageByTable = {};
 let dashboardJobPage = 1;
+let dashboardManagerialPage = 1;
+let dashboardOperationalPage = 1;
+let dashboardDataLoaded = false;
 const DASHBOARD_PAGE_SIZE = 10;
+const DASHBOARD_PANEL_IDS = {
+  chemistry: 'dashboardContent',
+  jobforms: 'jobFormsContent',
+  managerial: 'managerialFormsContent',
+  operational: 'operationalDashboardContent',
+  metrics: 'dashboardMetricsContent',
+};
 const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a trickle'];
 const BLEACH_FEEDER_STATUS_OPTIONS = ['Not applicable', 'Off', '0 or L', '1', '1.5', '1.75', '2', '2.25', '2.5', '3', '4', '5', '6', '7', '8', '9', '10'];
 const POOL_CLOSURE_OPTIONS = ['Open', 'Weather', 'Contamination', 'Chemical Imbalance', 'System Malfunction', 'Other'];
@@ -1932,6 +2373,11 @@ const POOL_CLOSURE_TODOS = {
 let operationalStatusLogs = [];
 let operationalStatusLatestMap = {};
 let operationalStatusPageReady = false;
+let dashboardMetricsFilters = {
+  market: 'all',
+  pool: 'all',
+  time: 'All Time',
+};
 
 async function refreshSanitationSelections() {
   try {
@@ -2501,6 +2947,8 @@ function renderDashboardFilterBar(container, onChange) {
     dashboardChemPage = 1;
     dashboardChemPageByTable = {};
     dashboardJobPage = 1;
+    dashboardManagerialPage = 1;
+    dashboardOperationalPage = 1;
     onChange?.();
   };
 
@@ -2554,7 +3002,8 @@ function renderDashboardPagination(container, { page, totalRows, totalPages: sup
 }
 
 async function loadDashboardData() {
-  const container = document.getElementById('dashboardContent');
+  const activeTab = !isSupervisor() ? 'chemistry' : getActiveDashboardTab();
+  const container = document.getElementById(DASHBOARD_PANEL_IDS[activeTab] || 'dashboardContent');
   if (!container) return;
   if (!canAccessPoolChemistryDashboard()) {
     container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view the Pool Chemistry Dashboard.</p>';
@@ -2564,19 +3013,23 @@ async function loadDashboardData() {
   container.innerHTML = '<p style="padding:16px;color:#666;">Loading…</p>';
 
   try {
-    // Load sanitation method selections
-    const sanSnap = await getDoc(doc(db, 'settings', 'sanitation'));
+    const fullAccess = isSupervisor();
+    const [sanSnap, chemSnap, dutySnap, managerialSnap] = await Promise.all([
+      getDoc(doc(db, 'settings', 'sanitation')),
+      getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'))),
+      fullAccess ? getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
+      fullAccess ? getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
+    ]);
     sanitationSelections = sanSnap.exists() ? (sanSnap.data().pools || {}) : {};
-
-    // Fetch all submissions, ordered newest first
-    const q = query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'));
-    const snap = await getDocs(q);
-    allLogs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    allLogs = chemSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    allDutyReports = dutySnap ? dutySnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
+    allManagerialReports = managerialSnap ? managerialSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     await loadOperationalStatusLogs();
-
-    renderDashboard(allLogs);
+    dashboardDataLoaded = true;
+    await renderActiveDashboardTab();
   } catch (err) {
     console.error('[ChemLog] Error loading dashboard data:', err);
+    dashboardDataLoaded = false;
     if (container) container.innerHTML = '<p style="color:red;padding:16px;">Error loading data. Check console.</p>';
   }
 }
@@ -5952,58 +6405,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadDashboardData();
   }
 
-  // Supervisor Dashboard tab switching (Pool Chemistry vs Cleanliness Reports)
+  // Supervisor Dashboard tab switching
   const dashTabs = document.querySelectorAll('[data-dash-tab]');
   dashTabs.forEach(tab => {
     tab.addEventListener('click', () => {
       if (!isSupervisor() && tab.dataset.dashTab !== 'chemistry') return;
-      dashTabs.forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      const which = tab.dataset.dashTab;
-      const chemPanel = document.getElementById('dashboardContent');
-      const jobPanel = document.getElementById('jobFormsContent');
-      if (which === 'chemistry') {
-        if (chemPanel) chemPanel.style.display = '';
-        if (jobPanel) jobPanel.style.display = 'none';
-        if (allLogs.length) renderDashboard(allLogs);
-        else loadDashboardData();
-      } else if (which === 'jobforms') {
-        if (chemPanel) chemPanel.style.display = 'none';
-        if (jobPanel) { jobPanel.style.display = ''; loadJobFormSubmissions(); }
-      }
+      activateDashboardTab(tab.dataset.dashTab);
     });
   });
 });
 
 // ============================================================
-// JOB FORM SUBMISSIONS (Duties page results)
+// DASHBOARD REPORTS + METRICS
 // ============================================================
 
-async function loadJobFormSubmissions() {
-  const container = document.getElementById('jobFormsContent');
-  if (!container) return;
-  if (!isSupervisor()) {
-    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view cleanliness report submissions.</p>';
-    return;
-  }
-  container.innerHTML = '<p style="padding:16px;color:#666;">Loading submissions…</p>';
-
-  try {
-    const q = query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'));
-    const snap = await getDocs(q);
-    const submissions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderJobFormSubmissions(submissions, container);
-  } catch (err) {
-    console.error('[Duties] Error loading submissions:', err);
-    container.innerHTML = '<p style="color:red;padding:16px;">Error loading submissions.</p>';
-  }
+function getDashboardPoolDocByName(poolName) {
+  return poolsCache.find((pool) => getPoolName(pool) === poolName) || null;
 }
 
-function renderJobFormSubmissions(submissions, container) {
+function getPrimaryMarketName(poolDoc) {
+  const markets = Array.isArray(poolDoc?.markets) ? poolDoc.markets
+    : (poolDoc?.market ? [poolDoc.market] : []);
+  return String(markets[0] || 'Other').trim() || 'Other';
+}
+
+function getDashboardReportPage(kind) {
+  return kind === 'managerial' ? dashboardManagerialPage : dashboardJobPage;
+}
+
+function setDashboardReportPage(kind, value) {
+  if (kind === 'managerial') dashboardManagerialPage = value;
+  else dashboardJobPage = value;
+}
+
+function getDutyReportTitle(sub) {
+  return sub?.reportType === 'managerial' ? 'Managerial Report' : 'Cleanliness Report';
+}
+
+function createDutyFormLink(sub, label = getDutyReportTitle(sub)) {
+  const formLink = document.createElement('a');
+  formLink.href = '#';
+  formLink.className = 'dashboard-form-link';
+  formLink.textContent = label;
+  formLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    openDutyFormModal(sub);
+  });
+  return formLink;
+}
+
+function renderReportSubmissions(submissions, container, {
+  kind = 'cleanliness',
+  emptyMessage = 'No reports match the selected filters.',
+} = {}) {
   container.innerHTML = '';
 
-  renderDashboardFilterBar(container, () => renderJobFormSubmissions(submissions, container));
+  renderDashboardFilterBar(container, () => renderReportSubmissions(submissions, container, { kind, emptyMessage }));
 
+  const reportLabel = kind === 'managerial' ? 'Managerial Report' : 'Cleanliness Report';
   const marketMap = getDashboardMarketMap({ docs: false });
   const marketsToShow = getVisibleDashboardMarkets(marketMap);
   const submissionsForDate = submissions.filter((sub) => isDashboardDate(sub.timestamp, dashboardDateFilter));
@@ -6016,15 +6475,15 @@ function renderJobFormSubmissions(submissions, container) {
   if (dashboardPoolFilter !== 'all') {
     const poolSubs = submissionsForDate.filter((sub) => sub.pool === dashboardPoolFilter);
     const totalPages = Math.max(1, Math.ceil(poolSubs.length / DASHBOARD_PAGE_SIZE));
-    dashboardJobPage = Math.min(Math.max(1, dashboardJobPage), totalPages);
-    const pageSubs = poolSubs.slice((dashboardJobPage - 1) * DASHBOARD_PAGE_SIZE, dashboardJobPage * DASHBOARD_PAGE_SIZE);
+    const currentPage = Math.min(Math.max(1, getDashboardReportPage(kind)), totalPages);
+    const pageSubs = poolSubs.slice((currentPage - 1) * DASHBOARD_PAGE_SIZE, currentPage * DASHBOARD_PAGE_SIZE);
 
     const section = document.createElement('div');
     section.className = 'dashboard-market-section dashboard-single-pool-section';
-    const h2 = document.createElement('h2');
-    h2.className = 'dashboard-market-heading';
-    h2.textContent = dashboardPoolFilter;
-    section.appendChild(h2);
+    const heading = document.createElement('h2');
+    heading.className = 'dashboard-market-heading';
+    heading.textContent = dashboardPoolFilter;
+    section.appendChild(heading);
 
     const table = document.createElement('table');
     table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-cleanliness-table';
@@ -6032,14 +6491,14 @@ function renderJobFormSubmissions(submissions, container) {
     const tbody = document.createElement('tbody');
 
     if (!pageSubs.length) {
-      tbody.innerHTML = '<tr><td colspan="4">No cleanliness reports match the selected filters.</td></tr>';
+      tbody.innerHTML = `<tr><td colspan="4">${escapeHtml(emptyMessage)}</td></tr>`;
     } else {
       pageSubs.forEach((sub) => {
         const ts = toDateObject(sub.timestamp);
         const tr = document.createElement('tr');
-        const tdForm = document.createElement('td');
-        tdForm.appendChild(createDutyFormLink(sub));
-        tr.appendChild(tdForm);
+        const formCell = document.createElement('td');
+        formCell.appendChild(createDutyFormLink(sub, reportLabel));
+        tr.appendChild(formCell);
         tr.insertAdjacentHTML('beforeend', `
           <td>${escapeHtml(sub.pool || '—')}</td>
           <td>${escapeHtml(sub.submitterEmail || '—')}</td>
@@ -6052,11 +6511,11 @@ function renderJobFormSubmissions(submissions, container) {
     table.appendChild(tbody);
     section.appendChild(table);
     renderDashboardPagination(section, {
-      page: dashboardJobPage,
+      page: currentPage,
       totalRows: poolSubs.length,
       onPageChange: (nextPage) => {
-        dashboardJobPage = nextPage;
-        renderJobFormSubmissions(submissions, container);
+        setDashboardReportPage(kind, nextPage);
+        renderReportSubmissions(submissions, container, { kind, emptyMessage });
       },
     });
     container.appendChild(section);
@@ -6071,10 +6530,10 @@ function renderJobFormSubmissions(submissions, container) {
 
     const section = document.createElement('div');
     section.className = 'dashboard-market-section';
-    const h2 = document.createElement('h2');
-    h2.className = 'dashboard-market-heading';
-    h2.textContent = market;
-    section.appendChild(h2);
+    const heading = document.createElement('h2');
+    heading.className = 'dashboard-market-heading';
+    heading.textContent = market;
+    section.appendChild(heading);
 
     const table = document.createElement('table');
     table.className = 'data-table dashboard-pool-table dashboard-cleanliness-table';
@@ -6085,14 +6544,14 @@ function renderJobFormSubmissions(submissions, container) {
       const mostRecent = submissionsForDate.find((sub) => sub.pool === poolName);
       const ts = toDateObject(mostRecent?.timestamp);
       const tr = document.createElement('tr');
-      const facilityTd = document.createElement('td');
-      facilityTd.textContent = poolName;
-      const formTd = document.createElement('td');
-      if (mostRecent) formTd.appendChild(createDutyFormLink(mostRecent));
-      else formTd.textContent = 'No report';
+      const facilityCell = document.createElement('td');
+      facilityCell.textContent = poolName;
+      const formCell = document.createElement('td');
+      if (mostRecent) formCell.appendChild(createDutyFormLink(mostRecent, reportLabel));
+      else formCell.textContent = 'No report';
 
-      tr.appendChild(facilityTd);
-      tr.appendChild(formTd);
+      tr.appendChild(facilityCell);
+      tr.appendChild(formCell);
       tr.insertAdjacentHTML('beforeend', `
         <td>${escapeHtml(mostRecent?.submitterEmail || '—')}</td>
         <td>${ts ? ts.toLocaleString() : '—'}</td>
@@ -6107,22 +6566,688 @@ function renderJobFormSubmissions(submissions, container) {
   });
 
   if (!renderedAny) {
-    container.insertAdjacentHTML('beforeend', '<p style="padding:8px 0;color:#666;">No cleanliness reports match the selected filters.</p>');
+    container.insertAdjacentHTML('beforeend', `<p style="padding:8px 0;color:#666;">${escapeHtml(emptyMessage)}</p>`);
   }
 
   wrapResponsiveTables(container);
 }
 
-function createDutyFormLink(sub) {
-  const formLink = document.createElement('a');
-  formLink.href = '#';
-  formLink.className = 'dashboard-form-link';
-  formLink.textContent = 'Cleanliness Report';
-  formLink.addEventListener('click', (event) => {
-    event.preventDefault();
-    openDutyFormModal(sub);
+function loadJobFormSubmissions() {
+  const container = document.getElementById('jobFormsContent');
+  if (!container) return;
+  if (!isSupervisor()) {
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view cleanliness report submissions.</p>';
+    return;
+  }
+  renderReportSubmissions(allDutyReports, container, {
+    kind: 'cleanliness',
+    emptyMessage: 'No cleanliness reports match the selected filters.',
   });
-  return formLink;
+}
+
+function loadManagerialFormSubmissions() {
+  const container = document.getElementById('managerialFormsContent');
+  if (!container) return;
+  if (!isSupervisor()) {
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view managerial reports.</p>';
+    return;
+  }
+  renderReportSubmissions(allManagerialReports, container, {
+    kind: 'managerial',
+    emptyMessage: 'No managerial reports match the selected filters.',
+  });
+}
+
+function getOperationalLogsForPoolOnDate(facilityName, poolIdx) {
+  return operationalStatusLogs.filter((log) =>
+    log.facilityName === facilityName
+    && Number(log.poolIndex || 0) === Number(poolIdx || 0)
+    && isDashboardDate(log.timestamp, dashboardDateFilter));
+}
+
+function renderOperationalDashboard() {
+  const container = document.getElementById('operationalDashboardContent');
+  if (!container) return;
+  if (!isSupervisor()) {
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view operational status reports.</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+  renderDashboardFilterBar(container, () => renderOperationalDashboard());
+
+  const marketMap = getDashboardMarketMap({ docs: true });
+  const marketsToShow = getVisibleDashboardMarkets(marketMap);
+  if (!marketsToShow.length) {
+    container.insertAdjacentHTML('beforeend', '<p style="padding:16px;color:#666;">No markets selected. Enable markets in Settings.</p>');
+    return;
+  }
+
+  if (dashboardPoolFilter !== 'all') {
+    const rows = operationalStatusLogs.filter((log) =>
+      log.facilityName === dashboardPoolFilter && isDashboardDate(log.timestamp, dashboardDateFilter));
+    const totalPages = Math.max(1, Math.ceil(rows.length / DASHBOARD_PAGE_SIZE));
+    dashboardOperationalPage = Math.min(Math.max(1, dashboardOperationalPage), totalPages);
+    const pageRows = rows.slice((dashboardOperationalPage - 1) * DASHBOARD_PAGE_SIZE, dashboardOperationalPage * DASHBOARD_PAGE_SIZE);
+
+    const section = document.createElement('div');
+    section.className = 'dashboard-market-section dashboard-single-pool-section';
+    const heading = document.createElement('h2');
+    heading.className = 'dashboard-market-heading';
+    heading.textContent = dashboardPoolFilter;
+    section.appendChild(heading);
+
+    const table = document.createElement('table');
+    table.className = 'data-table dashboard-pool-table dashboard-detail-table';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    if (!pageRows.length) {
+      tbody.innerHTML = '<tr><td colspan="7">No operational status entries match the selected filters.</td></tr>';
+    } else {
+      pageRows.forEach((log) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(log.facilityName || '—')}</td>
+          <td>${escapeHtml(log.poolLabel || `Pool ${Number(log.poolIndex || 0) + 1}`)}</td>
+          <td>${escapeHtml(log.fillStatus || '—')}</td>
+          <td>${escapeHtml(log.bleachStatus || '—')}</td>
+          <td>${escapeHtml(log.closureStatus || '—')}</td>
+          <td>${escapeHtml(getLogRespondentName(log))}</td>
+          <td>${escapeHtml(formatTimestampDisplay(log.timestamp))}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    table.appendChild(tbody);
+    section.appendChild(table);
+    renderDashboardPagination(section, {
+      page: dashboardOperationalPage,
+      totalRows: rows.length,
+      onPageChange: (nextPage) => {
+        dashboardOperationalPage = nextPage;
+        renderOperationalDashboard();
+      },
+    });
+    container.appendChild(section);
+    wrapResponsiveTables(container);
+    return;
+  }
+
+  let renderedAny = false;
+  marketsToShow.forEach((market) => {
+    const marketPools = marketMap[market] || [];
+    if (!marketPools.length) return;
+
+    const section = document.createElement('div');
+    section.className = 'dashboard-market-section';
+    const heading = document.createElement('h2');
+    heading.className = 'dashboard-market-heading';
+    heading.textContent = market;
+    section.appendChild(heading);
+
+    const table = document.createElement('table');
+    table.className = 'data-table dashboard-pool-table';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+
+    marketPools.forEach((poolDoc) => {
+      const facilityName = getPoolName(poolDoc);
+      const poolCount = Math.max(1, Number(poolDoc?.numPools || poolDoc?.poolCount || 1));
+      for (let poolIdx = 0; poolIdx < poolCount; poolIdx += 1) {
+        const latestLog = getOperationalLogsForPoolOnDate(facilityName, poolIdx)[0] || null;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${escapeHtml(facilityName)}</td>
+          <td>${escapeHtml(getFacilityPoolLabel(poolDoc, poolIdx))}</td>
+          <td>${escapeHtml(latestLog?.fillStatus || '—')}</td>
+          <td>${escapeHtml(latestLog?.bleachStatus || '—')}</td>
+          <td>${escapeHtml(getOperationalClosureSummary(latestLog))}</td>
+          <td>${escapeHtml(latestLog ? getLogRespondentName(latestLog) : '—')}</td>
+          <td>${escapeHtml(latestLog ? formatTimestampDisplay(latestLog.timestamp) : '—')}</td>
+        `;
+        tbody.appendChild(tr);
+        renderedAny = true;
+      }
+    });
+
+    table.appendChild(tbody);
+    section.appendChild(table);
+    container.appendChild(section);
+  });
+
+  if (!renderedAny) {
+    container.insertAdjacentHTML('beforeend', '<p style="padding:8px 0;color:#666;">No operational status entries match the selected filters.</p>');
+  }
+
+  wrapResponsiveTables(container);
+}
+
+function formatMetricsDate(date) {
+  const d = toDateObject(date);
+  if (!d) return '';
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
+function metricsWeekStart(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function metricsWeekLabel(date) {
+  const start = metricsWeekStart(date);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return `${formatMetricsDate(start)} - ${formatMetricsDate(end)}`;
+}
+
+function filterDashboardRecordsByTime(records, timeLabel) {
+  const now = new Date();
+  const start = new Date(now);
+  if (timeLabel === 'Past Week') start.setDate(now.getDate() - 7);
+  else if (timeLabel === 'Past 2 Weeks') start.setDate(now.getDate() - 14);
+  else if (timeLabel === 'Past Month') start.setMonth(now.getMonth() - 1);
+  else if (timeLabel === 'Past 3 Months') start.setMonth(now.getMonth() - 3);
+  else if (timeLabel === 'This Calendar Year') start.setMonth(0, 1);
+  else return records;
+  start.setHours(0, 0, 0, 0);
+  return records.filter((record) => {
+    const date = toDateObject(record.timestamp);
+    return date && date >= start && date <= now;
+  });
+}
+
+function dashboardMetricsBucketMode() {
+  if (dashboardMetricsFilters.time === 'Past Week' || dashboardMetricsFilters.time === 'Past 2 Weeks') return 'day';
+  if (dashboardMetricsFilters.time === 'Past Month' || dashboardMetricsFilters.time === 'Past 3 Months') return 'week';
+  return 'month';
+}
+
+function dashboardMetricsBucketStart(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const mode = dashboardMetricsBucketMode();
+  if (mode === 'week') return metricsWeekStart(d);
+  if (mode === 'month') return new Date(d.getFullYear(), d.getMonth(), 1);
+  return d;
+}
+
+function dashboardMetricsBucketLabel(date) {
+  const mode = dashboardMetricsBucketMode();
+  if (mode === 'day') return formatMetricsDate(date);
+  if (mode === 'week') return metricsWeekLabel(date);
+  return `${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+}
+
+function parseChemMetricValue(type, rawValue) {
+  const raw = String(rawValue || '').trim();
+  if (!raw) return null;
+  if (type === 'ph') {
+    if (raw === '< 7.0') return 6.9;
+    if (raw === '> 8.0') return 8.1;
+  }
+  if (type === 'cl' && raw === '> 10') return 10.5;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : null;
+}
+
+function getVisibleMetricsMarketsSet() {
+  const marketMap = Object.fromEntries(groupPoolsByMarket(poolsCache).map(({ market, pools }) => [market, pools]));
+  return new Set(getVisibleDashboardMarkets(marketMap));
+}
+
+function metricsRecordMatchesFilters(record) {
+  const visibleMarkets = getVisibleMetricsMarketsSet();
+  if (!visibleMarkets.has(record.market)) return false;
+  if (dashboardMetricsFilters.market !== 'all' && record.market !== dashboardMetricsFilters.market) return false;
+  if (dashboardMetricsFilters.pool !== 'all' && record.facilityName !== dashboardMetricsFilters.pool) return false;
+  return true;
+}
+
+function buildChemMetricSamples(metricType) {
+  const samples = [];
+  allLogs.forEach((log) => {
+    const facilityName = String(log.poolLocation || '').trim();
+    if (!facilityName) return;
+    const poolDoc = getDashboardPoolDocByName(facilityName);
+    if (!poolDoc) return;
+    const market = getPrimaryMarketName(poolDoc);
+    const poolCount = Math.max(1, Number(poolDoc?.numPools || poolDoc?.poolCount || 1));
+    for (let poolIdx = 0; poolIdx < poolCount; poolIdx += 1) {
+      const fields = poolFieldNames(poolIdx);
+      const rawValue = metricType === 'ph' ? log?.[fields.ph] : log?.[fields.cl];
+      const value = parseChemMetricValue(metricType, rawValue);
+      if (value === null) continue;
+      samples.push({
+        market,
+        facilityName,
+        poolIdx,
+        poolLabel: getFacilityPoolLabel(poolDoc, poolIdx),
+        value,
+        timestamp: log.timestamp,
+      });
+    }
+  });
+  return filterDashboardRecordsByTime(samples, dashboardMetricsFilters.time).filter(metricsRecordMatchesFilters);
+}
+
+function buildCyaMetricSamples() {
+  const samples = [];
+  allManagerialReports.forEach((report) => {
+    const facilityName = String(report.pool || '').trim();
+    if (!facilityName || !report.cyaReadings) return;
+    const poolDoc = getDashboardPoolDocByName(facilityName);
+    if (!poolDoc) return;
+    const market = getPrimaryMarketName(poolDoc);
+    Object.entries(report.cyaReadings || {}).forEach(([key, rawValue]) => {
+      const poolIdx = Math.max(0, Number(String(key).replace('pool', '')) - 1);
+      const value = Number(rawValue);
+      if (!Number.isFinite(value)) return;
+      samples.push({
+        market,
+        facilityName,
+        poolIdx,
+        poolLabel: getFacilityPoolLabel(poolDoc, poolIdx),
+        value,
+        timestamp: report.timestamp,
+      });
+    });
+  });
+  return filterDashboardRecordsByTime(samples, dashboardMetricsFilters.time).filter(metricsRecordMatchesFilters);
+}
+
+function buildAverageMetricSeries(records) {
+  const grouped = new Map();
+  records.forEach((record) => {
+    const date = toDateObject(record.timestamp);
+    if (!date) return;
+    const start = dashboardMetricsBucketStart(date);
+    const key = start.toISOString();
+    if (!grouped.has(key)) grouped.set(key, {
+      date: start,
+      total: 0,
+      count: 0,
+    });
+    const bucket = grouped.get(key);
+    bucket.total += record.value;
+    bucket.count += 1;
+  });
+
+  return [...grouped.values()]
+    .filter((bucket) => bucket.count > 0)
+    .sort((a, b) => a.date - b.date)
+    .map((bucket) => ({
+      label: dashboardMetricsBucketLabel(bucket.date),
+      value: bucket.total / bucket.count,
+      count: bucket.count,
+    }));
+}
+
+function buildDailyClVarianceVsCyaPoints() {
+  const clRecords = buildChemMetricSamples('cl');
+  const cyaRecords = buildCyaMetricSamples();
+
+  const clByDay = new Map();
+  clRecords.forEach((record) => {
+    const date = toDateObject(record.timestamp);
+    if (!date) return;
+    const dayKey = formatDateInputValue(date);
+    const key = `${record.facilityName}::${record.poolIdx}::${dayKey}`;
+    if (!clByDay.has(key)) {
+      clByDay.set(key, {
+        facilityName: record.facilityName,
+        poolIdx: record.poolIdx,
+        poolLabel: record.poolLabel,
+        date,
+        values: [],
+      });
+    }
+    clByDay.get(key).values.push(record.value);
+  });
+
+  const cyaByDay = new Map();
+  cyaRecords.forEach((record) => {
+    const date = toDateObject(record.timestamp);
+    if (!date) return;
+    const dayKey = formatDateInputValue(date);
+    const key = `${record.facilityName}::${record.poolIdx}::${dayKey}`;
+    if (!cyaByDay.has(key)) {
+      cyaByDay.set(key, {
+        total: 0,
+        count: 0,
+      });
+    }
+    const bucket = cyaByDay.get(key);
+    bucket.total += record.value;
+    bucket.count += 1;
+  });
+
+  return [...clByDay.entries()].map(([key, entry]) => {
+    const cyaEntry = cyaByDay.get(key);
+    if (!cyaEntry || !entry.values.length) return null;
+    const clAverage = entry.values.reduce((sum, value) => sum + value, 0) / entry.values.length;
+    const variance = entry.values.reduce((sum, value) => sum + ((value - clAverage) ** 2), 0) / entry.values.length;
+    return {
+      x: cyaEntry.total / cyaEntry.count,
+      y: variance,
+      label: `${formatMetricsDate(entry.date)} • ${entry.facilityName} • ${entry.poolLabel}`,
+    };
+  }).filter(Boolean);
+}
+
+function getGraphDomain(values, { includeZero = false, minSpan = 1 } = {}) {
+  if (!values.length) return { min: 0, max: 1 };
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (includeZero) min = Math.min(0, min);
+  if (min === max) {
+    const half = minSpan / 2;
+    return { min: min - half, max: max + half };
+  }
+  const span = Math.max(max - min, minSpan);
+  const padding = span * 0.12;
+  return {
+    min: min - padding,
+    max: max + padding,
+  };
+}
+
+function buildBestFitPath(points, xAccessor, yAccessor, toX, toY) {
+  const n = points.length;
+  if (n < 2) return '';
+  const sumX = points.reduce((sum, point) => sum + xAccessor(point), 0);
+  const sumY = points.reduce((sum, point) => sum + yAccessor(point), 0);
+  const sumXY = points.reduce((sum, point) => sum + xAccessor(point) * yAccessor(point), 0);
+  const sumXX = points.reduce((sum, point) => sum + xAccessor(point) * xAccessor(point), 0);
+  const denom = (n * sumXX - sumX * sumX) || 1;
+  const slope = (n * sumXY - sumX * sumY) / denom;
+  const intercept = (sumY - slope * sumX) / n;
+  const startX = xAccessor(points[0]);
+  const endX = xAccessor(points[n - 1]);
+  const startY = slope * startX + intercept;
+  const endY = slope * endX + intercept;
+  return `M ${toX(startX)} ${toY(startY)} L ${toX(endX)} ${toY(endY)}`;
+}
+
+function renderMetricsLineChart(container, {
+  title,
+  emptyMessage,
+  series,
+  yLabel,
+  valueFormatter = (value) => value.toFixed(2),
+  includeZero = false,
+  minSpan = 1,
+} = {}) {
+  const card = document.createElement('section');
+  card.className = 'dashboard-metrics-chart-card';
+  card.innerHTML = `<h3>${escapeHtml(title || '')}</h3>`;
+
+  if (!series.length) {
+    card.insertAdjacentHTML('beforeend', `<p class="dashboard-metrics-empty">${escapeHtml(emptyMessage || 'No data available for the selected filters.')}</p>`);
+    container.appendChild(card);
+    return;
+  }
+
+  const width = 1040;
+  const height = 360;
+  const margin = { top: 22, right: 88, bottom: 92, left: 70 };
+  const innerW = width - margin.left - margin.right;
+  const innerH = height - margin.top - margin.bottom;
+  const xStep = series.length > 1 ? innerW / (series.length - 1) : 0;
+  const domain = getGraphDomain(series.map((point) => point.value), { includeZero, minSpan });
+  const toX = (idx) => margin.left + idx * xStep;
+  const toY = (value) => margin.top + (domain.max - value) * (innerH / (domain.max - domain.min || 1));
+  const points = series.map((point, idx) => ({ ...point, idx, x: toX(idx), y: toY(point.value) }));
+  const linePath = points.map((point, idx) => `${idx === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+  const bestFitPath = buildBestFitPath(points, (point) => point.idx, (point) => point.value, toX, toY);
+  const tickValues = Array.from({ length: 5 }, (_, idx) => domain.min + ((domain.max - domain.min) * idx) / 4);
+
+  const yTicks = tickValues.map((value) => {
+    const y = toY(value);
+    return `
+      <line x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}" class="emp-graph-grid"/>
+      <text x="${margin.left - 10}" y="${y + 4}" text-anchor="end" class="emp-graph-axis-text">${escapeHtml(valueFormatter(value))}</text>
+    `;
+  }).join('');
+
+  const xTicks = points.map((point) => `
+    <line x1="${point.x}" y1="${height - margin.bottom}" x2="${point.x}" y2="${height - margin.bottom + 6}" class="emp-graph-axis"/>
+    <text x="${point.x}" y="${height - margin.bottom + 22}" text-anchor="end" transform="rotate(-60 ${point.x} ${height - margin.bottom + 22})" class="emp-graph-axis-text emp-graph-xlabel">${escapeHtml(point.label)}</text>
+  `).join('');
+
+  const circles = points.map((point) => `
+    <circle cx="${point.x}" cy="${point.y}" r="4.8" fill="#69140e">
+      <title>${escapeHtml(`${point.label}: ${valueFormatter(point.value)}`)}</title>
+    </circle>
+  `).join('');
+
+  card.insertAdjacentHTML('beforeend', `
+    <div class="emp-graph-wrap">
+      <svg viewBox="0 0 ${width} ${height}" class="emp-line-graph" role="img" aria-label="${escapeHtml(title || 'Metrics graph')}">
+        ${yTicks}
+        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
+        <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
+        <path d="${linePath}" class="emp-graph-line"/>
+        ${bestFitPath ? `<path d="${bestFitPath}" class="emp-graph-bestfit"/>` : ''}
+        ${circles}
+        ${xTicks}
+        <text x="${width / 2}" y="${height - 8}" text-anchor="middle" class="emp-graph-label">Time</text>
+        <text x="18" y="${height / 2}" text-anchor="middle" transform="rotate(-90 18 ${height / 2})" class="emp-graph-label">${escapeHtml(yLabel || '')}</text>
+      </svg>
+    </div>
+  `);
+  container.appendChild(card);
+}
+
+function renderMetricsScatterChart(container, {
+  title,
+  emptyMessage,
+  points,
+  xLabel,
+  yLabel,
+  xFormatter = (value) => value.toFixed(1),
+  yFormatter = (value) => value.toFixed(2),
+} = {}) {
+  const card = document.createElement('section');
+  card.className = 'dashboard-metrics-chart-card';
+  card.innerHTML = `<h3>${escapeHtml(title || '')}</h3>`;
+
+  if (!points.length) {
+    card.insertAdjacentHTML('beforeend', `<p class="dashboard-metrics-empty">${escapeHtml(emptyMessage || 'No data available for the selected filters.')}</p>`);
+    container.appendChild(card);
+    return;
+  }
+
+  const width = 1040;
+  const height = 360;
+  const margin = { top: 24, right: 54, bottom: 72, left: 70 };
+  const innerW = width - margin.left - margin.right;
+  const innerH = height - margin.top - margin.bottom;
+  const xDomain = getGraphDomain(points.map((point) => point.x), { includeZero: true, minSpan: 1 });
+  const yDomain = getGraphDomain(points.map((point) => point.y), { includeZero: true, minSpan: 0.2 });
+  const toX = (value) => margin.left + ((value - xDomain.min) / (xDomain.max - xDomain.min || 1)) * innerW;
+  const toY = (value) => margin.top + ((yDomain.max - value) / (yDomain.max - yDomain.min || 1)) * innerH;
+  const circles = points.map((point) => `
+    <circle cx="${toX(point.x)}" cy="${toY(point.y)}" r="5.2" class="emp-graph-point emp-graph-point--scatter">
+      <title>${escapeHtml(`${point.label}: CYA ${xFormatter(point.x)}, Cl variance ${yFormatter(point.y)}`)}</title>
+    </circle>
+  `).join('');
+
+  const xTicks = Array.from({ length: 5 }, (_, idx) => xDomain.min + ((xDomain.max - xDomain.min) * idx) / 4)
+    .map((value) => `
+      <line x1="${toX(value)}" y1="${height - margin.bottom}" x2="${toX(value)}" y2="${height - margin.bottom + 6}" class="emp-graph-axis"/>
+      <text x="${toX(value)}" y="${height - margin.bottom + 22}" text-anchor="middle" class="emp-graph-axis-text">${escapeHtml(xFormatter(value))}</text>
+    `).join('');
+
+  const yTicks = Array.from({ length: 5 }, (_, idx) => yDomain.min + ((yDomain.max - yDomain.min) * idx) / 4)
+    .map((value) => `
+      <line x1="${margin.left}" y1="${toY(value)}" x2="${width - margin.right}" y2="${toY(value)}" class="emp-graph-grid"/>
+      <text x="${margin.left - 10}" y="${toY(value) + 4}" text-anchor="end" class="emp-graph-axis-text">${escapeHtml(yFormatter(value))}</text>
+    `).join('');
+
+  card.insertAdjacentHTML('beforeend', `
+    <div class="emp-graph-wrap">
+      <svg viewBox="0 0 ${width} ${height}" class="emp-line-graph" role="img" aria-label="${escapeHtml(title || 'Metrics scatter graph')}">
+        ${yTicks}
+        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
+        <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
+        ${circles}
+        ${xTicks}
+        <text x="${width / 2}" y="${height - 8}" text-anchor="middle" class="emp-graph-label">${escapeHtml(xLabel || '')}</text>
+        <text x="18" y="${height / 2}" text-anchor="middle" transform="rotate(-90 18 ${height / 2})" class="emp-graph-label">${escapeHtml(yLabel || '')}</text>
+      </svg>
+    </div>
+  `);
+  container.appendChild(card);
+}
+
+function renderDashboardMetrics() {
+  const container = document.getElementById('dashboardMetricsContent');
+  if (!container) return;
+  if (!isSupervisor()) {
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view dashboard metrics.</p>';
+    return;
+  }
+
+  const groupedMarkets = groupPoolsByMarket(poolsCache);
+  const visibleMarkets = getVisibleDashboardMarkets(
+    Object.fromEntries(groupedMarkets.map(({ market, pools }) => [market, pools]))
+  );
+  if (!visibleMarkets.length) {
+    container.innerHTML = '<p style="padding:16px;color:#666;">No markets selected. Enable markets in Settings.</p>';
+    return;
+  }
+  if (dashboardMetricsFilters.market !== 'all' && !visibleMarkets.includes(dashboardMetricsFilters.market)) {
+    dashboardMetricsFilters.market = 'all';
+  }
+  if (dashboardMetricsFilters.pool !== 'all') {
+    const selectedPool = getDashboardPoolDocByName(dashboardMetricsFilters.pool);
+    const selectedPoolMarket = selectedPool ? getPrimaryMarketName(selectedPool) : null;
+    if (!selectedPool || (dashboardMetricsFilters.market !== 'all' && selectedPoolMarket !== dashboardMetricsFilters.market)) {
+      dashboardMetricsFilters.pool = 'all';
+    }
+  }
+
+  container.innerHTML = '';
+  const filterBar = document.createElement('div');
+  filterBar.className = 'emp-global-filter-bar dashboard-metrics-filter-bar';
+  filterBar.innerHTML = `
+    <span class="filter-by-label">Filter By:</span>
+    <select id="dashboardMetricsMarketFilter" class="training-filter-select">
+      <option value="all">All Markets</option>
+    </select>
+    <select id="dashboardMetricsPoolFilter" class="training-filter-select">
+      <option value="all">All Pools</option>
+    </select>
+    <select id="dashboardMetricsTimeFilter" class="training-filter-select">
+      <option value="All Time">All Time</option>
+      <option value="Past Week">Past Week</option>
+      <option value="Past 2 Weeks">Past 2 Weeks</option>
+      <option value="Past Month">Past Month</option>
+      <option value="Past 3 Months">Past 3 Months</option>
+      <option value="This Calendar Year">This Calendar Year</option>
+    </select>
+  `;
+  container.appendChild(filterBar);
+
+  const marketSelect = filterBar.querySelector('#dashboardMetricsMarketFilter');
+  const poolSelect = filterBar.querySelector('#dashboardMetricsPoolFilter');
+  const timeSelect = filterBar.querySelector('#dashboardMetricsTimeFilter');
+
+  visibleMarkets.forEach((market) => {
+    const option = document.createElement('option');
+    option.value = market;
+    option.textContent = market;
+    marketSelect.appendChild(option);
+  });
+  marketSelect.value = dashboardMetricsFilters.market;
+  if (marketSelect.value !== dashboardMetricsFilters.market) {
+    dashboardMetricsFilters.market = 'all';
+    marketSelect.value = 'all';
+  }
+
+  const visibleMarketSet = new Set(visibleMarkets);
+  const eligiblePools = groupedMarkets
+    .filter(({ market }) => visibleMarketSet.has(market) && (dashboardMetricsFilters.market === 'all' || market === dashboardMetricsFilters.market))
+    .flatMap(({ market, pools }) => pools.map((pool) => ({ market, pool })));
+  eligiblePools.forEach(({ market, pool }) => {
+    const option = document.createElement('option');
+    option.value = getPoolName(pool);
+    option.textContent = getPoolName(pool);
+    option.dataset.market = market;
+    poolSelect.appendChild(option);
+  });
+  poolSelect.value = dashboardMetricsFilters.pool;
+  if (poolSelect.value !== dashboardMetricsFilters.pool) {
+    dashboardMetricsFilters.pool = 'all';
+    poolSelect.value = 'all';
+  }
+
+  timeSelect.value = dashboardMetricsFilters.time;
+
+  marketSelect.addEventListener('change', () => {
+    dashboardMetricsFilters.market = marketSelect.value || 'all';
+    dashboardMetricsFilters.pool = 'all';
+    renderDashboardMetrics();
+  });
+  poolSelect.addEventListener('change', () => {
+    dashboardMetricsFilters.pool = poolSelect.value || 'all';
+    renderDashboardMetrics();
+  });
+  timeSelect.addEventListener('change', () => {
+    dashboardMetricsFilters.time = timeSelect.value || 'All Time';
+    renderDashboardMetrics();
+  });
+
+  const grid = document.createElement('div');
+  grid.className = 'dashboard-metrics-grid';
+  container.appendChild(grid);
+
+  const phSeries = buildAverageMetricSeries(buildChemMetricSamples('ph'));
+  const clSeries = buildAverageMetricSeries(buildChemMetricSamples('cl'));
+  const cyaSeries = buildAverageMetricSeries(buildCyaMetricSamples());
+  const clVariancePoints = buildDailyClVarianceVsCyaPoints();
+
+  renderMetricsLineChart(grid, {
+    title: 'pH vs Time',
+    emptyMessage: 'No pH readings match the selected filters.',
+    series: phSeries,
+    yLabel: 'Average pH',
+    valueFormatter: (value) => value.toFixed(2),
+    minSpan: 0.2,
+  });
+  renderMetricsLineChart(grid, {
+    title: 'Cl Level vs Time',
+    emptyMessage: 'No chlorine readings match the selected filters.',
+    series: clSeries,
+    yLabel: 'Average Cl',
+    valueFormatter: (value) => value.toFixed(2),
+    includeZero: true,
+    minSpan: 1,
+  });
+  renderMetricsLineChart(grid, {
+    title: 'CYA Level vs Time',
+    emptyMessage: 'No CYA readings match the selected filters.',
+    series: cyaSeries,
+    yLabel: 'Average CYA',
+    valueFormatter: (value) => value.toFixed(1),
+    includeZero: true,
+    minSpan: 5,
+  });
+  renderMetricsScatterChart(grid, {
+    title: 'Daily Cl Variance vs CYA Level',
+    emptyMessage: 'You need same-day Cl and CYA readings to draw this graph.',
+    points: clVariancePoints,
+    xLabel: 'Average CYA',
+    yLabel: 'Daily Cl Variance',
+    xFormatter: (value) => value.toFixed(1),
+    yFormatter: (value) => value.toFixed(2),
+  });
 }
 
 function escapeHtml(value) {
@@ -6316,6 +7441,8 @@ function openDutyFormModal(sub) {
 
   const ts = toDateObject(sub.timestamp);
   const esc = escapeHtml;
+  const reportTitle = getDutyReportTitle(sub);
+  const managerPanelTitle = sub?.reportType === 'managerial' ? 'Managerial Report Details' : 'Managers Only';
 
   const photoSectionHtml = (label, photos) => {
     if (!photos?.length) return '';
@@ -6358,7 +7485,7 @@ function openDutyFormModal(sub) {
   modal.innerHTML = `
     <div class="duty-report-modal-card">
       <div class="modal-header duty-report-modal-header">
-        <h2>Cleanliness Report</h2>
+        <h2>${esc(reportTitle)}</h2>
         <button type="button" class="close" onclick="window.closeDutyFormModal()">&times;</button>
       </div>
       <div class="duty-report-modal-scroll">
@@ -6381,7 +7508,7 @@ function openDutyFormModal(sub) {
 
         ${hasManagerData ? `
         <section class="duty-report-manager-panel">
-          <h3>Managers Only</h3>
+          <h3>${esc(managerPanelTitle)}</h3>
           ${photoSectionHtml('Bleach Barrels', photos.bleach)}
           ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
           ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}

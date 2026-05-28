@@ -365,16 +365,30 @@ body.dark-mode .dropdown-item {
 .dropdown-item.supervisor-only {
     border-bottom: none;
     border-top: none;
-    border-left: 3px solid white;
-    border-right: 3px solid white;
+    border-left: 3px solid #b7b7b7;
+    border-right: 3px solid #b7b7b7;
+    position: relative;
 }
 
 .dropdown-item.supervisor-group-start {
-    border-top: 3px solid white;
+    border-top: 24px solid #b7b7b7;
+    padding-top: 18px;
 }
 
 .dropdown-item.supervisor-group-end {
-    border-bottom: 3px solid white;
+    border-bottom: 3px solid #b7b7b7;
+}
+
+.dropdown-item.supervisor-group-start::before {
+    content: 'SUPERVISOR TOOLS';
+    position: absolute;
+    left: 12px;
+    top: -21px;
+    color: #fff;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    pointer-events: none;
 }
 
 /* Logout button — always red */
@@ -2410,6 +2424,7 @@ body.dark-mode #trainingNotesInput {
   margin-left: auto;
   margin-right: auto;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .emp-page-tab {
@@ -4053,6 +4068,199 @@ td.concern-major {
 body.dark-mode .dashboard-market-heading {
   color: #ff8080;
   border-color: #ff8080;
+}
+
+.emp-global-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.dashboard-metrics-filter-bar {
+  margin-bottom: 24px;
+}
+
+.dashboard-metrics-section {
+  width: 100%;
+  margin-bottom: 40px;
+}
+
+.dashboard-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 22px;
+}
+
+.dashboard-metrics-chart-card {
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.dashboard-metrics-chart-card h3 {
+  margin: 0 0 12px;
+  color: #f0c9b6;
+  font-size: 18px;
+}
+
+.dashboard-metrics-empty {
+  margin: 12px 0 0;
+  color: #aaa;
+}
+
+.emp-graph-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.emp-line-graph {
+  width: 100%;
+  min-width: 780px;
+  display: block;
+  background: #1d1d1d;
+  border: 1px solid #444;
+}
+
+.emp-graph-axis {
+  stroke: #9a9a9a;
+  stroke-width: 1.2;
+}
+
+.emp-graph-grid {
+  stroke: #373737;
+  stroke-width: 1;
+}
+
+.emp-graph-line {
+  fill: none;
+  stroke: #ff8080;
+  stroke-width: 2.6;
+}
+
+.emp-graph-bestfit {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.emp-graph-axis-text {
+  fill: #d0d0d0;
+  font-size: 12px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.emp-graph-xlabel {
+  font-size: 10px;
+}
+
+.emp-graph-label {
+  fill: #f0f0f0;
+  font-size: 13px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-weight: 700;
+}
+
+.emp-graph-point {
+  fill: #69140e;
+}
+
+.emp-graph-point--scatter {
+  fill: #ff8080;
+  fill-opacity: 0.88;
+}
+
+.chem-auto-controller-group {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #555;
+}
+
+.chem-auto-controller-group.hidden {
+  display: none !important;
+}
+
+.chem-auto-controller-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: #f0c9b6;
+  font-size: 16px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.chem-auto-controller-desc,
+.chem-auto-controller-note {
+  margin: 0 0 10px;
+  color: #ddd;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.chem-auto-controller-note {
+  color: #bdbdbd;
+}
+
+.chem-auto-controller-note.hidden {
+  display: none !important;
+}
+
+.chem-auto-controller-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.chem-auto-controller-upload-area {
+  width: 120px;
+  height: 120px;
+  border: 2px dashed #666;
+  background: #3a3a3a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.chem-auto-controller-upload-area:hover,
+.chem-auto-controller-upload-area:focus-visible {
+  border-color: #ff8080;
+  background: #444;
+}
+
+.chem-auto-controller-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: #bbb;
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
+.chem-auto-controller-icon {
+  font-size: 28px;
+}
+
+.chem-auto-controller-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: none;
+  position: absolute;
+  inset: 0;
 }
 
 body.dark-mode .dashboard-tab-btn {

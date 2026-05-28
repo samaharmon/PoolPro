@@ -303,14 +303,26 @@
             <h2 class="page-content-title">Supervisor Dashboard</h2>
             <!-- Dashboard top-level tabs -->
             <div class="emp-page-tabs" id="supervisorDashTabs" style="margin-bottom: 20px;">
-                <button class="emp-page-tab active" data-dash-tab="chemistry">Pool Chemistry</button>
+                <button class="emp-page-tab active" data-dash-tab="chemistry">Pool Status Reports</button>
                 <button class="emp-page-tab" data-dash-tab="jobforms">Cleanliness Reports</button>
+                <button class="emp-page-tab" data-dash-tab="managerial">Managerial Reports</button>
+                <button class="emp-page-tab" data-dash-tab="operational">Operational Status</button>
+                <button class="emp-page-tab" data-dash-tab="metrics">Metrics</button>
             </div>
             <div id="dashboardContent" class="dash-tab-panel">
                 <!-- Market tables with pool tabs are injected by script.js -->
             </div>
             <div id="jobFormsContent" class="dash-tab-panel" style="display:none;">
                 <!-- Job form submissions injected by script.js -->
+            </div>
+            <div id="managerialFormsContent" class="dash-tab-panel" style="display:none;">
+                <!-- Managerial report submissions injected by script.js -->
+            </div>
+            <div id="operationalDashboardContent" class="dash-tab-panel" style="display:none;">
+                <!-- Operational status dashboard injected by script.js -->
+            </div>
+            <div id="dashboardMetricsContent" class="dash-tab-panel" style="display:none;">
+                <!-- Dashboard metrics injected by script.js -->
             </div>
         </div>
             <div class="footer">

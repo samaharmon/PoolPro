@@ -134,6 +134,7 @@ function captureRockbridgePresetIfNeeded() {
     if (!poolIndex) return;
 
     const poolRules = { ph: {}, cl: {} };
+    const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
 
     getResponseFields(block, poolIndex).forEach((area) => {
       const typeKey = area.id.includes('_ph_') ? 'ph' : 'cl';
@@ -145,6 +146,8 @@ function captureRockbridgePresetIfNeeded() {
         concernLevel: levelSelect ? levelSelect.value : 'none',
       };
     });
+
+    poolRules.autoController = !!autoControllerCheckbox?.checked;
 
     preset.rulesByPoolIndex[poolIndex] = poolRules;
   });
@@ -205,6 +208,8 @@ function applyRockbridgePresetToNewPool() {
   if (!preset.rulesByPoolIndex) return;
 
   Object.entries(preset.rulesByPoolIndex).forEach(([poolIndex, rules]) => {
+    const autoControllerCheckbox = document.querySelector(`.pool-rule-block[data-pool-index="${poolIndex}"] .pool-auto-controller-checkbox`);
+    if (autoControllerCheckbox) autoControllerCheckbox.checked = !!rules.autoController;
     ['ph', 'cl'].forEach(typeKey => {
       const group = rules[typeKey] || {};
       Object.entries(group).forEach(([key, rule]) => {
@@ -760,6 +765,8 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
     // Load pool sub-name if stored
     const nameInput = block.querySelector('.pool-name-input');
     if (nameInput) nameInput.value = fromDoc.poolName || '';
+    const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
+    if (autoControllerCheckbox) autoControllerCheckbox.checked = !!fromDoc.autoController;
   });
 
   // Make sure the right sanitize tab is active & buttons are wired
@@ -835,6 +842,7 @@ function readEditorToObject() {
 
     const state = getOrCreatePoolRuleState(poolIndex);
     const nameInput = block.querySelector('.pool-name-input');
+    const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
     const poolName = nameInput ? nameInput.value.trim() : '';
     const phMethods = state.phMethods || createEmptyPhMethods();
     const defaultPh = phMethods[DEFAULT_PH_RULE_METHOD]?.ph || {};
@@ -846,6 +854,7 @@ function readEditorToObject() {
       tablet: { ...(state.tablet || createEmptyMethodRules()), ph: cloneRuleMap(defaultPh) },
       off: { ...(state.off || createEmptyMethodRules()), ph: cloneRuleMap(defaultPh) },
       poolName,
+      autoController: !!autoControllerCheckbox?.checked,
     });
   });
 
@@ -1851,6 +1860,12 @@ function ensureEditorAccessibility() {
       poolNameInput.setAttribute('aria-label', `Pool ${poolIndex} name`);
     }
 
+    const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
+    if (autoControllerCheckbox) {
+      if (!autoControllerCheckbox.id) autoControllerCheckbox.id = `pool${poolIndex}_auto_controller`;
+      autoControllerCheckbox.setAttribute('aria-label', `Pool ${poolIndex} auto controller`);
+    }
+
     block.querySelectorAll('.copy-rules-location').forEach((copyLocation) => {
       const copyKind = copyLocation.closest('.copy-rules-row')?.dataset.copyKind || 'rules';
       if (!copyLocation.id) copyLocation.id = `pool${poolIndex}_copy_location`;
@@ -1893,6 +1908,23 @@ function ensureEditorAccessibility() {
   document.getElementById('employeeMarketFilter')?.setAttribute('aria-label', 'Filter employees by market');
   document.getElementById('employeePoolFilter')?.setAttribute('aria-label', 'Filter employees by home pool');
   document.getElementById('darkModeToggle')?.setAttribute('aria-label', 'Toggle dark mode');
+}
+
+function ensureAutoControllerToggles() {
+  document.querySelectorAll('.pool-rule-block').forEach((block) => {
+    if (block.querySelector('.pool-auto-controller-toggle')) return;
+    const title = block.querySelector('.pool-rule-title');
+    if (!title) return;
+    const poolIndex = block.dataset.poolIndex || '';
+
+    const toggle = document.createElement('label');
+    toggle.className = 'pool-auto-controller-toggle';
+    toggle.innerHTML = `
+      <input type="checkbox" class="market-filter-checkbox pool-auto-controller-checkbox" data-pool-index="${poolIndex}">
+      <span>Auto Controller</span>
+    `;
+    title.insertAdjacentElement('afterend', toggle);
+  });
 }
 
 // ---- Copy Existing Rules ----
@@ -2096,6 +2128,7 @@ function wireCopyRulesDropdowns() {
 
 async function initEditor() {
   removePoolShapeGallonage();
+  ensureAutoControllerToggles();
   startPoolListener();
   await refreshPools();
   convertRuleTextareasToRichEditors();
