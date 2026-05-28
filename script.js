@@ -5314,15 +5314,6 @@ function timeoutAfter(ms, label) {
   });
 }
 
-function readFileAsDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error || new Error('Unable to read file.'));
-    reader.readAsDataURL(file);
-  });
-}
-
 function openResourceDataUrl(dataUrl) {
   if (!dataUrl || !dataUrl.startsWith('data:')) throw new Error('Invalid resource data.');
   const [header, b64] = dataUrl.split(',');
