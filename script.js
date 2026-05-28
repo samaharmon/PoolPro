@@ -272,6 +272,7 @@ function setupFloatingHeaders() {
 }
 
 function getResponsiveTableMinWidth(table) {
+  if (table.matches('.dashboard-operational-table')) return '760px';
   if (table.matches('.dashboard-cleanliness-table')) return '520px';
   if (table.matches('.dashboard-detail-table')) return '760px';
   if (table.matches('.dashboard-pool-table, .pool-table')) return '1200px';
@@ -1639,6 +1640,58 @@ function isSupervisor() {
   return isDeveloperUser();
 }
 
+const IMPORTANT_UPDATES_NOTICE_STORAGE_KEY = 'poolproImportantUpdatesNoticeDismissed_v1';
+const IMPORTANT_UPDATES_NOTICE_END = new Date(2026, 4, 31, 0, 0, 0, 0);
+
+function isImportantUpdatesNoticeActive() {
+  return Date.now() < IMPORTANT_UPDATES_NOTICE_END.getTime();
+}
+
+function hasActivePoolProSession() {
+  return hasFreshSupervisorToken() ||
+    isLifeguardSession() ||
+    !!(sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole'));
+}
+
+function dismissImportantUpdatesNotice() {
+  try {
+    sessionStorage.setItem(IMPORTANT_UPDATES_NOTICE_STORAGE_KEY, 'true');
+  } catch (_) {
+    // Ignore storage failures; the close button should still hide the notice.
+  }
+  document.getElementById('importantUpdatesNotice')?.remove();
+}
+
+function maybeShowImportantUpdatesNotice() {
+  if (!isImportantUpdatesNoticeActive() || !hasActivePoolProSession()) return;
+  try {
+    if (sessionStorage.getItem(IMPORTANT_UPDATES_NOTICE_STORAGE_KEY) === 'true') return;
+  } catch (_) {
+    // Continue without persistence if sessionStorage is unavailable.
+  }
+  if (document.getElementById('importantUpdatesNotice')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'importantUpdatesNotice';
+  overlay.className = 'important-updates-notice';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'importantUpdatesNoticeTitle');
+  overlay.innerHTML = `
+    <button type="button" class="important-updates-close" aria-label="Close important updates">&times;</button>
+    <div class="important-updates-card">
+      <h2 id="importantUpdatesNoticeTitle">IMPORTANT UPDATES:</h2>
+      <ol type="a">
+        <li>Lifeguards must fill out Cleanliness Reports (in the dropdown menu) every night.</li>
+        <li>Use the Operation Status Log page to log when you (1) turn a fill line or hose on/off, (2) turn the chlorine feeder up/down, (3) close/reopen a pool for any reason.</li>
+        <li><strong>MANAGERS:</strong> fill out Managerial Reports every Friday.</li>
+      </ol>
+    </div>
+  `;
+  overlay.querySelector('.important-updates-close')?.addEventListener('click', dismissImportantUpdatesNotice);
+  document.body.appendChild(overlay);
+}
+
 // Show/hide supervisor-only dropdown items based on login state.
 // Called on DOMContentLoaded and exported so training.js can re-call after login.
 window.setupDropdownVisibility = function () {
@@ -1673,6 +1726,7 @@ window.setupDropdownVisibility = function () {
       visibleSupervisorItems[visibleSupervisorItems.length - 1].classList.add('supervisor-group-end');
     }
   });
+  maybeShowImportantUpdatesNotice();
 };
 
 function footerLogoPrefix() {
@@ -6633,7 +6687,7 @@ function renderOperationalDashboard() {
     section.appendChild(heading);
 
     const table = document.createElement('table');
-    table.className = 'data-table dashboard-pool-table dashboard-detail-table';
+    table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-operational-table';
     table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
     const tbody = document.createElement('tbody');
 
@@ -6683,7 +6737,7 @@ function renderOperationalDashboard() {
     section.appendChild(heading);
 
     const table = document.createElement('table');
-    table.className = 'data-table dashboard-pool-table';
+    table.className = 'data-table dashboard-pool-table dashboard-operational-table';
     table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
     const tbody = document.createElement('tbody');
 

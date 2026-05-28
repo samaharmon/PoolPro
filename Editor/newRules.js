@@ -533,6 +533,8 @@ function setBlockEnabled(block, enabled) {
   // Also enable/disable the pool name input in the header
   const nameInput = block.querySelector('.pool-name-input');
   if (nameInput) nameInput.disabled = !enabled;
+  const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
+  if (autoControllerCheckbox) autoControllerCheckbox.disabled = !enabled;
 
   // add overlay class only to the rules-table region
   block.querySelectorAll('.rules-table').forEach(tbl => {
@@ -1043,6 +1045,8 @@ function setBlockEditing(block, isEditing) {
   block.querySelectorAll('.formatting-toolbar button').forEach(btn => {
     btn.disabled = !isEditing;
   });
+  const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
+  if (autoControllerCheckbox) autoControllerCheckbox.disabled = !isEditing;
 
   const editBtn = block.querySelector('.pool-edit-btn');
   const saveBtn = block.querySelector('.pool-save-btn');

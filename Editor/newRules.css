@@ -205,6 +205,15 @@
 .pool-auto-controller-toggle .market-filter-checkbox {
   margin: 0;
 }
+
+.pool-auto-controller-toggle:has(.pool-auto-controller-checkbox:disabled) {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.pool-auto-controller-checkbox:disabled {
+  cursor: not-allowed;
+}
  
 .rule-tables {
   display: flex;
