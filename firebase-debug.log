@@ -1,0 +1,229 @@
+[debug] [2026-05-24T17:35:09.126Z] ----------------------------------------------------------------------
+[debug] [2026-05-24T17:35:09.128Z] Command:       /opt/homebrew/Cellar/node/25.5.0/bin/node /Users/samharmon/.npm/_npx/ba4f1959e38407b5/node_modules/.bin/firebase firestore:databases:list
+[debug] [2026-05-24T17:35:09.129Z] CLI Version:   15.18.0
+[debug] [2026-05-24T17:35:09.129Z] Platform:      darwin
+[debug] [2026-05-24T17:35:09.129Z] Node Version:  v25.5.0
+[debug] [2026-05-24T17:35:09.129Z] Time:          Sun May 24 2026 13:35:09 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-05-24T17:35:09.129Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-24T17:35:10.170Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-24T17:35:10.171Z] > authorizing via signed-in user (samharmon2404@gmail.com)
+[debug] [2026-05-24T17:35:10.171Z] [iam] checking project chemlog-43c08 for permissions ["datastore.databases.list","firebase.projects.get"]
+[debug] [2026-05-24T17:35:10.172Z] Checked if tokens are valid: false, expires at: 1779579870326
+[debug] [2026-05-24T17:35:10.173Z] Checked if tokens are valid: false, expires at: 1779579870326
+[debug] [2026-05-24T17:35:10.173Z] > refreshing access token with scopes: []
+[debug] [2026-05-24T17:35:10.175Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-05-24T17:35:10.175Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-24T17:35:10.426Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-05-24T17:35:10.427Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-24T17:35:10.440Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions [none]
+[debug] [2026-05-24T17:35:10.440Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-24T17:35:10.440Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["datastore.databases.list","firebase.projects.get"]}
+[debug] [2026-05-24T17:35:10.785Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions 200
+[debug] [2026-05-24T17:35:10.785Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["datastore.databases.list","firebase.projects.get"]}
+[debug] [2026-05-24T17:35:10.786Z] Checked if tokens are valid: true, expires at: 1779647709427
+[debug] [2026-05-24T17:35:10.787Z] Checked if tokens are valid: true, expires at: 1779647709427
+[debug] [2026-05-24T17:35:10.787Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases [none]
+[debug] [2026-05-24T17:35:11.433Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases 200
+[debug] [2026-05-24T17:35:11.433Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases {"databases":[{"name":"projects/chemlog-43c08/databases/(default)","uid":"d89815bd-1f69-4ff9-98e5-e45753bb0bdd","createTime":"2025-07-22T19:10:52.294469Z","updateTime":"2025-07-22T19:10:52.294469Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-05-24T16:35:11.562852Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IKSi1Pi60pQDMKWGju2g5pID"}]}
+[info] ┌───────────────────────────────────────────────┬────────────────────┬────────────────────┐
+│ Database Name                                 │ Edition            │ Type               │
+├───────────────────────────────────────────────┼────────────────────┼────────────────────┤
+│ projects/chemlog-43c08/databases/(default)    │ STANDARD           │ FIRESTORE_NATIVE   │
+└───────────────────────────────────────────────┴────────────────────┴────────────────────┘
+[debug] [2026-05-25T00:55:29.403Z] ----------------------------------------------------------------------
+[debug] [2026-05-25T00:55:29.406Z] Command:       /opt/homebrew/Cellar/node/25.5.0/bin/node /Users/samharmon/.npm/_npx/ba4f1959e38407b5/node_modules/.bin/firebase deploy --project chemlog-43c08 --only functions:deleteAuthUserByEmail,firestore:rules
+[debug] [2026-05-25T00:55:29.406Z] CLI Version:   15.18.0
+[debug] [2026-05-25T00:55:29.406Z] Platform:      darwin
+[debug] [2026-05-25T00:55:29.406Z] Node Version:  v25.5.0
+[debug] [2026-05-25T00:55:29.406Z] Time:          Sun May 24 2026 20:55:29 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-05-25T00:55:29.406Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-25T00:55:29.408Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-05-25T00:55:30.985Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-25T00:55:30.986Z] > authorizing via signed-in user (samharmon2404@gmail.com)
+[debug] [2026-05-25T00:55:30.986Z] [iam] checking project chemlog-43c08 for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2026-05-25T00:55:30.987Z] Checked if tokens are valid: false, expires at: 1779647709427
+[debug] [2026-05-25T00:55:30.987Z] Checked if tokens are valid: false, expires at: 1779647709427
+[debug] [2026-05-25T00:55:30.987Z] > refreshing access token with scopes: []
+[debug] [2026-05-25T00:55:30.988Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-05-25T00:55:30.988Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-25T00:55:31.162Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-05-25T00:55:31.162Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-25T00:55:31.175Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions [none]
+[debug] [2026-05-25T00:55:31.175Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-25T00:55:31.175Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-05-25T00:55:31.177Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-05-25T00:55:31.177Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-05-25T00:55:31.437Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions 200
+[debug] [2026-05-25T00:55:31.438Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-05-25T00:55:31.438Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:31.438Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:31.438Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/chemlog-43c08/serviceAccounts/chemlog-43c08@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-05-25T00:55:31.438Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/chemlog-43c08/serviceAccounts/chemlog-43c08@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2026-05-25T00:55:31.653Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/chemlog-43c08/serviceAccounts/chemlog-43c08@appspot.gserviceaccount.com:testIamPermissions 200
+[debug] [2026-05-25T00:55:31.653Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/chemlog-43c08/serviceAccounts/chemlog-43c08@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[info] 
+[info] === Deploying to 'chemlog-43c08'...
+[info] 
+[info] i  deploying firestore, functions 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-05-25T00:55:31.658Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:31.658Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:31.658Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases/(default) [none]
+[debug] [2026-05-25T00:55:32.026Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases/(default) 200
+[debug] [2026-05-25T00:55:32.026Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases/(default) {"name":"projects/chemlog-43c08/databases/(default)","uid":"d89815bd-1f69-4ff9-98e5-e45753bb0bdd","createTime":"2025-07-22T19:10:52.294469Z","updateTime":"2025-07-22T19:10:52.294469Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-05-24T23:55:32.013076Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IM30gq+d05QDMKWGju2g5pID"}
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-05-25T00:55:32.026Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.027Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.027Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08:test [none]
+[debug] [2026-05-25T00:55:32.027Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08:test [omitted]
+[debug] [2026-05-25T00:55:32.359Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08:test 200
+[debug] [2026-05-25T00:55:32.359Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-05-25T00:55:32.362Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.362Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.362Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08 [none]
+[debug] [2026-05-25T00:55:32.468Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08 200
+[debug] [2026-05-25T00:55:32.468Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08 {"projectNumber":"554394202059","projectId":"chemlog-43c08","lifecycleState":"ACTIVE","name":"PoolPro","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2025-07-22T19:05:00.873775Z"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[debug] [2026-05-25T00:55:32.469Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.469Z] Checked if tokens are valid: true, expires at: 1779674130162
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2026-05-25T00:55:32.470Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.470Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.470Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/cloudbuild.googleapis.com [none]
+[debug] [2026-05-25T00:55:32.470Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/cloudbuild.googleapis.com  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-25T00:55:32.471Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/artifactregistry.googleapis.com [none]
+[debug] [2026-05-25T00:55:32.471Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/artifactregistry.googleapis.com  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-25T00:55:32.824Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/artifactregistry.googleapis.com 200
+[debug] [2026-05-25T00:55:32.824Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/artifactregistry.googleapis.com [omitted]
+[warn] ⚠  artifactregistry: missing required API artifactregistry.googleapis.com. Enabling now... 
+[debug] [2026-05-25T00:55:32.825Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.825Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.826Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/artifactregistry.googleapis.com:enable [none]
+[debug] [2026-05-25T00:55:32.826Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/artifactregistry.googleapis.com:enable  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-25T00:55:32.830Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/cloudbuild.googleapis.com 200
+[debug] [2026-05-25T00:55:32.830Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/cloudbuild.googleapis.com [omitted]
+[warn] ⚠  functions: missing required API cloudbuild.googleapis.com. Enabling now... 
+[debug] [2026-05-25T00:55:32.830Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.830Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T00:55:32.831Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/cloudbuild.googleapis.com:enable [none]
+[debug] [2026-05-25T00:55:32.831Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/cloudbuild.googleapis.com:enable  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-25T00:55:33.063Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/artifactregistry.googleapis.com:enable 400
+[debug] [2026-05-25T00:55:33.063Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/artifactregistry.googleapis.com:enable [omitted]
+[debug] [2026-05-25T00:55:33.156Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/cloudbuild.googleapis.com:enable 400
+[debug] [2026-05-25T00:55:33.156Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/chemlog-43c08/services/cloudbuild.googleapis.com:enable [omitted]
+[error] 
+[error] Error: Your project chemlog-43c08 must be on the Blaze (pay-as-you-go) plan to complete this command. Required API artifactregistry.googleapis.com can't be enabled until the upgrade is complete. To upgrade, visit the following URL:
+
+https://console.firebase.google.com/project/chemlog-43c08/usage/details
+[debug] [2026-05-25T01:05:42.389Z] ----------------------------------------------------------------------
+[debug] [2026-05-25T01:05:42.391Z] Command:       /opt/homebrew/Cellar/node/25.5.0/bin/node /Users/samharmon/.npm/_npx/ba4f1959e38407b5/node_modules/.bin/firebase deploy --project chemlog-43c08 --only firestore:rules
+[debug] [2026-05-25T01:05:42.391Z] CLI Version:   15.18.0
+[debug] [2026-05-25T01:05:42.391Z] Platform:      darwin
+[debug] [2026-05-25T01:05:42.392Z] Node Version:  v25.5.0
+[debug] [2026-05-25T01:05:42.392Z] Time:          Sun May 24 2026 21:05:42 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-05-25T01:05:42.392Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-25T01:05:44.176Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-25T01:05:44.177Z] > authorizing via signed-in user (samharmon2404@gmail.com)
+[debug] [2026-05-25T01:05:44.177Z] [iam] checking project chemlog-43c08 for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2026-05-25T01:05:44.178Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:44.178Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:44.179Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions [none]
+[debug] [2026-05-25T01:05:44.179Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-25T01:05:44.179Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-05-25T01:05:44.395Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions 200
+[debug] [2026-05-25T01:05:44.395Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[info] 
+[info] === Deploying to 'chemlog-43c08'...
+[info] 
+[info] i  deploying firestore 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-05-25T01:05:44.398Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:44.398Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:44.398Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases/(default) [none]
+[debug] [2026-05-25T01:05:44.737Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases/(default) 200
+[debug] [2026-05-25T01:05:44.737Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases/(default) {"name":"projects/chemlog-43c08/databases/(default)","uid":"d89815bd-1f69-4ff9-98e5-e45753bb0bdd","createTime":"2025-07-22T19:10:52.294469Z","updateTime":"2025-07-22T19:10:52.294469Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-05-25T00:05:44.795818Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"INGZnNOf05QDMKWGju2g5pID"}
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-05-25T01:05:44.739Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:44.739Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:44.739Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08:test [none]
+[debug] [2026-05-25T01:05:44.739Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08:test [omitted]
+[debug] [2026-05-25T01:05:45.132Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08:test 200
+[debug] [2026-05-25T01:05:45.132Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08:test {}
+[info] ✔  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-05-25T01:05:45.133Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:45.134Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:45.134Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/releases pageSize=10&pageToken=
+[debug] [2026-05-25T01:05:45.347Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/releases 200
+[debug] [2026-05-25T01:05:45.347Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/releases {"releases":[{"name":"projects/chemlog-43c08/releases/cloud.firestore","rulesetName":"projects/chemlog-43c08/rulesets/ce2a2a27-427b-4271-910c-e60d66024c0e","createTime":"2025-07-22T19:10:54.310066Z","updateTime":"2026-05-23T23:28:35.301467Z"}]}
+[debug] [2026-05-25T01:05:45.348Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:45.348Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:45.349Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/rulesets/ce2a2a27-427b-4271-910c-e60d66024c0e [none]
+[debug] [2026-05-25T01:05:45.487Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/rulesets/ce2a2a27-427b-4271-910c-e60d66024c0e 200
+[debug] [2026-05-25T01:05:45.487Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/rulesets/ce2a2a27-427b-4271-910c-e60d66024c0e [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2026-05-25T01:05:45.488Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:45.488Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:45.488Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/rulesets [none]
+[debug] [2026-05-25T01:05:45.488Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/rulesets [omitted]
+[debug] [2026-05-25T01:05:45.825Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/rulesets 200
+[debug] [2026-05-25T01:05:45.825Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/rulesets {"name":"projects/chemlog-43c08/rulesets/0dc047c4-ca0d-44df-bae5-0fd11bb3fe18","source":{"files":[{"content":"rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n\n    // Chemistry submissions\n    match /poolSubmissions/{docId} {\n      allow read, write: if true;\n    }\n\n    // Legacy\n    match /formSubmissions/{docId} {\n      allow read, write: if true;\n    }\n\n    // CSV export (optional)\n    match /chemistryLogs/{docId} {\n      allow read, write: if true;\n    }\n\n    // Pool definitions/rules\n    match /pools/{poolId} {\n      allow read, write: if true;\n    }\n\n    // App settings (includes settings/trainingSchedule, settings/employeePerformance, settings/setQuestionTypes)\n    match /settings/{docId} {\n      allow read, write: if true;\n    }\n\n    // Training signups\n    match /trainingSignups/{signupId} {\n      allow read, write: if true;\n    }\n\n    // Cleanliness report submissions\n    match /dutySubmissions/{submissionId} {\n      allow read, write: if true;\n    }\n\n    // Managerial report submissions\n    match /managerialReports/{submissionId} {\n      allow read, write: if true;\n    }\n\n    // Fill line, hose, and bleach feeder operational status updates\n    match /operationalStatusLogs/{logId} {\n      allow read, write: if true;\n    }\n\n    // Lifeguard employees who can log in via home screen\n    match /employees/{employeeId} {\n      allow read, write: if true;\n    }\n\n    // Lifeguard login accounts created from the home screen\n    match /lifeguardAccounts/{username} {\n      allow read, write: if true;\n    }\n\n    // Uploaded resources metadata\n    match /resourcesDocuments/{documentId} {\n      allow read, write: if true;\n    }\n\n    // Resource files stored as Firestore fallback chunks when Firebase Storage CORS blocks browser uploads\n    match /resourcesDocuments/{documentId}/fileChunks/{chunkId} {\n      allow read, write: if true;\n    }\n\n    // Signed user agreement acknowledgments\n    match /userAgreements/{agreementId} {\n      allow read, write: if true;\n    }\n\n    // Auditing form submissions\n    match /testingResults/{resultId} {\n      allow read, write: if true;\n    }\n\n    // Deny everything else\n    match /{document=**} {\n      allow read, write: if false;\n    }\n  }\n}\n","name":"firestore.rules"}]},"createTime":"2026-05-25T01:05:45.869983Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2026-05-25T01:05:45.825Z] [rules] created ruleset projects/chemlog-43c08/rulesets/0dc047c4-ca0d-44df-bae5-0fd11bb3fe18
+[debug] [2026-05-25T01:05:45.826Z] [rules] releasing cloud.firestore with ruleset projects/chemlog-43c08/rulesets/0dc047c4-ca0d-44df-bae5-0fd11bb3fe18
+[debug] [2026-05-25T01:05:45.826Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:45.826Z] Checked if tokens are valid: true, expires at: 1779674130162
+[debug] [2026-05-25T01:05:45.827Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/releases/cloud.firestore [none]
+[debug] [2026-05-25T01:05:45.827Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/releases/cloud.firestore {"release":{"name":"projects/chemlog-43c08/releases/cloud.firestore","rulesetName":"projects/chemlog-43c08/rulesets/0dc047c4-ca0d-44df-bae5-0fd11bb3fe18"}}
+[debug] [2026-05-25T01:05:46.192Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/releases/cloud.firestore 200
+[debug] [2026-05-25T01:05:46.192Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/chemlog-43c08/releases/cloud.firestore {"name":"projects/chemlog-43c08/releases/cloud.firestore","rulesetName":"projects/chemlog-43c08/rulesets/0dc047c4-ca0d-44df-bae5-0fd11bb3fe18","createTime":"2025-07-22T19:10:54.310066Z","updateTime":"2026-05-25T01:05:46.231568Z"}
+[debug] [2026-05-25T01:05:46.192Z] [rules] updated release projects/chemlog-43c08/releases/cloud.firestore
+[info] ✔  firestore: released rules firestore.rules to cloud.firestore 
+[info] 
+[info] ✔  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/chemlog-43c08/overview
+[debug] [2026-05-25T21:40:28.483Z] ----------------------------------------------------------------------
+[debug] [2026-05-26T01:22:01.194Z] ----------------------------------------------------------------------
+[debug] [2026-05-27T22:08:00.202Z] ----------------------------------------------------------------------
+[debug] [2026-05-27T22:08:00.207Z] Command:       /opt/homebrew/Cellar/node/25.5.0/bin/node /Users/samharmon/.npm/_npx/ba4f1959e38407b5/node_modules/.bin/firebase firestore:databases:list
+[debug] [2026-05-27T22:08:00.208Z] CLI Version:   15.19.0
+[debug] [2026-05-27T22:08:00.208Z] Platform:      darwin
+[debug] [2026-05-27T22:08:00.208Z] Node Version:  v25.5.0
+[debug] [2026-05-27T22:08:00.208Z] Time:          Wed May 27 2026 18:08:00 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-05-27T22:08:00.208Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-27T22:08:00.211Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-05-27T22:08:02.043Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-27T22:08:02.043Z] > authorizing via signed-in user (samharmon2404@gmail.com)
+[debug] [2026-05-27T22:08:02.043Z] [iam] checking project chemlog-43c08 for permissions ["datastore.databases.list","firebase.projects.get"]
+[debug] [2026-05-27T22:08:02.043Z] Checked if tokens are valid: false, expires at: 1779762193864
+[debug] [2026-05-27T22:08:02.044Z] Checked if tokens are valid: false, expires at: 1779762193864
+[debug] [2026-05-27T22:08:02.044Z] > refreshing access token with scopes: []
+[debug] [2026-05-27T22:08:02.045Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-05-27T22:08:02.045Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-27T22:08:02.142Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-05-27T22:08:02.142Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-05-27T22:08:02.174Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-05-27T22:08:02.174Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-27T22:08:02.187Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions [none]
+[debug] [2026-05-27T22:08:02.187Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-27T22:08:02.187Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["datastore.databases.list","firebase.projects.get"]}
+[debug] [2026-05-27T22:08:02.347Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions 200
+[debug] [2026-05-27T22:08:02.347Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["datastore.databases.list","firebase.projects.get"]}
+[debug] [2026-05-27T22:08:02.348Z] Checked if tokens are valid: true, expires at: 1779923281174
+[debug] [2026-05-27T22:08:02.348Z] Checked if tokens are valid: true, expires at: 1779923281174
+[debug] [2026-05-27T22:08:02.348Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases [none]
+[debug] [2026-05-27T22:08:02.779Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases 200
+[debug] [2026-05-27T22:08:02.779Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases {"databases":[{"name":"projects/chemlog-43c08/databases/(default)","uid":"d89815bd-1f69-4ff9-98e5-e45753bb0bdd","createTime":"2025-07-22T19:10:52.294469Z","updateTime":"2025-07-22T19:10:52.294469Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-05-27T21:08:02.771912Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IJbUoMO92pQDMKWGju2g5pID"}]}
+[info] ┌───────────────────────────────────────────────┬────────────────────┬────────────────────┐
+│ Database Name                                 │ Edition            │ Type               │
+├───────────────────────────────────────────────┼────────────────────┼────────────────────┤
+│ projects/chemlog-43c08/databases/(default)    │ STANDARD           │ FIRESTORE_NATIVE   │
+└───────────────────────────────────────────────┴────────────────────┴────────────────────┘
