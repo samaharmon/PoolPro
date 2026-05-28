@@ -365,18 +365,18 @@ body.dark-mode .dropdown-item {
 .dropdown-item.supervisor-only {
     border-bottom: none;
     border-top: none;
-    border-left: 3px solid #b7b7b7;
-    border-right: 3px solid #b7b7b7;
+    border-left: 3px solid #ccc;
+    border-right: 3px solid #ccc;
     position: relative;
 }
 
 .dropdown-item.supervisor-group-start {
-    border-top: 24px solid #b7b7b7;
+    border-top: 24px solid #ccc;
     padding-top: 18px;
 }
 
 .dropdown-item.supervisor-group-end {
-    border-bottom: 3px solid #b7b7b7;
+    border-bottom: 3px solid #ccc;
 }
 
 .dropdown-item.supervisor-group-start::before {

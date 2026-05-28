@@ -46,6 +46,15 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Pool chemistry auto-controller photos stored in Firestore chunks
+    match /chemSubmissionMedia/{submissionId}/photos/{photoId} {
+      allow read, write: if true;
+    }
+
+    match /chemSubmissionMedia/{submissionId}/photos/{photoId}/chunks/{chunkId} {
+      allow read, write: if true;
+    }
+
     // Managerial report submissions
     match /managerialReports/{submissionId} {
       allow read, write: if true;

@@ -2124,9 +2124,10 @@ function setupChemForm() {
   if (locationSelect) {
     locationSelect.addEventListener('change', async () => {
       const pool = poolsCache.find(p => p.id === locationSelect.value);
-      updateVisiblePoolSections(pool ? (pool.numPools || 2) : 2);
-      updatePoolSectionTitles(pool);
-      await updateChemAutoControllerSections(pool || null);
+      const latestPool = pool ? await getFreshPoolDoc(pool.id, pool) : null;
+      updateVisiblePoolSections(latestPool ? (latestPool.numPools || 2) : 2);
+      updatePoolSectionTitles(latestPool);
+      await updateChemAutoControllerSections(latestPool || null);
     });
     const initialPool = poolsCache.find(p => p.id === locationSelect.value);
     updateVisiblePoolSections(initialPool ? (initialPool.numPools || 2) : 2);
@@ -2148,7 +2149,7 @@ function setupChemForm() {
     }
 
     const pool = poolsCache.find(p => p.id === poolId);
-    const poolName = pool?.name || poolId;
+    let poolName = pool?.name || poolId;
     const submissionRef = doc(collection(db, 'poolSubmissions'));
 
     const entry = {
@@ -2175,8 +2176,11 @@ function setupChemForm() {
     try {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Submitting…';
+      const poolDocForSubmission = await getFreshPoolDoc(poolId, pool);
+      poolName = getPoolName(poolDocForSubmission) || poolName;
+      entry.poolLocation = poolName;
       const recentSubmission = await hasRecentChemSubmissionForFacility(poolName);
-      const autoControllerRows = getChemControllerPhotoRows(entry, pool);
+      const autoControllerRows = getChemControllerPhotoRows(entry, poolDocForSubmission || pool);
       const missingAutoControllerPhoto = !recentSubmission && autoControllerRows.some((row) => !row.file);
       if (missingAutoControllerPhoto) {
         alert('Please upload each required auto controller image before submitting.');
@@ -2211,7 +2215,7 @@ function setupChemForm() {
       }
 
       await refreshSanitationSelections();
-      const poolDoc = await getFreshPoolDoc(poolId, pool);
+      const poolDoc = poolDocForSubmission || pool;
       const poolRules = poolDoc ? normalizePoolRules(poolDoc) : [];
 
       // Check concern levels for all submitted pools
