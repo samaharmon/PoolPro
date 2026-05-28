@@ -227,3 +227,36 @@ https://console.firebase.google.com/project/chemlog-43c08/usage/details
 ├───────────────────────────────────────────────┼────────────────────┼────────────────────┤
 │ projects/chemlog-43c08/databases/(default)    │ STANDARD           │ FIRESTORE_NATIVE   │
 └───────────────────────────────────────────────┴────────────────────┴────────────────────┘
+[debug] [2026-05-28T03:22:59.686Z] ----------------------------------------------------------------------
+[debug] [2026-05-28T03:22:59.690Z] Command:       /opt/homebrew/Cellar/node/25.5.0/bin/node /Users/samharmon/.npm/_npx/ba4f1959e38407b5/node_modules/.bin/firebase firestore:databases:list
+[debug] [2026-05-28T03:22:59.690Z] CLI Version:   15.19.0
+[debug] [2026-05-28T03:22:59.690Z] Platform:      darwin
+[debug] [2026-05-28T03:22:59.690Z] Node Version:  v25.5.0
+[debug] [2026-05-28T03:22:59.690Z] Time:          Wed May 27 2026 23:22:59 GMT-0400 (Eastern Daylight Time)
+[debug] [2026-05-28T03:22:59.691Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-28T03:23:01.252Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-28T03:23:01.252Z] > authorizing via signed-in user (samharmon2404@gmail.com)
+[debug] [2026-05-28T03:23:01.252Z] [iam] checking project chemlog-43c08 for permissions ["datastore.databases.list","firebase.projects.get"]
+[debug] [2026-05-28T03:23:01.253Z] Checked if tokens are valid: false, expires at: 1779923281174
+[debug] [2026-05-28T03:23:01.253Z] Checked if tokens are valid: false, expires at: 1779923281174
+[debug] [2026-05-28T03:23:01.254Z] > refreshing access token with scopes: []
+[debug] [2026-05-28T03:23:01.255Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-05-28T03:23:01.255Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-28T03:23:01.428Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-05-28T03:23:01.428Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-28T03:23:01.440Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions [none]
+[debug] [2026-05-28T03:23:01.440Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions  x-goog-user-project=chemlog-43c08
+[debug] [2026-05-28T03:23:01.440Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["datastore.databases.list","firebase.projects.get"]}
+[debug] [2026-05-28T03:23:01.613Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions 200
+[debug] [2026-05-28T03:23:01.614Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/chemlog-43c08:testIamPermissions {"permissions":["datastore.databases.list","firebase.projects.get"]}
+[debug] [2026-05-28T03:23:01.614Z] Checked if tokens are valid: true, expires at: 1779942180428
+[debug] [2026-05-28T03:23:01.614Z] Checked if tokens are valid: true, expires at: 1779942180428
+[debug] [2026-05-28T03:23:01.614Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases [none]
+[debug] [2026-05-28T03:23:02.264Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases 200
+[debug] [2026-05-28T03:23:02.265Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/chemlog-43c08/databases {"databases":[{"name":"projects/chemlog-43c08/databases/(default)","uid":"d89815bd-1f69-4ff9-98e5-e45753bb0bdd","createTime":"2025-07-22T19:10:52.294469Z","updateTime":"2025-07-22T19:10:52.294469Z","locationId":"nam5","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-05-28T02:23:02.330361Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"s","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IK/QofeD25QDMKWGju2g5pID"}]}
+[info] ┌───────────────────────────────────────────────┬────────────────────┬────────────────────┐
+│ Database Name                                 │ Edition            │ Type               │
+├───────────────────────────────────────────────┼────────────────────┼────────────────────┤
+│ projects/chemlog-43c08/databases/(default)    │ STANDARD           │ FIRESTORE_NATIVE   │
+└───────────────────────────────────────────────┴────────────────────┴────────────────────┘
