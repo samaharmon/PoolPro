@@ -5104,3 +5104,227 @@ body.dark-mode .dash-value-popover {
     padding: 14px;
   }
 }
+
+/* ============================================================
+   Shared UI motion + settings polish
+   ============================================================ */
+button,
+input[type="button"],
+input[type="submit"],
+.submit-btn,
+.editAndSave,
+.button-shadow,
+.notify-btn,
+.menu-btn,
+.logout-btn,
+.supervisor-login-btn,
+.theme-toggle-option,
+.dropdown-item,
+.home-create-link-btn {
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    opacity 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.12s ease,
+    filter 0.18s ease !important;
+}
+
+button:hover:not(:disabled),
+input[type="button"]:hover:not(:disabled),
+input[type="submit"]:hover:not(:disabled),
+.submit-btn:hover:not(:disabled),
+.editAndSave:hover:not(:disabled),
+.button-shadow:hover:not(:disabled),
+.notify-btn:hover:not(:disabled),
+.menu-btn:hover:not(:disabled),
+.logout-btn:hover:not(:disabled),
+.supervisor-login-btn:hover:not(:disabled),
+.home-create-link-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled),
+input[type="button"]:active:not(:disabled),
+input[type="submit"]:active:not(:disabled),
+.submit-btn:active:not(:disabled),
+.editAndSave:active:not(:disabled),
+.button-shadow:active:not(:disabled),
+.notify-btn:active:not(:disabled),
+.menu-btn:active:not(:disabled),
+.logout-btn:active:not(:disabled),
+.supervisor-login-btn:active:not(:disabled),
+.home-create-link-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.26) !important;
+}
+
+body,
+#settingsModal,
+.feedback-modal,
+#dutyFormModal.duty-report-modal,
+.modal-overlay {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#dutyFormModal.duty-report-modal {
+  opacity: 0;
+}
+
+#dutyFormModal.duty-report-modal.visible {
+  opacity: 1;
+}
+
+#dutyFormModal .duty-report-modal-card {
+  transform: translateY(10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  opacity: 0;
+}
+
+#dutyFormModal.visible .duty-report-modal-card {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.modal-overlay,
+.sanitation-section.overlay-disabled::before,
+.settings-modal-content .sanitation-section.overlay-disabled::before {
+  cursor: not-allowed;
+}
+
+#siteEditor {
+  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2) !important;
+}
+
+#employeeFileInput,
+#resourceFileInput {
+  color: #fff;
+  max-width: 100%;
+  min-height: 40px;
+}
+
+#employeeFileInput::file-selector-button,
+#resourceFileInput::file-selector-button {
+  background: var(--poolpro-accent-gradient);
+  color: #fff;
+  border: none;
+  border-radius: 0;
+  min-height: 40px;
+  padding: 0 18px;
+  margin-right: 12px;
+  font-size: 14px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
+}
+
+#employeeFileInput::file-selector-button:hover,
+#resourceFileInput::file-selector-button:hover {
+  filter: brightness(1.05);
+}
+
+#employeeHomePoolInput,
+.employee-add-row select {
+  min-height: 40px;
+  height: 40px;
+  padding: 8px 10px !important;
+  line-height: 1.2;
+}
+
+.resource-table.resource-table-admin th:nth-child(1),
+.resource-table.resource-table-admin td:nth-child(1) { width: 24%; }
+
+.resource-table.resource-table-admin th:nth-child(2),
+.resource-table.resource-table-admin td:nth-child(2) { width: 13%; }
+
+.resource-table.resource-table-admin th:nth-child(3),
+.resource-table.resource-table-admin td:nth-child(3) {
+  width: 28%;
+  white-space: normal;
+}
+
+.resource-table.resource-table-admin th:nth-child(4),
+.resource-table.resource-table-admin td:nth-child(4) { width: 15%; }
+
+.resource-table.resource-table-admin th:nth-child(5),
+.resource-table.resource-table-admin td:nth-child(5) { width: 20%; }
+
+.resource-table-section.overlay-disabled tbody tr {
+  opacity: 0.55;
+}
+
+.resource-row-clickable {
+  cursor: pointer;
+}
+
+.resource-row-selected td {
+  border-top: 4px solid #69140e !important;
+  border-bottom: 4px solid #69140e !important;
+  box-shadow: inset 0 0 0 2px #69140e;
+}
+
+.resource-row-selected td:first-child {
+  border-left: 4px solid #69140e !important;
+}
+
+.resource-row-selected td:last-child {
+  border-right: 4px solid #69140e !important;
+}
+
+#employeeTableSection .employee-row-selected td {
+  border-top: 4px solid #69140e !important;
+  border-bottom: 4px solid #69140e !important;
+  box-shadow: inset 0 0 0 2px #69140e !important;
+}
+
+#employeeTableSection .employee-row-selected td:first-child {
+  border-left: 4px solid #69140e !important;
+}
+
+#employeeTableSection .employee-row-selected td:last-child {
+  border-right: 4px solid #69140e !important;
+}
+
+.feedback-warning-callout {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid #d2b36a;
+  background: rgba(210, 179, 106, 0.18);
+  color: #fff3c8;
+  font-weight: 700;
+  line-height: 1.4;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
+}
+
+.roles-permission-modal {
+  display: flex !important;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.roles-permission-modal.hidden {
+  display: flex !important;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.roles-permission-modal.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.roles-permission-modal-card {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.roles-permission-modal.visible .roles-permission-modal-card {
+  opacity: 1;
+  transform: translateY(0);
+}

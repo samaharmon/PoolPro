@@ -1,5 +1,5 @@
 // home.js – landing page login logic
-import { db, auth, doc, getDoc, setDoc, getDocs, collection } from '../firebase.js';
+import { db, auth, doc, getDoc, setDoc, getDocs, collection, deleteDoc } from '../firebase.js';
 import { requireUserAgreement } from '../agreement.js';
 import {
   createUserWithEmailAndPassword,
@@ -29,7 +29,8 @@ const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+
 const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
 const DEVICE_VERIFIED_KEY = 'poolproDeviceVerified';
 const LOGIN_ATTEMPT_STORAGE_KEY = 'poolproLoginAttempts';
-const MAX_LOGIN_ATTEMPTS = 6;
+const LOGIN_ATTEMPT_DOC_PREFIX = 'loginAttempt__';
+const MAX_LOGIN_ATTEMPTS = 3;
 const LOGIN_ATTEMPT_LOCKOUT_MS = 15 * 60 * 1000;
 
 let pendingTarget = null;
@@ -207,21 +208,6 @@ function clearPendingVerificationContext() {
   } catch (_) { /* ignore */ }
 }
 
-function getLoginAttemptStorage() {
-  try {
-    const raw = localStorage.getItem(LOGIN_ATTEMPT_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch (_) {
-    return {};
-  }
-}
-
-function saveLoginAttemptStorage(store) {
-  try {
-    localStorage.setItem(LOGIN_ATTEMPT_STORAGE_KEY, JSON.stringify(store || {}));
-  } catch (_) { /* ignore */ }
-}
-
 function normalizeLoginAttemptIdentifier(identifier) {
   return String(identifier || '').trim().toLowerCase();
 }
@@ -231,9 +217,35 @@ function getLoginAttemptKey(role, identifier) {
   return normalizedIdentifier ? `${role}:${normalizedIdentifier}` : '';
 }
 
+function clearLegacyLoginAttemptState(role, identifier) {
+  const key = getLoginAttemptKey(role, identifier);
+  if (!key) return;
+  try {
+    const raw = localStorage.getItem(LOGIN_ATTEMPT_STORAGE_KEY);
+    if (!raw) return;
+    const store = JSON.parse(raw);
+    if (!store || typeof store !== 'object' || !store[key]) return;
+    delete store[key];
+    localStorage.setItem(LOGIN_ATTEMPT_STORAGE_KEY, JSON.stringify(store));
+  } catch (_) {
+    // Ignore stale local lock data cleanup errors.
+  }
+}
+
+function getLoginAttemptDocId(role, identifier) {
+  const key = getLoginAttemptKey(role, identifier);
+  if (!key) return '';
+  return `${LOGIN_ATTEMPT_DOC_PREFIX}${key.replace(/[^a-z0-9._:-]+/gi, '_')}`;
+}
+
+function getLoginAttemptDocRef(role, identifier) {
+  const docId = getLoginAttemptDocId(role, identifier);
+  return docId ? doc(db, 'settings', docId) : null;
+}
+
 function formatLoginLockoutMessage(waitMs) {
   const remainingMinutes = Math.max(1, Math.ceil(Number(waitMs || 0) / 60000));
-  return `Too many login attempts. Wait ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}, then try again.`;
+  return `Too many login attempts. Wait ${remainingMinutes} minute${remainingMinutes === 1 ? '' : 's'}, then try again. If you get locked out again after 3 tries, notify the developer.`;
 }
 
 function createLoginLockoutError(waitMs) {
@@ -242,35 +254,46 @@ function createLoginLockoutError(waitMs) {
   return err;
 }
 
-function getLoginAttemptState(role, identifier) {
-  const key = getLoginAttemptKey(role, identifier);
-  const store = getLoginAttemptStorage();
-  if (!key) {
-    return { key: '', store, count: 0, lastFailedAt: 0, blockedUntil: 0 };
+async function getLoginAttemptState(role, identifier) {
+  const ref = getLoginAttemptDocRef(role, identifier);
+  if (!ref) {
+    return { ref: null, count: 0, lastFailedAt: 0, blockedUntil: 0 };
   }
 
-  const rawState = store[key] || {};
   const now = Date.now();
-  const count = Number(rawState.count || 0);
-  const lastFailedAt = Number(rawState.lastFailedAt || 0);
-  const blockedUntil = Number(rawState.blockedUntil || 0);
-  const shouldReset =
-    !count ||
-    (blockedUntil && now >= blockedUntil) ||
-    (lastFailedAt && (now - lastFailedAt) >= LOGIN_ATTEMPT_LOCKOUT_MS);
+  try {
+    const snap = await getDoc(ref);
+    if (!snap.exists()) {
+      clearLegacyLoginAttemptState(role, identifier);
+      return { ref, count: 0, lastFailedAt: 0, blockedUntil: 0 };
+    }
 
-  if (shouldReset) {
-    delete store[key];
-    saveLoginAttemptStorage(store);
-    return { key, store, count: 0, lastFailedAt: 0, blockedUntil: 0 };
+    const rawState = snap.data() || {};
+    const count = Number(rawState.count || 0);
+    const lastFailedAt = Number(rawState.lastFailedAt || 0);
+    const blockedUntil = Number(rawState.blockedUntil || 0);
+    const shouldReset =
+      !count ||
+      (blockedUntil && now >= blockedUntil) ||
+      (lastFailedAt && (now - lastFailedAt) >= LOGIN_ATTEMPT_LOCKOUT_MS);
+
+    if (shouldReset) {
+      await deleteDoc(ref).catch(() => {});
+      clearLegacyLoginAttemptState(role, identifier);
+      return { ref, count: 0, lastFailedAt: 0, blockedUntil: 0 };
+    }
+
+    clearLegacyLoginAttemptState(role, identifier);
+    return { ref, count, lastFailedAt, blockedUntil };
+  } catch (err) {
+    console.warn('Could not read login attempt state:', err);
+    return { ref, count: 0, lastFailedAt: 0, blockedUntil: 0 };
   }
-
-  return { key, store, count, lastFailedAt, blockedUntil };
 }
 
-function assertLoginAttemptsRemaining(role, identifier) {
-  const state = getLoginAttemptState(role, identifier);
-  if (!state.key) return;
+async function assertLoginAttemptsRemaining(role, identifier) {
+  const state = await getLoginAttemptState(role, identifier);
+  if (!state.ref) return;
 
   const now = Date.now();
   if (state.blockedUntil && state.blockedUntil > now) {
@@ -278,30 +301,41 @@ function assertLoginAttemptsRemaining(role, identifier) {
   }
 }
 
-function recordLoginFailure(role, identifier, options = {}) {
+async function recordLoginFailure(role, identifier, options = {}) {
   const { lockImmediately = false } = options;
-  const state = getLoginAttemptState(role, identifier);
-  if (!state.key) {
+  const state = await getLoginAttemptState(role, identifier);
+  if (!state.ref) {
     return { count: 0, lastFailedAt: 0, blockedUntil: 0 };
   }
 
   const now = Date.now();
-  const nextCount = lockImmediately ? MAX_LOGIN_ATTEMPTS : (Number(state.count || 0) + 1);
+  const nextCount = lockImmediately
+    ? MAX_LOGIN_ATTEMPTS
+    : Math.min(MAX_LOGIN_ATTEMPTS, Number(state.count || 0) + 1);
   const blockedUntil = nextCount >= MAX_LOGIN_ATTEMPTS ? now + LOGIN_ATTEMPT_LOCKOUT_MS : 0;
-  state.store[state.key] = {
+  const nextState = {
     count: nextCount,
     lastFailedAt: now,
     blockedUntil,
   };
-  saveLoginAttemptStorage(state.store);
-  return state.store[state.key];
+  try {
+    await setDoc(state.ref, nextState, { merge: true });
+  } catch (err) {
+    console.warn('Could not persist login attempt state:', err);
+  }
+  clearLegacyLoginAttemptState(role, identifier);
+  return nextState;
 }
 
-function clearLoginFailures(role, identifier) {
-  const state = getLoginAttemptState(role, identifier);
-  if (!state.key || !state.store[state.key]) return;
-  delete state.store[state.key];
-  saveLoginAttemptStorage(state.store);
+async function clearLoginFailures(role, identifier) {
+  const ref = getLoginAttemptDocRef(role, identifier);
+  if (!ref) return;
+  try {
+    await deleteDoc(ref);
+  } catch (err) {
+    console.warn('Could not clear login attempt state:', err);
+  }
+  clearLegacyLoginAttemptState(role, identifier);
 }
 
 function sanitizeTarget(target) {
@@ -389,7 +423,7 @@ function resetVerificationState() {
   if (verifyForm) verifyForm.reset();
   if (verifySubtitleEl) verifySubtitleEl.textContent = '';
   if (verifyHintEl) {
-    verifyHintEl.textContent = 'Check spam if it does not arrive within 60 seconds. Use resend if needed.';
+    verifyHintEl.textContent = 'Check spam after 60 seconds. Resend if needed.';
   }
   if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification';
   verifyCooldownUntil = 0;
@@ -994,10 +1028,10 @@ function openVerificationView({
   });
 
   if (verifySubtitleEl) {
-    verifySubtitleEl.textContent = `Verify the email sent to ${maskEmail(email)}. Then return and sign in with your username and password.`;
+    verifySubtitleEl.textContent = `Open the email sent to ${maskEmail(email)}, verify it, then sign in again.`;
   }
   if (verifyHintEl) {
-    verifyHintEl.textContent = 'Check spam if it does not arrive within 60 seconds. Use resend if needed.';
+    verifyHintEl.textContent = 'Check spam after 60 seconds. Resend if needed.';
   }
   if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification';
   setMessage(
@@ -1066,7 +1100,7 @@ async function authenticateSupervisor(email, password) {
   const e = (email || '').trim();
   const p = password || '';
   if (!e || !p) throw new Error('Please enter your email and password.');
-  assertLoginAttemptsRemaining('supervisor', e);
+  await assertLoginAttemptsRemaining('supervisor', e);
 
   try {
     if (window.supervisorSignIn) {
@@ -1075,11 +1109,11 @@ async function authenticateSupervisor(email, password) {
       await signInWithEmailAndPassword(auth, e, p);
       markSupervisorLoggedIn(e);
     }
-    clearLoginFailures('supervisor', e);
+    await clearLoginFailures('supervisor', e);
   } catch (err) {
     const code = err.code || '';
     if (code === 'agreement/required') {
-      clearLoginFailures('supervisor', e);
+      await clearLoginFailures('supervisor', e);
       throw err;
     }
     if (
@@ -1088,13 +1122,13 @@ async function authenticateSupervisor(email, password) {
       code === 'auth/invalid-credential' ||
       code === 'auth/too-many-requests'
     ) {
-      const state = recordLoginFailure('supervisor', e, {
+      const state = await recordLoginFailure('supervisor', e, {
         lockImmediately: code === 'auth/too-many-requests',
       });
       if (state.blockedUntil && state.blockedUntil > Date.now()) {
         throw createLoginLockoutError(state.blockedUntil - Date.now());
       }
-      throw new Error('Email or password not recognized.');
+      throw new Error('Email not found or password incorrect.');
     }
     throw err;
   }
@@ -1104,9 +1138,20 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
   const username = normalizeUsername(usernameRaw);
   const password = passwordRaw || '';
   if (!username || !password) throw new Error('Please enter your username and password.');
-  assertLoginAttemptsRemaining('lifeguard', username);
+  await assertLoginAttemptsRemaining('lifeguard', username);
 
-  const account = await getLifeguardAccount(username);
+  let account;
+  try {
+    account = await getLifeguardAccount(username);
+  } catch (err) {
+    if ((err?.message || '').toLowerCase().includes('username not found')) {
+      const state = await recordLoginFailure('lifeguard', username);
+      if (state.blockedUntil && state.blockedUntil > Date.now()) {
+        throw createLoginLockoutError(state.blockedUntil - Date.now());
+      }
+    }
+    throw err;
+  }
   const authEmail = getAuthEmail(account);
   if (!authEmail) throw new Error('This account is missing an email address. Please contact your supervisor.');
 
@@ -1119,17 +1164,17 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
       code === 'auth/invalid-credential' ||
       code === 'auth/too-many-requests'
     ) {
-      const state = recordLoginFailure('lifeguard', username, {
+      const state = await recordLoginFailure('lifeguard', username, {
         lockImmediately: code === 'auth/too-many-requests',
       });
       if (state.blockedUntil && state.blockedUntil > Date.now()) {
         throw createLoginLockoutError(state.blockedUntil - Date.now());
       }
-      throw new Error('Incorrect password. Try again or use "Forgot Password?"');
+      throw new Error('Incorrect password. Try again or reset it.');
     }
     throw err;
   }
-  clearLoginFailures('lifeguard', username);
+  await clearLoginFailures('lifeguard', username);
   const user = auth.currentUser;
 
   if (!user?.emailVerified) {
@@ -1190,7 +1235,7 @@ async function sendVerificationEmail({ isResend = false } = {}) {
   startVerifyCooldown();
   setMessage(
     verifyMessageEl,
-    `${isResend ? 'Verification email resent' : 'Verification email sent'} to ${maskEmail(email)}. Verify it, then sign in.`
+    `${isResend ? 'Verification email resent' : 'Verification email sent'} to ${maskEmail(email)}. Verify it, then sign in again.`
   );
 }
 
@@ -1279,7 +1324,7 @@ async function handleSubmit(event) {
     const friendly = code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential'
       ? (currentRole === 'lifeguard'
         ? 'Username not found. Create an account first, then ask your supervisor for help if the issue persists.'
-        : 'Email or password not recognized.')
+        : 'Email not found or password incorrect.')
       : code === 'agreement/required'
         ? 'You must accept the user agreement before using PoolPro.'
       : (err.message || 'Login failed. Please try again.');
@@ -1339,7 +1384,7 @@ async function handleCreateAccountSubmit(event) {
     showSignupVerification(
       username,
       accountData,
-      'Check your email, verify it, then return and sign in.'
+      'Check your email, verify it, then sign in.'
     );
   } catch (err) {
     console.error('Create account failed:', err);

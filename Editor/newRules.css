@@ -127,6 +127,16 @@
   min-width: 120px;       /* wide enough so “Delete pool” is on one line */
   white-space: nowrap;    /* prevent wrapping */
   border-radius: 0;       /* override any .danger-button radius */
+  margin: 0 !important;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.metadata-actions-row,
+.metadata-actions-row .rule-buttons {
+  align-items: stretch;
 }
 
 .market-options {

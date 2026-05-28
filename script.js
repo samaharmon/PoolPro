@@ -57,7 +57,7 @@ let agreementGatePromise = null;
 let accountDeletionInProgress = false;
 let sanitationEditing = false;
 let sanitationMarketFilter = 'all';
-const FEEDBACK_RESPONSES_ENABLED = false;
+const FEEDBACK_RESPONSES_ENABLED = true;
 const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 const LIFEGUARD_SESSION_VERIFICATION_VERSION = 1;
@@ -1810,7 +1810,12 @@ function setupChemForm() {
         feedbackModal.dataset.poolName = poolName;
         feedbackModal.dataset.entry = JSON.stringify(entry);
 
-        let html = `<h3 class="modal-facility-name">${poolName}</h3>`;
+        let html = `
+          <div class="feedback-warning-callout">
+            DO NOT HANDLE ANY POOL CHEMISTRY BALANCING SKILL UNTIL TAUGHT BY A MANAGER/SUPERVISOR AND GIVEN APPROVAL.
+          </div>
+          <h3 class="modal-facility-name">${poolName}</h3>
+        `;
         let checkboxIdx = 0;
         let majorLines = [];
 
@@ -3370,7 +3375,7 @@ function setEmployeeUndoAction(action) {
 
 async function undoLastEmployeeAction() {
   if (!employeeUndoState) return;
-  const { type, employee } = employeeUndoState;
+  const { type, employee, index } = employeeUndoState;
   const normalized = normalizeEmployeeRecord(employee);
 
   if (type === 'add') {
@@ -3402,14 +3407,14 @@ function setEmployeeTableEditable(editable) {
 
   if (section) section.classList.toggle('overlay-disabled', !employeeTableEditable);
   if (editBtn) {
-    editBtn.classList.toggle('active', !employeeTableEditable);
+    editBtn.classList.toggle('active', employeeTableEditable);
     editBtn.disabled = employeeTableEditable;
   }
   if (saveBtn) {
-    saveBtn.classList.toggle('active', employeeTableEditable);
+    saveBtn.classList.toggle('active', !employeeTableEditable);
     saveBtn.disabled = !employeeTableEditable;
   }
-  setSegmentedToggleThumb(controls, employeeTableEditable ? 'save' : 'edit');
+  setSegmentedToggleThumb(controls, employeeTableEditable ? 'edit' : 'save');
 
   if (!employeeTableEditable) {
     editingEmployeeIdx = -1;
@@ -4145,8 +4150,13 @@ function setupRolePermissionModalEvents() {
   if (!modal || modal.dataset.bound === 'true') return;
   modal.dataset.bound = 'true';
   const close = () => {
-    modal.classList.add('hidden');
+    modal.classList.remove('visible');
     modal.setAttribute('aria-hidden', 'true');
+    window.setTimeout(() => {
+      if (!modal.classList.contains('visible')) {
+        modal.classList.add('hidden');
+      }
+    }, 250);
   };
   modal.addEventListener('click', (event) => {
     if (event.target === modal) close();
@@ -4206,6 +4216,7 @@ function openRolePermissionModal(roleKey, memberKey) {
 
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => modal.classList.add('visible'));
 }
 
 function renderRoleMembers(roleKey, tbodyId) {
@@ -4304,6 +4315,7 @@ function renderRolesPermissionsSettings() {
 
 let resourcesData = [];
 let resourceEditingId = '';
+let resourceTableEditable = false;
 let pendingResourceFile = null;
 let resourceSourceType = 'file';
 let resourcePageMarketFilter = 'all';
@@ -4371,6 +4383,7 @@ function ensureResourcesSettingsSection() {
     </div>
     <div class="employee-add-btn-row">
       <button type="button" class="submit-btn button-shadow employee-action-btn" id="resourceAddBtn">Add</button>
+      <button type="button" class="submit-btn button-shadow employee-action-btn hidden" id="resourceDeleteBtn">Delete</button>
     </div>
     <div class="training-filter-bar employee-filter-bar" id="resourceFilterBar" style="margin: 20px 0 4px;">
       <span class="filter-by-label">Filter By:</span>
@@ -4392,7 +4405,6 @@ function ensureResourcesSettingsSection() {
                 <th>Description</th>
                 <th>Market</th>
                 <th>Facility</th>
-                <th>Actions</th>
               </tr>
             </thead>
             <tbody id="resourceTableBody"></tbody>
@@ -4403,6 +4415,125 @@ function ensureResourcesSettingsSection() {
   `;
   employeeSettings.insertAdjacentElement('afterend', section);
   wrapResponsiveTables(section);
+}
+
+function ensureResourceSettingsUi() {
+  const tableSection = document.getElementById('resourceTableSection');
+  if (!tableSection) return;
+
+  if (!document.getElementById('resourceControls')) {
+    const controlsRow = document.createElement('div');
+    controlsRow.className = 'toggle-btn employee-toggle-row';
+    controlsRow.innerHTML = `
+      <div id="resourceControls" class="sanitation-controls">
+        <div class="sanitation-controls-thumb"></div>
+        <button type="button" class="editAndSave" id="resourceEditBtn">Edit</button>
+        <button type="button" class="editAndSave active" id="resourceSaveBtn" disabled>Save</button>
+      </div>
+    `;
+    tableSection.parentElement?.insertBefore(controlsRow, tableSection);
+  }
+
+  const table = tableSection.querySelector('.resource-table');
+  if (table && !table.closest('.table-scroll-wrap')) {
+    const shell = document.createElement('div');
+    shell.className = 'table-scroll-shell resource-table-scroll-shell';
+    const wrap = document.createElement('div');
+    wrap.className = 'table-scroll-wrap resource-table-scroll-wrap';
+    wrap.style.setProperty('--table-min-width', '980px');
+    tableSection.insertBefore(shell, table);
+    shell.appendChild(wrap);
+    wrap.appendChild(table);
+  }
+
+  const headerRow = tableSection.querySelector('.resource-table thead tr');
+  while (headerRow && headerRow.children.length > 5) {
+    headerRow.lastElementChild?.remove();
+  }
+}
+
+function populateResourceForm(item) {
+  const normalized = normalizeResourceRecord(item || {});
+  resourceEditingId = normalized.id || '';
+  pendingResourceFile = null;
+  setResourceSourceType(normalized.resourceType === 'link' ? 'link' : 'file');
+  const fileInput = document.getElementById('resourceFileInput');
+  if (fileInput) fileInput.value = '';
+  const linkInput = document.getElementById('resourceLinkInput');
+  if (linkInput) linkInput.value = normalized.resourceType === 'link' ? (normalized.fileUrl || '') : '';
+  const nameInput = document.getElementById('resourceDocumentNameInput');
+  const descriptionInput = document.getElementById('resourceDescriptionInput');
+  const poolInput = document.getElementById('resourcePoolInput');
+  if (nameInput) nameInput.value = normalized.documentName || '';
+  if (descriptionInput) descriptionInput.value = normalized.description || '';
+  populateResourcePoolOptions(poolInput, 'all', false);
+  if (poolInput) poolInput.value = normalized.pool || '';
+}
+
+function syncResourceActionButtons() {
+  ensureResourceSettingsUi();
+  const addBtn = document.getElementById('resourceAddBtn');
+  const deleteBtn = document.getElementById('resourceDeleteBtn');
+  const hasSelectedRow = resourceTableEditable && !!resourceEditingId && resourcesData.some((item) => item.id === resourceEditingId);
+
+  if (addBtn) addBtn.textContent = hasSelectedRow ? 'Save' : 'Add';
+  if (deleteBtn) deleteBtn.classList.toggle('hidden', !hasSelectedRow);
+}
+
+function selectResourceRow(resourceId) {
+  if (!resourceTableEditable || !resourceId) return;
+  const resource = resourcesData.find((item) => item.id === resourceId);
+  if (!resource) return;
+  populateResourceForm(resource);
+  syncResourceActionButtons();
+  renderResourcesSettingsTable();
+}
+
+function setResourceTableEditable(editable) {
+  ensureResourceSettingsUi();
+  resourceTableEditable = !!editable;
+  const editBtn = document.getElementById('resourceEditBtn');
+  const saveBtn = document.getElementById('resourceSaveBtn');
+  const controls = document.getElementById('resourceControls');
+  const section = document.getElementById('resourceTableSection');
+
+  if (section) section.classList.toggle('overlay-disabled', !resourceTableEditable);
+  if (editBtn) {
+    editBtn.classList.toggle('active', resourceTableEditable);
+    editBtn.disabled = resourceTableEditable;
+  }
+  if (saveBtn) {
+    saveBtn.classList.toggle('active', !resourceTableEditable);
+    saveBtn.disabled = !resourceTableEditable;
+  }
+  setSegmentedToggleThumb(controls, resourceTableEditable ? 'edit' : 'save');
+
+  if (!resourceTableEditable) {
+    resourceEditingId = '';
+    clearResourceForm();
+  }
+
+  syncResourceActionButtons();
+  renderResourcesSettingsTable();
+}
+
+function setupResourceOverlay() {
+  ensureResourceSettingsUi();
+  const editBtn = document.getElementById('resourceEditBtn');
+  const saveBtn = document.getElementById('resourceSaveBtn');
+  if (!editBtn || !saveBtn) return;
+  if (!editBtn.dataset.bound) {
+    editBtn.dataset.bound = 'true';
+    editBtn.addEventListener('click', () => setResourceTableEditable(true));
+  }
+  if (!saveBtn.dataset.bound) {
+    saveBtn.dataset.bound = 'true';
+    saveBtn.addEventListener('click', () => setResourceTableEditable(false));
+  }
+  if (!resourceTableEditable) {
+    document.getElementById('resourceTableSection')?.classList.add('overlay-disabled');
+  }
+  setResourceTableEditable(resourceTableEditable);
 }
 
 function getPoolMarket(poolName) {
@@ -4640,7 +4771,6 @@ function buildResourceRowCells(item, includeActions = false) {
     <td>${item.description || '—'}</td>
     <td>${getResourceMarket(item) || '—'}</td>
     <td>${item.pool || '—'}</td>
-    <td class="actions-cell"></td>
   `;
 }
 
@@ -4677,61 +4807,28 @@ function renderResourcesSettingsTable() {
   });
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
     const wrapper = tbody.closest('.table-scroll-wrap');
     if (wrapper) requestAnimationFrame(() => updateTableScrollShadow(wrapper));
+    syncResourceActionButtons();
     return;
   }
 
   rows.forEach((item) => {
     const tr = document.createElement('tr');
+    tr.dataset.resourceId = item.id;
+    if (resourceTableEditable) tr.classList.add('resource-row-clickable');
+    if (resourceTableEditable && item.id === resourceEditingId) {
+      tr.classList.add('resource-row-selected');
+    }
     tr.innerHTML = buildResourceRowCells(item, true);
-    const actionsCell = tr.querySelector('.actions-cell');
-    actionsCell.style.cssText = 'text-align:center;vertical-align:middle;padding:4px 6px;';
-
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;';
-
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.textContent = 'Edit';
-    editBtn.className = 'submit-btn';
-    editBtn.style.cssText = 'padding:3px 10px;font-size:0.82rem;width:70px;';
-    editBtn.addEventListener('click', () => {
-      resourceEditingId = item.id;
-      pendingResourceFile = null;
-      setResourceSourceType(item.resourceType === 'link' ? 'link' : 'file');
-      const fileInput = document.getElementById('resourceFileInput');
-      if (fileInput) fileInput.value = '';
-      const linkInput = document.getElementById('resourceLinkInput');
-      if (linkInput) linkInput.value = item.resourceType === 'link' ? item.fileUrl || '' : '';
-      document.getElementById('resourceDocumentNameInput').value = item.documentName || '';
-      document.getElementById('resourceDescriptionInput').value = item.description || '';
-      populateResourcePoolOptions(document.getElementById('resourcePoolInput'), 'all', false);
-      document.getElementById('resourcePoolInput').value = item.pool || '';
-      const actionBtn = document.getElementById('resourceAddBtn');
-      if (actionBtn) actionBtn.textContent = 'Save';
-      document.getElementById('resourceTableSection')?.classList.remove('overlay-disabled');
-    });
-
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.textContent = 'Remove';
-    removeBtn.className = 'submit-btn';
-    removeBtn.style.cssText = 'padding:3px 10px;font-size:0.82rem;width:70px;';
-    removeBtn.addEventListener('click', async () => {
-      if (!confirm(`Remove "${item.documentName || item.fileName || 'this document'}"?`)) return;
-      await deleteResourceRecord(item);
-    });
-
-    wrap.appendChild(editBtn);
-    wrap.appendChild(removeBtn);
-    actionsCell.appendChild(wrap);
+    tr.addEventListener('click', () => selectResourceRow(item.id));
     tbody.appendChild(tr);
   });
 
   const wrapper = tbody.closest('.table-scroll-wrap');
   if (wrapper) requestAnimationFrame(() => updateTableScrollShadow(wrapper));
+  syncResourceActionButtons();
 }
 
 function clearResourceForm() {
@@ -4751,7 +4848,7 @@ function clearResourceForm() {
   if (poolInput) poolInput.value = '';
   const actionBtn = document.getElementById('resourceAddBtn');
   if (actionBtn) actionBtn.textContent = 'Add';
-  document.getElementById('resourceTableSection')?.classList.add('overlay-disabled');
+  syncResourceActionButtons();
 }
 
 function timeoutAfter(ms, label) {
@@ -4968,16 +5065,18 @@ function setupResourcesPageFilters() {
 }
 
 function setupResourcesSettingsUI() {
+  ensureResourceSettingsUi();
   const sourceSelect = document.getElementById('resourceSourceTypeSelect');
   const fileInput = document.getElementById('resourceFileInput');
   const linkInput = document.getElementById('resourceLinkInput');
   const poolInput = document.getElementById('resourcePoolInput');
   const addBtn = document.getElementById('resourceAddBtn');
+  const deleteBtn = document.getElementById('resourceDeleteBtn');
   const marketFilter = document.getElementById('resourceMarketFilter');
   const poolFilter = document.getElementById('resourcePoolFilter');
   const deleteAllBtn = document.getElementById('resourceDeleteAllBtn');
 
-  if (!sourceSelect || !fileInput || !linkInput || !poolInput || !addBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
+  if (!sourceSelect || !fileInput || !linkInput || !poolInput || !addBtn || !deleteBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
   if (addBtn.dataset.bound === 'true') return;
   addBtn.dataset.bound = 'true';
 
@@ -5005,6 +5104,8 @@ function setupResourcesSettingsUI() {
     resourceSettingsPoolFilter = poolFilter.value || 'all';
     renderResourcesSettingsTable();
   });
+
+  setupResourceOverlay();
 
   addBtn.addEventListener('click', async () => {
     const documentName = document.getElementById('resourceDocumentNameInput')?.value.trim() || '';
@@ -5128,15 +5229,31 @@ function setupResourcesSettingsUI() {
         updatedAt: serverTimestamp(),
       }, { merge: true });
 
-      clearResourceForm();
       await loadResourcesDocuments();
+      if (resourceTableEditable && resourceEditingId) {
+        const savedId = targetId;
+        resourceEditingId = savedId;
+        const savedResource = resourcesData.find((item) => item.id === savedId);
+        if (savedResource) populateResourceForm(savedResource);
+      } else {
+        clearResourceForm();
+      }
     } catch (err) {
       console.error('[PoolPro] Unable to save resource:', err);
       alert(err?.message || 'Unable to save this document right now.');
     } finally {
       addBtn.disabled = false;
-      addBtn.textContent = resourceEditingId ? 'Save' : 'Add';
+      syncResourceActionButtons();
     }
+  });
+
+  deleteBtn.addEventListener('click', async () => {
+    if (!resourceEditingId) return;
+    const selected = resourcesData.find((item) => item.id === resourceEditingId);
+    if (!selected) return;
+    if (!confirm(`Remove "${selected.documentName || selected.fileName || 'this document'}"?`)) return;
+    await deleteResourceRecord(selected);
+    clearResourceForm();
   });
 
   deleteAllBtn.addEventListener('click', async () => {
@@ -5415,15 +5532,19 @@ function setupMarketEditSave() {
 
   // Start in read-only mode
   section.classList.add('overlay-disabled');
-  setSegmentedToggleThumb(controls, 'edit');
+  editBtn.classList.remove('active');
+  saveBtn.classList.add('active');
+  editBtn.disabled = false;
+  saveBtn.disabled = true;
+  setSegmentedToggleThumb(controls, 'save');
 
   editBtn.addEventListener('click', () => {
     section.classList.remove('overlay-disabled');
-    editBtn.classList.remove('active');
-    saveBtn.classList.add('active');
+    editBtn.classList.add('active');
+    saveBtn.classList.remove('active');
     editBtn.disabled = true;
     saveBtn.disabled = false;
-    setSegmentedToggleThumb(controls, 'save');
+    setSegmentedToggleThumb(controls, 'edit');
     section.querySelectorAll('.market-filter-checkbox').forEach(cb => { cb.disabled = false; });
   });
 
@@ -5431,11 +5552,11 @@ function setupMarketEditSave() {
     const selected = Array.from(section.querySelectorAll('.market-filter-checkbox:checked')).map(c => c.value);
     localStorage.setItem('chemlogMarkets', JSON.stringify(selected));
     section.classList.add('overlay-disabled');
-    saveBtn.classList.remove('active');
-    editBtn.classList.add('active');
+    saveBtn.classList.add('active');
+    editBtn.classList.remove('active');
     saveBtn.disabled = true;
     editBtn.disabled = false;
-    setSegmentedToggleThumb(controls, 'edit');
+    setSegmentedToggleThumb(controls, 'save');
     section.querySelectorAll('.market-filter-checkbox').forEach(cb => { cb.disabled = true; });
   });
 
@@ -6187,7 +6308,7 @@ function openDutyFormModal(sub) {
   if (!modal) {
     modal = document.createElement('div');
     modal.id = 'dutyFormModal';
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    modal.addEventListener('click', (e) => { if (e.target === modal) window.closeDutyFormModal(); });
     document.body.appendChild(modal);
   }
   modal.className = 'duty-report-modal';
@@ -6238,7 +6359,7 @@ function openDutyFormModal(sub) {
     <div class="duty-report-modal-card">
       <div class="modal-header duty-report-modal-header">
         <h2>Cleanliness Report</h2>
-        <button type="button" class="close" onclick="document.getElementById('dutyFormModal').style.display='none'">&times;</button>
+        <button type="button" class="close" onclick="window.closeDutyFormModal()">&times;</button>
       </div>
       <div class="duty-report-modal-scroll">
         <div class="duty-report-meta">
@@ -6271,10 +6392,22 @@ function openDutyFormModal(sub) {
     </div>`;
 
   modal.style.display = 'flex';
+  requestAnimationFrame(() => modal.classList.add('visible'));
   hydrateDutyReportPhotos(modal).catch((err) => {
     console.error('[Duties] Could not hydrate submitted photos:', err);
   });
 }
+
+window.closeDutyFormModal = function closeDutyFormModal() {
+  const modal = document.getElementById('dutyFormModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  window.setTimeout(() => {
+    if (!modal.classList.contains('visible')) {
+      modal.style.display = 'none';
+    }
+  }, 250);
+};
 
 // Photo modal for job form submissions
 window.openPhotoModal = function(url) {

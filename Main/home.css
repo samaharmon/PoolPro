@@ -196,13 +196,13 @@ html {
 
 .home-first-time-callout {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 10px;
   width: 100%;
   margin: 10px 0 16px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border: 1px solid #c8a47e;
   background: rgba(200, 164, 126, 0.14);
   color: #fff;
@@ -314,7 +314,8 @@ html {
 .home-create-link-btn {
   margin: 0;
   margin-bottom: 0;
-  padding: 8px 14px;
+  min-height: 40px;
+  padding: 0 16px;
   border: 1px solid #c8a47e;
   background: rgba(255, 255, 255, 0.1);
   color: #fff4d7;
@@ -472,5 +473,13 @@ html {
   .home-verify-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .home-first-time-callout {
+    grid-template-columns: 1fr;
+  }
+
+  .home-create-link-btn {
+    width: 100%;
   }
 }
