@@ -64,14 +64,21 @@ html {
 }
 
 .home-menu {
-  --poolpro-accent-gradient: linear-gradient(135deg, rgba(105, 20, 14, 0.92), rgba(32, 40, 52, 0.92));
+  --poolpro-accent-gradient: linear-gradient(
+    135deg,
+    rgba(105, 20, 14, 0.94) 0%,
+    rgba(105, 20, 14, 0.92) 42%,
+    rgba(52, 31, 36, 0.92) 50%,
+    rgba(32, 40, 52, 0.92) 58%,
+    rgba(32, 40, 52, 0.94) 100%
+  );
   width: 100%;
   max-width: 500px;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 12px;
   background: var(--poolpro-accent-gradient);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: none;
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.42);
 }
 
@@ -83,8 +90,7 @@ html {
   padding: 18px 24px;
   background: transparent;
   color: #fff;
-  border: none;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 0;
   font-size: 28px;
   text-align: center;
@@ -97,7 +103,7 @@ html {
 }
 
 .home-menu-item:last-child {
-  border-bottom: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.32);
 }
 
 .home-menu-item::before {

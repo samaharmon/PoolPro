@@ -1073,12 +1073,15 @@ async function saveSignupRecords(accountRef, accountData, employeeRecord) {
 }
 
 function showSignupVerification(username, accountData, message) {
+  persistAccessMode('lifeguard');
+  setRole('lifeguard');
   openVerificationView({
     username,
     account: accountData,
     target: getDestinationPath(),
     force: true,
     origin: 'create',
+    accessMode: 'lifeguard',
   });
   setMessage(verifyMessageEl, message);
 }
