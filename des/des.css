@@ -1,0 +1,148 @@
+.des-intro-row {
+  align-items: flex-end;
+}
+
+.des-form-card {
+  margin-top: 36px;
+}
+
+.des-form-note {
+  color: #e5e5e5;
+  margin: -8px 0 22px;
+}
+
+.des-item-list {
+  display: grid;
+  gap: 18px;
+}
+
+.des-item {
+  border: 1px solid #444;
+  background: #262626;
+}
+
+.des-item-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+  padding: 14px 16px;
+  border-left: 5px solid #ff6b6b;
+}
+
+.des-item-title {
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.des-answer-group {
+  display: inline-flex;
+  gap: 14px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.des-answer-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff;
+  font-weight: 600;
+}
+
+.des-answer-group input[type="radio"] {
+  accent-color: #ff6b6b;
+}
+
+.des-item-body {
+  padding: 0 16px 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.des-item-body textarea {
+  width: 100%;
+  min-height: 92px;
+  resize: vertical;
+}
+
+.des-photo-picker {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 2px dashed #777;
+  background: #333;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.des-photo-picker input {
+  display: none;
+}
+
+.des-photo-preview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.des-photo-thumb {
+  width: 110px;
+  min-height: 110px;
+  border: 2px dashed #777;
+  background: #1d1d1d;
+  display: grid;
+  gap: 6px;
+  place-items: center;
+  padding: 6px;
+}
+
+.des-photo-thumb img {
+  width: 100%;
+  height: 82px;
+  object-fit: cover;
+  display: block;
+}
+
+.des-photo-thumb button {
+  border: none;
+  background: #69140e;
+  color: #fff;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.des-submit-row {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.des-inspection-modal .des-inspection-review-item {
+  border: 1px solid #444;
+  padding: 14px;
+  margin-bottom: 12px;
+  background: #262626;
+}
+
+.des-inspection-modal .des-inspection-review-item h3 {
+  margin: 0 0 8px;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .des-item-header {
+    grid-template-columns: 1fr;
+  }
+
+  .des-answer-group {
+    justify-content: flex-start;
+  }
+}

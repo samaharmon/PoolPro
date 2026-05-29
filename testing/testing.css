@@ -52,8 +52,8 @@ body.dark-mode .test-auth-box h2 {
   padding: 30px;
   box-shadow: 0 8px 10px rgba(0,0,0,0.2);
   margin-top: 0;
-  width: calc(100vw - 100px);
-  max-width: calc(100vw - 100px);
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   opacity: 0;
   transform: translateY(8px);
@@ -61,8 +61,8 @@ body.dark-mode .test-auth-box h2 {
 }
 
 #rubricFormContainer {
-  width: calc(100vw - 100px);
-  max-width: calc(100vw - 100px);
+  width: 100%;
+  max-width: 100%;
   margin: 0 auto;
 }
 

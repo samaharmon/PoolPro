@@ -41,6 +41,7 @@ let filteredData = [];
 let paginatedData = [];
 let allDutyReports = [];
 let allManagerialReports = [];
+let allDesPreInspections = [];
 let currentPage = 1;
 const itemsPerPage = 20;
 let isLoggedIn = false;
@@ -135,7 +136,7 @@ document.addEventListener('click', (e) => {
 function getPagePrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   parts.pop();
-  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
+  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES'];
   const last = parts[parts.length - 1] || '';
   return subDirs.includes(last) ? '../' : '';
 }
@@ -190,6 +191,24 @@ function injectResourcesMenuLinks() {
     link.className = `dropdown-item${isResourcesPage ? ' active-page' : ''}`;
     link.dataset.nav = 'resources';
     link.textContent = 'Resources';
+    anchorLink.insertAdjacentElement('afterend', link);
+  });
+}
+
+function injectDesPreInspectionMenuLinks() {
+  const prefix = getPagePrefix();
+  const isDesPage = /\/des\/des\.html$/i.test(window.location.pathname);
+
+  document.querySelectorAll('.dropdown-menu').forEach((menu) => {
+    if (menu.querySelector('[data-nav="des-pre-inspection"]')) return;
+    const anchorLink = menu.querySelector('[data-nav="resources"]') || menu.querySelector('[data-nav="operational-status"]') || menu.querySelector('[data-nav="duties"]');
+    if (!anchorLink) return;
+
+    const link = document.createElement('a');
+    link.href = isDesPage ? 'des.html' : `${prefix}des/des.html`;
+    link.className = `dropdown-item${isDesPage ? ' active-page' : ''}`;
+    link.dataset.nav = 'des-pre-inspection';
+    link.textContent = 'DES Pre-Inspection';
     anchorLink.insertAdjacentElement('afterend', link);
   });
 }
@@ -786,7 +805,10 @@ function getActiveDashboardTab() {
 function showDashboardTabPanel(which) {
   Object.entries(DASHBOARD_PANEL_IDS).forEach(([key, id]) => {
     const panel = document.getElementById(id);
-    if (panel) panel.style.display = key === which ? '' : 'none';
+    if (!panel) return;
+    const active = key === which;
+    panel.style.display = active ? '' : 'none';
+    panel.classList.toggle('dashboard-main-panel-active', active);
   });
 }
 
@@ -877,7 +899,7 @@ window.logout = async function () {
   } catch (_) { /* ignore */ }
   const _parts = window.location.pathname.split('/').filter(Boolean);
   _parts.pop();
-  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
+  const _subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES'];
   const _last = _parts[_parts.length - 1] || '';
   window.location.href = (_subDirs.includes(_last) ? '../' : '') + 'index.html';
 };
@@ -1053,7 +1075,7 @@ window.goToEditor = function () {
   // Remove the filename (last element)
   parts.pop();
   // Remove segments that are known subdirectories to find the project root depth
-  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties', 'managerial', 'resources', 'operational'];
+  const subDirs = ['chem', 'training', 'editor', 'main', 'employees', 'testing', 'duties', 'managerial', 'resources', 'operational', 'des'];
   const lastPart = parts[parts.length - 1] || '';
   const stepsUp = subDirs.some(d => d.toLowerCase() === lastPart.toLowerCase()) ? 1 : 0;
   const prefix = stepsUp > 0 ? '../' : '';
@@ -1083,7 +1105,7 @@ window.goToTrainingSetup = function () {
     sessionStorage.setItem('trainingIntentAdmin', '1');
     const parts = window.location.pathname.split('/').filter(Boolean);
     parts.pop();
-    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational'];
+    const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES'];
     const lastPart = parts[parts.length - 1] || '';
     const prefix = subDirs.includes(lastPart) ? '../' : '';
     window.location.href = prefix + 'Training/training.html';
@@ -1637,7 +1659,16 @@ function isLifeguardSession() {
 }
 
 function isSupervisor() {
-  return isDeveloperUser();
+  if (isDeveloperUser()) return true;
+  try {
+    const supervisorHint = localStorage.getItem('ChemLogSupervisor') === 'true' ||
+      localStorage.getItem('trainingSupervisorLoggedIn') === 'true' ||
+      localStorage.getItem('chemlogTrainingSupervisorLoggedIn') === 'true';
+    const activeRole = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
+    return supervisorHint && hasFreshSupervisorToken() && activeRole !== 'lifeguard';
+  } catch (_) {
+    return false;
+  }
 }
 
 const IMPORTANT_UPDATES_NOTICE_STORAGE_KEY = 'poolproImportantUpdatesNoticeDismissed_v1';
@@ -1732,7 +1763,7 @@ window.setupDropdownVisibility = function () {
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const lastDir = parts.length > 1 ? parts[parts.length - 2] : '';
-  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'managerial', 'resources', 'operational', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Managerial', 'Employees', 'Testing', 'Resources', 'Operational'];
+  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'managerial', 'resources', 'operational', 'des', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Managerial', 'Employees', 'Testing', 'Resources', 'Operational', 'DES'];
   return subDirs.includes(lastDir) ? '../' : '';
 }
 
@@ -2104,6 +2135,7 @@ async function uploadChemControllerPhoto({ submissionId, poolName, poolIdx, file
 
   return {
     poolIdx,
+    poolName,
     url: `${CHEM_AUTO_CONTROLLER_STORAGE}:${submissionId}:${photoId}`,
     name: file.name || safeName,
     source: CHEM_AUTO_CONTROLLER_STORAGE,
@@ -2884,6 +2916,164 @@ function fillDashboardValueCell(cell, {
   }));
 }
 
+function getChemAutoControllerPhotoList(log, poolIdx = null) {
+  const groups = log?.autoControllerPhotos;
+  if (!groups || typeof groups !== 'object') return [];
+  if (poolIdx !== null && poolIdx !== undefined) {
+    const key = `pool${Number(poolIdx) + 1}`;
+    return Array.isArray(groups[key]) ? groups[key] : [];
+  }
+  return Object.values(groups).flatMap((items) => Array.isArray(items) ? items : []);
+}
+
+function getChemControllerPhotoCacheKey(photo) {
+  const url = String(photo?.url || '');
+  if (url.startsWith(`${CHEM_AUTO_CONTROLLER_STORAGE}:`)) return url;
+  if (photo?.submissionId && photo?.photoId) {
+    return `${CHEM_AUTO_CONTROLLER_STORAGE}:${photo.submissionId}:${photo.photoId}`;
+  }
+  return `${photo?.submissionId || ''}:${photo?.photoId || ''}`;
+}
+
+async function getFirestoreChemControllerPhotoDataUrl(photo) {
+  const cacheKey = getChemControllerPhotoCacheKey(photo);
+  if (chemControllerPhotoDataUrlMap.has(cacheKey)) return chemControllerPhotoDataUrlMap.get(cacheKey);
+
+  let submissionId = String(photo?.submissionId || '');
+  let photoId = String(photo?.photoId || '');
+  if ((!submissionId || !photoId) && cacheKey.startsWith(`${CHEM_AUTO_CONTROLLER_STORAGE}:`)) {
+    const parts = cacheKey.split(':');
+    submissionId = submissionId || parts[1] || '';
+    photoId = photoId || parts[2] || '';
+  }
+  if (!submissionId || !photoId) throw new Error('Auto controller photo reference is incomplete.');
+
+  const chunksSnap = await getDocs(collection(db, 'chemSubmissionMedia', submissionId, 'photos', photoId, 'chunks'));
+  const chunks = chunksSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
+    .sort((a, b) => Number(a.index ?? a.id) - Number(b.index ?? b.id))
+    .map((chunk) => chunk.data || '');
+  if (!chunks.length) throw new Error('Auto controller photo chunks were not found.');
+
+  const prefix = photo.dataUrlPrefix || `data:${photo.contentType || 'image/jpeg'};base64`;
+  const dataUrl = `${prefix},${chunks.join('')}`;
+  chemControllerPhotoDataUrlMap.set(cacheKey, dataUrl);
+  return dataUrl;
+}
+
+function getAutoControllerPoolLabel(log, poolIdx, photo) {
+  if (photo?.poolName) return photo.poolName;
+  const poolDoc = getDashboardPoolDocByName(log?.poolLocation);
+  return poolDoc ? getFacilityPoolLabel(poolDoc, poolIdx) : `Pool ${Number(poolIdx || 0) + 1}`;
+}
+
+function showChemAutoControllerPhotos(log, poolIdx = null) {
+  const photosByPool = [];
+  if (poolIdx !== null && poolIdx !== undefined) {
+    const photos = getChemAutoControllerPhotoList(log, poolIdx);
+    if (photos.length) photosByPool.push({ poolIdx, photos });
+  } else {
+    const groups = log?.autoControllerPhotos || {};
+    Object.keys(groups).forEach((key) => {
+      const idx = Math.max(0, Number(key.replace(/\D+/g, '')) - 1);
+      const photos = Array.isArray(groups[key]) ? groups[key] : [];
+      if (photos.length) photosByPool.push({ poolIdx: idx, photos });
+    });
+  }
+  if (!photosByPool.length) return;
+
+  let modal = document.getElementById('chemAutoControllerModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'chemAutoControllerModal';
+    modal.className = 'chem-controller-modal';
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeChemAutoControllerModal();
+    });
+    document.body.appendChild(modal);
+  }
+
+  const esc = escapeHtml;
+  const content = photosByPool.map(({ poolIdx: idx, photos }) => `
+    <section class="chem-controller-photo-section">
+      <h3>${esc(getAutoControllerPoolLabel(log, idx, photos[0]))}</h3>
+      <div class="chem-controller-photo-grid">
+        ${photos.map((photo) => `
+          <figure class="chem-controller-photo-card">
+            <img src="${EMPTY_INLINE_IMAGE}" alt="${esc(photo?.name || 'Auto controller photo')}" data-chem-controller-meta="${encodeURIComponent(JSON.stringify(photo || {}))}">
+            <figcaption>${esc(photo?.name || 'Auto controller')}</figcaption>
+          </figure>
+        `).join('')}
+      </div>
+    </section>
+  `).join('');
+
+  modal.innerHTML = `
+    <div class="chem-controller-modal-card">
+      <div class="modal-header duty-report-modal-header">
+        <h2>Auto Controller Photos</h2>
+        <button type="button" class="close" aria-label="Close auto controller photos">&times;</button>
+      </div>
+      <div class="chem-controller-modal-scroll">${content}</div>
+    </div>
+  `;
+  modal.querySelector('.close')?.addEventListener('click', closeChemAutoControllerModal);
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => modal.classList.add('visible'));
+  hydrateChemAutoControllerImages(modal).catch((err) => {
+    console.error('[ChemLog] Could not load auto controller photos:', err);
+  });
+}
+
+function closeChemAutoControllerModal() {
+  const modal = document.getElementById('chemAutoControllerModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) modal.style.display = 'none';
+  }, 220);
+}
+
+async function hydrateChemAutoControllerImages(root) {
+  const images = Array.from(root.querySelectorAll('[data-chem-controller-meta]'));
+  await Promise.all(images.map(async (img) => {
+    try {
+      const meta = JSON.parse(decodeURIComponent(img.dataset.chemControllerMeta || ''));
+      const fullUrl = await getFirestoreChemControllerPhotoDataUrl(meta);
+      img.src = fullUrl;
+      img.dataset.fullUrl = fullUrl;
+      img.addEventListener('click', () => window.openPhotoModal(fullUrl, images.map((node) => node.dataset.fullUrl).filter(Boolean)));
+    } catch (err) {
+      console.error('[ChemLog] Could not hydrate auto controller image:', err);
+      img.alt = 'Unable to load auto controller photo';
+      img.classList.add('duty-report-photo--error');
+    }
+  }));
+}
+
+function fillFacilityCellWithControllerFlag(cell, facilityName, log, poolIdx = null) {
+  if (!cell) return;
+  cell.innerHTML = '';
+  cell.className = 'dashboard-facility-cell';
+  const label = document.createElement('span');
+  label.textContent = facilityName || '—';
+  cell.appendChild(label);
+  const photos = getChemAutoControllerPhotoList(log, poolIdx);
+  if (!photos.length) return;
+
+  const flag = document.createElement('button');
+  flag.type = 'button';
+  flag.className = 'dashboard-cell-flag';
+  flag.title = 'View auto controller photos';
+  flag.setAttribute('aria-label', 'View auto controller photos');
+  flag.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    showChemAutoControllerPhotos(log, poolIdx);
+  });
+  cell.appendChild(flag);
+}
+
 function getLatestChemistryLogForPool(logs, facilityName, poolIdx) {
   const fields = poolFieldNames(poolIdx);
   return logs.find((log) => log.poolLocation === facilityName && (log?.[fields.ph] || log?.[fields.cl])) || null;
@@ -3072,16 +3262,18 @@ async function loadDashboardData() {
 
   try {
     const fullAccess = isSupervisor();
-    const [sanSnap, chemSnap, dutySnap, managerialSnap] = await Promise.all([
+    const [sanSnap, chemSnap, dutySnap, managerialSnap, desSnap] = await Promise.all([
       getDoc(doc(db, 'settings', 'sanitation')),
       getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'))),
       fullAccess ? getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
       fullAccess ? getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
+      fullAccess ? getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
     ]);
     sanitationSelections = sanSnap.exists() ? (sanSnap.data().pools || {}) : {};
     allLogs = chemSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
     allDutyReports = dutySnap ? dutySnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     allManagerialReports = managerialSnap ? managerialSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
+    allDesPreInspections = desSnap ? desSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     await loadOperationalStatusLogs();
     dashboardDataLoaded = true;
     await renderActiveDashboardTab();
@@ -3248,6 +3440,7 @@ function renderChemistryPoolDetail(container, logs, poolDoc) {
         <td></td>
       `;
       const cells = tr.querySelectorAll('td');
+      fillFacilityCellWithControllerFlag(cells[0], facilityName, log, poolIdx);
       fillDashboardValueCell(cells[2], { value: phVal || '—', log, concern: phConcern });
       fillDashboardValueCell(cells[3], { value: clVal || '—', log, concern: clConcern });
       fillDashboardValueCell(cells[4], {
@@ -3423,6 +3616,7 @@ function renderDashboard(logs) {
         }
 
         const cells = tr.querySelectorAll('td');
+        fillFacilityCellWithControllerFlag(cells[0], facilityName, log, i);
         fillDashboardValueCell(cells[1], { value: phVal || '—', log, concern: phConcern });
         fillDashboardValueCell(cells[2], { value: clVal || '—', log, concern: clConcern });
         fillDashboardValueCell(cells[3], {
@@ -4835,10 +5029,13 @@ let resourceSettingsMarketFilter = 'all';
 let resourceSettingsPoolFilter = 'all';
 const resourceDataUrlMap = new Map();
 const dutyPhotoDataUrlMap = new Map();
+const chemControllerPhotoDataUrlMap = new Map();
+const desInspectionPhotoDataUrlMap = new Map();
 const RESOURCE_FILTER_ALL_VALUE = 'all';
 const RESOURCE_ALL_FACILITIES_VALUE = 'All';
 const FIRESTORE_RESOURCE_STORAGE = 'firestoreChunks';
 const FIRESTORE_DUTY_PHOTO_STORAGE = 'firestoreDutyPhoto';
+const FIRESTORE_DES_PRE_INSPECTION_PHOTO_STORAGE = 'firestoreDesPreInspectionPhoto';
 const EMPTY_INLINE_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=';
 const RESOURCE_FIRESTORE_CHUNK_SIZE = 650000;
 const RESOURCE_FIRESTORE_MAX_FILE_SIZE = 20 * 1024 * 1024;
@@ -6333,6 +6530,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   injectOperationalStatusMenuLinks();
   injectManagerialReportMenuLinks();
   injectResourcesMenuLinks();
+  injectDesPreInspectionMenuLinks();
   injectLifeguardSettingsMenuLinks();
   ensureResourcesSettingsSection();
   ensureSettingsModalScrollBody();
@@ -6392,7 +6590,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     } else {
       // Signed out: clear supervisor flags (but don't redirect — may be lifeguard session)
-      clearSupervisorLoginState();
+      if (!hasFreshSupervisorToken()) clearSupervisorLoginState();
     }
     window.setupDropdownVisibility();
   });
@@ -6634,17 +6832,177 @@ function loadJobFormSubmissions() {
   });
 }
 
+function getReportMetaRows(sub) {
+  return [
+    ['Facility', sub?.pool || '—'],
+    ['Respondent', sub?.respondentName || sub?.submitterName || sub?.submitterEmail || '—'],
+    ['Submitted', formatTimestampDisplay(sub?.timestamp)],
+  ];
+}
+
+function openInspectionMetaPopup(sub, title) {
+  let modal = document.getElementById('inspectionMetaModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'inspectionMetaModal';
+    modal.className = 'dashboard-info-modal';
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeInspectionMetaPopup();
+    });
+    document.body.appendChild(modal);
+  }
+
+  modal.innerHTML = `
+    <div class="dashboard-info-card">
+      <button type="button" class="dashboard-info-close" aria-label="Close">&times;</button>
+      <h3>${escapeHtml(title)}</h3>
+      ${getReportMetaRows(sub).map(([label, value]) => `
+        <div class="dashboard-info-row"><strong>${escapeHtml(label)}:</strong><span>${escapeHtml(value)}</span></div>
+      `).join('')}
+    </div>
+  `;
+  modal.querySelector('.dashboard-info-close')?.addEventListener('click', closeInspectionMetaPopup);
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => modal.classList.add('visible'));
+}
+
+function closeInspectionMetaPopup() {
+  const modal = document.getElementById('inspectionMetaModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) modal.style.display = 'none';
+  }, 200);
+}
+
+function createInspectionInfoFlag(sub, title) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'dashboard-cell-flag dashboard-info-flag';
+  button.title = 'Submission details';
+  button.setAttribute('aria-label', 'Submission details');
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openInspectionMetaPopup(sub, title);
+  });
+  return button;
+}
+
+function createInspectionReportCell(sub, type) {
+  const cell = document.createElement('td');
+  cell.className = 'dashboard-report-cell';
+  if (!sub) {
+    cell.textContent = 'No report';
+    return cell;
+  }
+  if (type === 'des') {
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = 'dashboard-form-link';
+    link.textContent = 'DES Pre-Inspection';
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      openDesPreInspectionModal(sub);
+    });
+    cell.appendChild(link);
+    cell.appendChild(createInspectionInfoFlag(sub, 'DES Pre-Inspection Details'));
+    return cell;
+  }
+  cell.appendChild(createDutyFormLink(sub, 'Managerial Report'));
+  cell.appendChild(createInspectionInfoFlag(sub, 'Managerial Report Details'));
+  return cell;
+}
+
+function findLatestReportForPoolOnDate(submissions, poolName) {
+  return submissions.find((sub) => sub.pool === poolName && isDashboardDate(sub.timestamp, dashboardDateFilter)) || null;
+}
+
+function renderInspectionReports() {
+  const container = document.getElementById('managerialFormsContent');
+  if (!container) return;
+  container.innerHTML = '';
+
+  renderDashboardFilterBar(container, renderInspectionReports);
+
+  const marketMap = getDashboardMarketMap({ docs: false });
+  const marketsToShow = getVisibleDashboardMarkets(marketMap);
+  if (!marketsToShow.length) {
+    container.insertAdjacentHTML('beforeend', '<p style="padding:16px;color:#666;">No markets selected. Enable markets in Settings.</p>');
+    return;
+  }
+
+  const renderRowsForPools = (poolNames, tbody) => {
+    poolNames.forEach((poolName) => {
+      const managerial = findLatestReportForPoolOnDate(allManagerialReports, poolName);
+      const des = findLatestReportForPoolOnDate(allDesPreInspections, poolName);
+      const tr = document.createElement('tr');
+      const facilityCell = document.createElement('td');
+      facilityCell.textContent = poolName;
+      tr.appendChild(facilityCell);
+      tr.appendChild(createInspectionReportCell(managerial, 'managerial'));
+      tr.appendChild(createInspectionReportCell(des, 'des'));
+      tbody.appendChild(tr);
+    });
+  };
+
+  if (dashboardPoolFilter !== 'all') {
+    const section = document.createElement('div');
+    section.className = 'dashboard-market-section dashboard-single-pool-section';
+    const heading = document.createElement('h2');
+    heading.className = 'dashboard-market-heading';
+    heading.textContent = dashboardPoolFilter;
+    section.appendChild(heading);
+    const table = document.createElement('table');
+    table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-cleanliness-table dashboard-inspection-table';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Managerial Report</th><th>DES Pre-Inspection</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    renderRowsForPools([dashboardPoolFilter], tbody);
+    table.appendChild(tbody);
+    section.appendChild(table);
+    container.appendChild(section);
+    wrapResponsiveTables(container);
+    return;
+  }
+
+  let renderedAny = false;
+  marketsToShow.forEach((market) => {
+    const poolNames = marketMap[market] || [];
+    if (!poolNames.length) return;
+
+    const section = document.createElement('div');
+    section.className = 'dashboard-market-section';
+    const heading = document.createElement('h2');
+    heading.className = 'dashboard-market-heading';
+    heading.textContent = market;
+    section.appendChild(heading);
+
+    const table = document.createElement('table');
+    table.className = 'data-table dashboard-pool-table dashboard-cleanliness-table dashboard-inspection-table';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Managerial Report</th><th>DES Pre-Inspection</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    renderRowsForPools(poolNames, tbody);
+    table.appendChild(tbody);
+    section.appendChild(table);
+    container.appendChild(section);
+    renderedAny = true;
+  });
+
+  if (!renderedAny) {
+    container.insertAdjacentHTML('beforeend', '<p style="padding:8px 0;color:#666;">No inspection reports match the selected filters.</p>');
+  }
+
+  wrapResponsiveTables(container);
+}
+
 function loadManagerialFormSubmissions() {
   const container = document.getElementById('managerialFormsContent');
   if (!container) return;
   if (!isSupervisor()) {
-    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view managerial reports.</p>';
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view inspection reports.</p>';
     return;
   }
-  renderReportSubmissions(allManagerialReports, container, {
-    kind: 'managerial',
-    emptyMessage: 'No managerial reports match the selected filters.',
-  });
+  renderInspectionReports();
 }
 
 function getOperationalLogsForPoolOnDate(facilityName, poolIdx) {
@@ -6673,12 +7031,8 @@ function renderOperationalDashboard() {
   }
 
   if (dashboardPoolFilter !== 'all') {
-    const rows = operationalStatusLogs.filter((log) =>
-      log.facilityName === dashboardPoolFilter && isDashboardDate(log.timestamp, dashboardDateFilter));
-    const totalPages = Math.max(1, Math.ceil(rows.length / DASHBOARD_PAGE_SIZE));
-    dashboardOperationalPage = Math.min(Math.max(1, dashboardOperationalPage), totalPages);
-    const pageRows = rows.slice((dashboardOperationalPage - 1) * DASHBOARD_PAGE_SIZE, dashboardOperationalPage * DASHBOARD_PAGE_SIZE);
-
+    const selectedPoolDoc = getDashboardPoolDocByName(dashboardPoolFilter);
+    const poolCount = Math.max(1, Number(selectedPoolDoc?.numPools || selectedPoolDoc?.poolCount || 1));
     const section = document.createElement('div');
     section.className = 'dashboard-market-section dashboard-single-pool-section';
     const heading = document.createElement('h2');
@@ -6686,39 +7040,61 @@ function renderOperationalDashboard() {
     heading.textContent = dashboardPoolFilter;
     section.appendChild(heading);
 
-    const table = document.createElement('table');
-    table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-operational-table';
-    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
-    const tbody = document.createElement('tbody');
+    const tabBar = document.createElement('div');
+    tabBar.className = 'dashboard-tab-bar';
+    const tabPanels = [];
 
-    if (!pageRows.length) {
-      tbody.innerHTML = '<tr><td colspan="7">No operational status entries match the selected filters.</td></tr>';
-    } else {
-      pageRows.forEach((log) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td>${escapeHtml(log.facilityName || '—')}</td>
-          <td>${escapeHtml(log.poolLabel || `Pool ${Number(log.poolIndex || 0) + 1}`)}</td>
-          <td>${escapeHtml(log.fillStatus || '—')}</td>
-          <td>${escapeHtml(log.bleachStatus || '—')}</td>
-          <td>${escapeHtml(log.closureStatus || '—')}</td>
-          <td>${escapeHtml(getLogRespondentName(log))}</td>
-          <td>${escapeHtml(formatTimestampDisplay(log.timestamp))}</td>
-        `;
-        tbody.appendChild(tr);
-      });
+    for (let poolIdx = 0; poolIdx < poolCount; poolIdx += 1) {
+      const tabBtn = document.createElement('button');
+      tabBtn.type = 'button';
+      tabBtn.className = 'dashboard-tab-btn' + (poolIdx === 0 ? ' active' : '');
+      tabBtn.textContent = selectedPoolDoc ? getFacilityPoolLabel(selectedPoolDoc, poolIdx) : `Pool ${poolIdx + 1}`;
+      tabBtn.dataset.tabIdx = String(poolIdx);
+      tabBar.appendChild(tabBtn);
+
+      const panel = document.createElement('div');
+      panel.className = 'dashboard-tab-panel' + (poolIdx === 0 ? ' active' : '');
+      panel.dataset.tabIdx = String(poolIdx);
+
+      const table = document.createElement('table');
+      table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-operational-table';
+      table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      const rows = getOperationalLogsForPoolOnDate(dashboardPoolFilter, poolIdx);
+
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7">No operational status entries match the selected filters.</td></tr>';
+      } else {
+        rows.forEach((log) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${escapeHtml(log.facilityName || '—')}</td>
+            <td>${escapeHtml(log.poolLabel || `Pool ${Number(log.poolIndex || 0) + 1}`)}</td>
+            <td>${escapeHtml(log.fillStatus || '—')}</td>
+            <td>${escapeHtml(log.bleachStatus || '—')}</td>
+            <td>${escapeHtml(log.closureStatus || '—')}</td>
+            <td>${escapeHtml(getLogRespondentName(log))}</td>
+            <td>${escapeHtml(formatTimestampDisplay(log.timestamp))}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      table.appendChild(tbody);
+      panel.appendChild(table);
+      tabPanels.push(panel);
     }
 
-    table.appendChild(tbody);
-    section.appendChild(table);
-    renderDashboardPagination(section, {
-      page: dashboardOperationalPage,
-      totalRows: rows.length,
-      onPageChange: (nextPage) => {
-        dashboardOperationalPage = nextPage;
-        renderOperationalDashboard();
-      },
+    tabBar.addEventListener('click', (event) => {
+      const btn = event.target.closest('.dashboard-tab-btn');
+      if (!btn) return;
+      const idx = btn.dataset.tabIdx;
+      tabBar.querySelectorAll('.dashboard-tab-btn').forEach((tab) => tab.classList.toggle('active', tab === btn));
+      tabPanels.forEach((panel) => panel.classList.toggle('active', panel.dataset.tabIdx === idx));
     });
+
+    section.appendChild(tabBar);
+    tabPanels.forEach((panel) => section.appendChild(panel));
     container.appendChild(section);
     wrapResponsiveTables(container);
     return;
@@ -6729,6 +7105,7 @@ function renderOperationalDashboard() {
     const marketPools = marketMap[market] || [];
     if (!marketPools.length) return;
 
+    const maxPools = Math.max(...marketPools.map((poolDoc) => Number(poolDoc?.numPools || poolDoc?.poolCount || 1)));
     const section = document.createElement('div');
     section.className = 'dashboard-market-section';
     const heading = document.createElement('h2');
@@ -6736,15 +7113,32 @@ function renderOperationalDashboard() {
     heading.textContent = market;
     section.appendChild(heading);
 
-    const table = document.createElement('table');
-    table.className = 'data-table dashboard-pool-table dashboard-operational-table';
-    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
-    const tbody = document.createElement('tbody');
+    const tabBar = document.createElement('div');
+    tabBar.className = 'dashboard-tab-bar';
+    const tabPanels = [];
 
-    marketPools.forEach((poolDoc) => {
-      const facilityName = getPoolName(poolDoc);
-      const poolCount = Math.max(1, Number(poolDoc?.numPools || poolDoc?.poolCount || 1));
-      for (let poolIdx = 0; poolIdx < poolCount; poolIdx += 1) {
+    for (let poolIdx = 0; poolIdx < maxPools; poolIdx += 1) {
+      const tabBtn = document.createElement('button');
+      tabBtn.type = 'button';
+      tabBtn.className = 'dashboard-tab-btn' + (poolIdx === 0 ? ' active' : '');
+      tabBtn.textContent = `Pool ${poolIdx + 1}`;
+      tabBtn.dataset.tabIdx = String(poolIdx);
+      tabBar.appendChild(tabBtn);
+
+      const panel = document.createElement('div');
+      panel.className = 'dashboard-tab-panel' + (poolIdx === 0 ? ' active' : '');
+      panel.dataset.tabIdx = String(poolIdx);
+
+      const table = document.createElement('table');
+      table.className = 'data-table dashboard-pool-table dashboard-operational-table';
+      table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      let renderedRows = 0;
+
+      marketPools.forEach((poolDoc) => {
+        const facilityName = getPoolName(poolDoc);
+        const poolCount = Math.max(1, Number(poolDoc?.numPools || poolDoc?.poolCount || 1));
+        if (poolIdx >= poolCount) return;
         const latestLog = getOperationalLogsForPoolOnDate(facilityName, poolIdx)[0] || null;
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -6757,12 +7151,29 @@ function renderOperationalDashboard() {
           <td>${escapeHtml(latestLog ? formatTimestampDisplay(latestLog.timestamp) : '—')}</td>
         `;
         tbody.appendChild(tr);
+        renderedRows += 1;
         renderedAny = true;
+      });
+
+      if (!renderedRows) {
+        tbody.innerHTML = '<tr><td colspan="7">No facilities have this pool.</td></tr>';
       }
+
+      table.appendChild(tbody);
+      panel.appendChild(table);
+      tabPanels.push(panel);
+    }
+
+    tabBar.addEventListener('click', (event) => {
+      const btn = event.target.closest('.dashboard-tab-btn');
+      if (!btn) return;
+      const idx = btn.dataset.tabIdx;
+      tabBar.querySelectorAll('.dashboard-tab-btn').forEach((tab) => tab.classList.toggle('active', tab === btn));
+      tabPanels.forEach((panel) => panel.classList.toggle('active', panel.dataset.tabIdx === idx));
     });
 
-    table.appendChild(tbody);
-    section.appendChild(table);
+    section.appendChild(tabBar);
+    tabPanels.forEach((panel) => section.appendChild(panel));
     container.appendChild(section);
   });
 
@@ -7452,6 +7863,138 @@ async function getFirestoreDutyPhotoDataUrl(photo) {
   return dataUrl;
 }
 
+function getDesInspectionPhotoCacheKey(photo) {
+  const url = String(photo?.url || '');
+  if (url.startsWith(`${FIRESTORE_DES_PRE_INSPECTION_PHOTO_STORAGE}:`)) return url;
+  if (photo?.submissionId && photo?.photoId) {
+    return `${FIRESTORE_DES_PRE_INSPECTION_PHOTO_STORAGE}:${photo.submissionId}:${photo.photoId}`;
+  }
+  return url || `${photo?.submissionId || ''}:${photo?.photoId || ''}`;
+}
+
+async function getFirestoreDesInspectionPhotoDataUrl(photo) {
+  const cacheKey = getDesInspectionPhotoCacheKey(photo);
+  if (desInspectionPhotoDataUrlMap.has(cacheKey)) return desInspectionPhotoDataUrlMap.get(cacheKey);
+
+  let submissionId = String(photo?.submissionId || '');
+  let photoId = String(photo?.photoId || '');
+  if ((!submissionId || !photoId) && cacheKey.startsWith(`${FIRESTORE_DES_PRE_INSPECTION_PHOTO_STORAGE}:`)) {
+    const parts = cacheKey.split(':');
+    submissionId = submissionId || parts[1] || '';
+    photoId = photoId || parts[2] || '';
+  }
+  if (!submissionId || !photoId) throw new Error('DES pre-inspection photo reference is incomplete.');
+
+  const chunksSnap = await getDocs(collection(db, 'desPreInspectionMedia', submissionId, 'photos', photoId, 'chunks'));
+  const chunks = chunksSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
+    .sort((a, b) => Number(a.index ?? a.id) - Number(b.index ?? b.id))
+    .map((chunk) => chunk.data || '');
+  if (!chunks.length) throw new Error('DES pre-inspection photo chunks were not found.');
+
+  const prefix = photo.dataUrlPrefix || `data:${photo.contentType || 'image/jpeg'};base64`;
+  const dataUrl = `${prefix},${chunks.join('')}`;
+  desInspectionPhotoDataUrlMap.set(cacheKey, dataUrl);
+  return dataUrl;
+}
+
+function getDesInspectionItems(sub) {
+  if (Array.isArray(sub?.inspectionItems)) return sub.inspectionItems;
+  if (sub?.answers && typeof sub.answers === 'object') {
+    return Object.entries(sub.answers).map(([id, item]) => ({
+      id,
+      label: item?.label || id,
+      answer: item?.answer || '',
+      notes: item?.notes || '',
+      photos: item?.photos || [],
+    }));
+  }
+  return [];
+}
+
+async function hydrateDesInspectionPhotos(root) {
+  const images = Array.from(root.querySelectorAll('[data-des-photo-meta]'));
+  await Promise.all(images.map(async (img) => {
+    try {
+      const meta = JSON.parse(decodeURIComponent(img.dataset.desPhotoMeta || ''));
+      const fullUrl = await getFirestoreDesInspectionPhotoDataUrl(meta);
+      img.src = fullUrl;
+      img.dataset.fullUrl = fullUrl;
+      img.classList.remove('duty-report-photo--loading');
+      img.addEventListener('click', () => window.openPhotoModal(fullUrl, images.map((node) => node.dataset.fullUrl).filter(Boolean)));
+    } catch (err) {
+      console.error('[DES] Could not load submitted photo:', err);
+      img.classList.remove('duty-report-photo--loading');
+      img.classList.add('duty-report-photo--error');
+    }
+  }));
+}
+
+function openDesPreInspectionModal(sub) {
+  let modal = document.getElementById('desInspectionModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'desInspectionModal';
+    modal.className = 'duty-report-modal des-inspection-modal';
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) window.closeDesPreInspectionModal();
+    });
+    document.body.appendChild(modal);
+  }
+
+  const esc = escapeHtml;
+  const ts = toDateObject(sub.timestamp);
+  const photoHtml = (photos) => {
+    if (!Array.isArray(photos) || !photos.length) return '';
+    return `<div class="duty-report-photo-grid des-inspection-photo-grid">
+      ${photos.map((photo) => {
+        const meta = encodeURIComponent(JSON.stringify(photo || {}));
+        return `<img src="${EMPTY_INLINE_IMAGE}" alt="${esc(photo?.name || 'DES photo')}" class="duty-report-photo duty-report-photo--loading" data-des-photo-meta="${meta}">`;
+      }).join('')}
+    </div>`;
+  };
+  const items = getDesInspectionItems(sub);
+  modal.innerHTML = `
+    <div class="duty-report-modal-card des-inspection-modal-card">
+      <div class="modal-header duty-report-modal-header">
+        <h2>DES Pre-Inspection</h2>
+        <button type="button" class="close" onclick="window.closeDesPreInspectionModal()">&times;</button>
+      </div>
+      <div class="duty-report-modal-scroll">
+        <div class="duty-report-meta">
+          <p><strong>Pool:</strong> ${esc(sub.pool || '—')}</p>
+          <p><strong>Respondent:</strong> ${esc(sub.respondentName || sub.submitterName || sub.submitterEmail || '—')}</p>
+          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
+        </div>
+        <section class="des-inspection-item-list">
+          ${items.length ? items.map((item) => `
+            <article class="des-inspection-review-item">
+              <h3>${esc(item.label || item.id || 'Inspection item')}</h3>
+              <p><strong>Answer:</strong> ${esc(item.answer || '—')}</p>
+              ${item.notes ? `<div class="duty-report-notes"><strong>Notes:</strong><span>${esc(item.notes)}</span></div>` : ''}
+              ${photoHtml(item.photos)}
+            </article>
+          `).join('') : '<p>No inspection item details were recorded.</p>'}
+        </section>
+      </div>
+    </div>`;
+
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => modal.classList.add('visible'));
+  hydrateDesInspectionPhotos(modal).catch((err) => {
+    console.error('[DES] Could not hydrate submitted photos:', err);
+  });
+}
+
+window.closeDesPreInspectionModal = function closeDesPreInspectionModal() {
+  const modal = document.getElementById('desInspectionModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  window.setTimeout(() => {
+    if (!modal.classList.contains('visible')) modal.style.display = 'none';
+  }, 250);
+};
+
 async function hydrateDutyReportPhotos(root) {
   if (!root) return;
   const images = Array.from(root.querySelectorAll('[data-duty-photo-meta]'));
@@ -7466,7 +8009,10 @@ async function hydrateDutyReportPhotos(root) {
       img.dataset.fullUrl = fullUrl;
       img.title = meta.name || 'photo';
       img.classList.remove('duty-report-photo--loading', 'duty-report-photo--error');
-      img.onclick = () => window.openPhotoModal(fullUrl);
+      img.onclick = () => window.openPhotoModal(
+        fullUrl,
+        images.map((node) => node.dataset.fullUrl).filter(Boolean)
+      );
     } catch (err) {
       console.error('[Duties] Could not load submitted photo:', err);
       img.classList.remove('duty-report-photo--loading');
@@ -7585,20 +8131,63 @@ window.closeDutyFormModal = function closeDutyFormModal() {
   }, 250);
 };
 
-// Photo modal for job form submissions
-window.openPhotoModal = function(url) {
+// Photo modal for submitted report images
+window.openPhotoModal = function(url, gallery = []) {
+  const urls = Array.isArray(gallery) && gallery.length ? gallery.filter(Boolean) : [url].filter(Boolean);
+  let currentIndex = Math.max(0, urls.indexOf(url));
   let overlay = document.getElementById('photoViewOverlay');
   if (!overlay) {
     overlay = document.createElement('div');
     overlay.id = 'photoViewOverlay';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
-    overlay.addEventListener('click', () => overlay.style.display = 'none');
+    overlay.className = 'photo-view-overlay';
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) overlay.style.display = 'none';
+    });
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'photo-view-close';
+    close.setAttribute('aria-label', 'Close photo');
+    close.textContent = '×';
+    close.addEventListener('click', (event) => {
+      event.stopPropagation();
+      overlay.style.display = 'none';
+    });
+    const prev = document.createElement('button');
+    prev.type = 'button';
+    prev.className = 'photo-view-nav photo-view-nav--prev';
+    prev.setAttribute('aria-label', 'Previous photo');
+    prev.textContent = '‹';
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'photo-view-nav photo-view-nav--next';
+    next.setAttribute('aria-label', 'Next photo');
+    next.textContent = '›';
     const img = document.createElement('img');
     img.id = 'photoViewImg';
-    img.style.cssText = 'max-width:90vw;max-height:90vh;object-fit:contain;box-shadow:0 0 20px rgba(0,0,0,0.5);';
+    img.className = 'photo-view-img';
+    [prev, next].forEach((btn) => {
+      btn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const activeUrls = overlay._poolProPhotoGallery || [];
+        if (activeUrls.length <= 1) return;
+        const delta = btn === prev ? -1 : 1;
+        const nextIndex = (Number(overlay.dataset.index || 0) + delta + activeUrls.length) % activeUrls.length;
+        overlay.dataset.index = String(nextIndex);
+        img.src = activeUrls[nextIndex];
+      });
+    });
+    overlay.appendChild(close);
+    overlay.appendChild(prev);
     overlay.appendChild(img);
+    overlay.appendChild(next);
     document.body.appendChild(overlay);
   }
-  document.getElementById('photoViewImg').src = url;
+  overlay._poolProPhotoGallery = urls;
+  overlay.dataset.index = String(currentIndex);
+  const img = document.getElementById('photoViewImg');
+  if (img) img.src = urls[currentIndex] || url;
+  overlay.querySelectorAll('.photo-view-nav').forEach((btn) => {
+    btn.hidden = urls.length <= 1;
+  });
   overlay.style.display = 'flex';
 };

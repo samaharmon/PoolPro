@@ -60,6 +60,19 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // DES pre-inspection submissions and Firestore-backed photos
+    match /desPreInspections/{submissionId} {
+      allow read, write: if true;
+    }
+
+    match /desPreInspectionMedia/{submissionId}/photos/{photoId} {
+      allow read, write: if true;
+    }
+
+    match /desPreInspectionMedia/{submissionId}/photos/{photoId}/chunks/{chunkId} {
+      allow read, write: if true;
+    }
+
     // Fill line, hose, and bleach feeder operational status updates
     match /operationalStatusLogs/{logId} {
       allow read, write: if true;
