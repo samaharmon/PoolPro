@@ -1886,4 +1886,101 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearPendingVerificationContext();
     setModalView('login');
   });
-  verifyBackBtn?.addEventListener('click'
+  verifyBackBtn?.addEventListener('click', async () => {
+    await signOut(auth).catch(() => {});
+    resetVerificationState();
+    clearPendingVerificationContext();
+    setModalView('login');
+  });
+  verifyResendBtn?.addEventListener('click', async () => {
+    try {
+      await sendVerificationEmail({ isResend: true });
+    } catch (err) {
+      const code = err.code || '';
+      const friendly = code === 'auth/operation-not-allowed'
+        ? 'Email/password sign-in is not enabled yet.'
+        : code === 'auth/too-many-requests'
+          ? 'Too many attempts. Wait a few minutes, then resend.'
+        : (err.message || 'Unable to resend the verification email.');
+      setMessage(verifyMessageEl, friendly, true);
+    }
+  });
+  modal?.addEventListener('click', async (event) => {
+    if (event.target !== modal) return;
+    if (auth.currentUser && currentRole !== 'supervisor') {
+      await signOut(auth).catch(() => {});
+    }
+    closeModal();
+  });
+
+  const pendingContext = loadPendingVerificationContext();
+  if (pendingContext?.username && auth.currentUser) {
+    const pendingMode = pendingContext.emailAuthMode || EMAIL_AUTH_MODE_VERIFY;
+    const pendingAccessMode = normalizeAccessMode(pendingContext.accessMode || 'lifeguard');
+    const account = await getLifeguardAccount(pendingContext.username);
+    if (auth.currentUser.emailVerified) {
+      pendingVerification = {
+        username: pendingContext.username,
+        account,
+        target: pendingContext.target || getDestinationPath(),
+        origin: handledVerificationRedirect ? 'redirect-resume' : 'resume',
+        force: true,
+        emailAuthMode: pendingMode,
+        accessMode: pendingAccessMode,
+      };
+      await requirePasswordLoginAfterVerification('Your email has been verified. Sign in with your username and password to continue.');
+      return;
+    }
+    openVerificationView({
+      username: pendingContext.username,
+      account,
+      target: pendingContext.target || getDestinationPath(),
+      force: true,
+      origin: handledVerificationRedirect ? 'redirect-resume' : 'resume',
+      emailAuthMode: pendingMode,
+      accessMode: pendingAccessMode,
+    });
+  }
+
+  if (handledVerificationRedirect) return;
+
+  let initialRole = 'lifeguard';
+  try {
+    const stored = localStorage.getItem(ACCESS_MODE_STORAGE_KEY);
+    if (ACCESS_MODES.has(stored)) initialRole = stored;
+  } catch (err) {
+    console.warn('Could not read stored role; defaulting to lifeguard', err);
+  }
+
+  setRole(initialRole);
+  setModalView('login');
+});
+
+window.addEventListener('focus', async () => {
+  if (!pendingVerification || !auth.currentUser) return;
+  try {
+    await auth.currentUser.reload();
+    if (auth.currentUser.emailVerified) {
+      await confirmVerifiedEmail();
+    }
+  } catch (_) {
+    // Ignore transient reload issues while waiting on verification.
+  }
+});
+
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!pendingVerification || !auth.currentUser) return;
+  try {
+    await auth.currentUser.reload();
+    if (auth.currentUser.emailVerified) {
+      await confirmVerifiedEmail();
+    }
+  } catch (_) {
+    // Ignore transient reload issues while waiting on verification.
+  }
+});
+
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) window.location.reload();
+});
