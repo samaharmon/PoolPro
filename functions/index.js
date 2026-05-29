@@ -5,24 +5,57 @@ const admin = require('firebase-admin');
 
 admin.initializeApp();
 
+const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
 const allowedOrigins = new Set([
   'https://poolpro1.vercel.app',
-  'http://localhost:8765',
-  'http://127.0.0.1:8765',
 ]);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  if (allowedOrigins.has(origin)) return true;
+  return /^https:\/\/poolpro1-[a-z0-9-]+\.vercel\.app$/i.test(origin) ||
+    /^http:\/\/localhost:\d+$/i.test(origin) ||
+    /^http:\/\/127\.0\.0\.1:\d+$/i.test(origin);
+}
 
 function setCors(req, res) {
   const origin = req.headers.origin || '';
-  if (allowedOrigins.has(origin)) {
+  if (isAllowedOrigin(origin)) {
     res.set('Access-Control-Allow-Origin', origin);
   }
   res.set('Vary', 'Origin');
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
 }
 
 function normalize(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+async function requireAccountManager(req) {
+  const authHeader = req.get('authorization') || req.get('Authorization') || '';
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    const err = new Error('Sign in before deleting accounts.');
+    err.status = 401;
+    throw err;
+  }
+
+  const decoded = await admin.auth().verifyIdToken(match[1]);
+  const email = normalize(decoded.email);
+  if (email === SITE_DEVELOPER_EMAIL) return decoded;
+
+  const roleSnap = await admin.firestore().collection('settings').doc('rolesPermissions').get();
+  const roles = roleSnap.exists ? roleSnap.data().roles || {} : {};
+  const supervisors = Array.isArray(roles.supervisor)
+    ? roles.supervisor.map(normalize).filter(Boolean)
+    : [];
+  if (supervisors.includes(email)) return decoded;
+
+  const err = new Error('Supervisor access is required to delete accounts.');
+  err.status = 403;
+  throw err;
 }
 
 exports.deleteAuthUserByEmail = functions.https.onRequest(async (req, res) => {
@@ -37,6 +70,8 @@ exports.deleteAuthUserByEmail = functions.https.onRequest(async (req, res) => {
   }
 
   try {
+    await requireAccountManager(req);
+
     const email = normalize(req.body?.email);
     const username = normalize(req.body?.username);
     if (!email || !username) {
@@ -76,6 +111,6 @@ exports.deleteAuthUserByEmail = functions.https.onRequest(async (req, res) => {
     }
   } catch (err) {
     console.error('deleteAuthUserByEmail failed:', err);
-    res.status(500).json({ error: 'Unable to delete Firebase Auth user.' });
+    res.status(err.status || 500).json({ error: err.message || 'Unable to delete Firebase Auth user.' });
   }
 });

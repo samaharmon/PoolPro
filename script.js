@@ -544,21 +544,28 @@ async function findLinkedLifeguardAccountsByEmail(email) {
 async function deleteLinkedLifeguardAccessForEmployee(employee) {
   const normalizedEmployee = normalizeEmployeeRecord(employee || {});
   const email = (normalizedEmployee.email || normalizedEmployee.id || '').trim().toLowerCase();
-  if (!email) return;
+  if (!email) return { authDeleteError: null };
 
   const linkedAccounts = await findLinkedLifeguardAccountsByEmail(email);
-  if (!linkedAccounts.length) return;
+  if (!linkedAccounts.length) return { authDeleteError: null };
 
   const authTarget = linkedAccounts.find((account) => account.username) || linkedAccounts[0];
-  await deleteFirebaseAuthCredentialForAccount({
-    email,
-    username: authTarget.username,
-    role: 'lifeguard',
-  });
+  let authDeleteError = null;
+  try {
+    await deleteFirebaseAuthCredentialForAccount({
+      email,
+      username: authTarget.username,
+      role: 'lifeguard',
+    });
+  } catch (err) {
+    authDeleteError = err;
+    console.warn('[PoolPro] Firebase Auth credential could not be deleted; removing PoolPro login records anyway.', err);
+  }
 
   await Promise.all(
     linkedAccounts.map((account) => deleteDoc(doc(db, 'lifeguardAccounts', account.username)))
   );
+  return { authDeleteError };
 }
 
 function isDeletedAccountMatch(value, identifiers) {
@@ -667,9 +674,13 @@ async function deleteFirebaseAuthCredentialForAccount(context, password = '') {
 
   if (context?.role !== 'lifeguard' || !username) return;
 
+  const headers = { 'Content-Type': 'application/json' };
+  if (auth.currentUser) {
+    headers.Authorization = `Bearer ${await auth.currentUser.getIdToken()}`;
+  }
   const response = await fetch(DELETE_AUTH_USER_FUNCTION_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ email, username }),
   });
   if (!response.ok) {
@@ -4773,8 +4784,9 @@ function setupEmployeeManagement() {
       if (editingEmployeeIdx < 0 || !employeesData[editingEmployeeIdx]) return;
       const removed = normalizeEmployeeRecord(employeesData[editingEmployeeIdx]);
       const removedIndex = editingEmployeeIdx;
+      let linkedAccessResult = { authDeleteError: null };
       try {
-        await deleteLinkedLifeguardAccessForEmployee(removed);
+        linkedAccessResult = await deleteLinkedLifeguardAccessForEmployee(removed);
       } catch (err) {
         console.error('[ChemLog] Could not delete linked lifeguard access:', err);
         alert('Unable to delete the linked PoolPro login right now. The employee record was not removed.');
@@ -4790,6 +4802,9 @@ function setupEmployeeManagement() {
       });
       await saveEmployees();
       renderEmployeesTable();
+      if (linkedAccessResult?.authDeleteError) {
+        alert('Employee removed from PoolPro, but the Firebase Auth credential could not be deleted automatically. If this email needs to be reused later, delete it from Firebase Authentication manually.');
+      }
     });
   }
 
