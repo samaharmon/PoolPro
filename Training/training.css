@@ -131,7 +131,8 @@ p {
 /* Main layout + card panels */
 .training-main {
   flex: 1;
-  width: min(1320px, 100%);
+  width: min(1320px, calc(100% - 28px));
+  max-width: 1320px;
   margin: 30px auto;
   padding: 0 14px;
   display: flex;
@@ -151,7 +152,7 @@ p {
   padding: 30px;
   border-radius: 0;
   box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Page-level section title (Training Signup / Training Setup at top of page) */
@@ -3068,6 +3069,39 @@ body.dark-mode .training-schedule-table thead th {
   background-color: transparent !important;
   color: #ffffff !important;
 }
+
+.table-scroll-wrap > .training-schedule-table {
+  width: 100% !important;
+  min-width: 100% !important;
+  table-layout: fixed !important;
+}
+
+.training-schedule-table th,
+.training-schedule-table td {
+  padding: 8px 9px !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.training-schedule-table--admin th:nth-child(1),
+.training-schedule-table--admin td:nth-child(1) { width: 14% !important; }
+
+.training-schedule-table--admin th:nth-child(2),
+.training-schedule-table--admin td:nth-child(2) { width: 17% !important; }
+
+.training-schedule-table--admin th:nth-child(3),
+.training-schedule-table--admin td:nth-child(3) { width: 17% !important; }
+
+.training-schedule-table--admin th:nth-child(4),
+.training-schedule-table--admin td:nth-child(4) { width: 28% !important; }
+
+.training-schedule-table--admin th:nth-child(5),
+.training-schedule-table--admin td:nth-child(5) { width: 11% !important; }
+
+.training-schedule-table--admin th:nth-child(6),
+.training-schedule-table--admin td:nth-child(6) { width: 13% !important; }
 
 /* Settings modal: fixed shell/border with independently scrollable content */
 #settingsModal {

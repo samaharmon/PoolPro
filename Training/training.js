@@ -216,7 +216,7 @@ function normalizeTrainingHeaderCopy() {
 }
 
 function getResponsiveTableMinWidth(table) {
-  if (table.matches('.training-schedule-table')) return '980px';
+  if (table.matches('.training-schedule-table')) return '760px';
   if (table.matches('.attendance-table')) return '900px';
   if (table.matches('.employee-table')) return '980px';
   if (table.matches('.resource-table')) return '980px';

@@ -295,7 +295,7 @@ function getResponsiveTableMinWidth(table) {
   if (table.matches('.dashboard-cleanliness-table')) return '520px';
   if (table.matches('.dashboard-detail-table')) return '760px';
   if (table.matches('.dashboard-pool-table, .pool-table')) return '1200px';
-  if (table.matches('.training-schedule-table')) return '980px';
+  if (table.matches('.training-schedule-table')) return '760px';
   if (table.matches('.attendance-table, .test-rubric-table')) return '900px';
   if (table.matches('.employee-table')) return '980px';
   if (table.matches('.sanitation-table--settings')) return '420px';
@@ -473,19 +473,19 @@ function updateSettingsModalForRole() {
   const modal = document.getElementById('settingsModal');
   if (!modal) return;
 
-  const lifeguard = isLifeguardSession() && !isSupervisor();
-  modal.classList.toggle('lifeguard-settings-view', lifeguard);
+  const limitedUser = !isSupervisor() && hasActivePoolProSession();
+  modal.classList.toggle('lifeguard-settings-view', limitedUser);
   modal.querySelectorAll('.settings-section').forEach((section) => {
-    section.style.display = lifeguard && section.id !== 'accountManagementSection' ? 'none' : '';
+    section.style.display = limitedUser && section.id !== 'accountManagementSection' ? 'none' : '';
   });
-  if (lifeguard) {
+  if (limitedUser) {
     document.getElementById('accountManagementSection')?.classList.remove('collapsed');
   }
 
   const description = document.getElementById('accountManagementDescription');
   if (description) {
-    description.textContent = lifeguard
-      ? 'Permanently delete your lifeguard PoolPro account. This removes your login record and employee profile, then signs you out.'
+    description.textContent = limitedUser
+      ? 'Permanently delete your PoolPro account. This removes your login record and employee profile, then signs you out.'
       : 'Permanently delete the currently signed-in PoolPro account, then sign out.';
   }
 }
@@ -1430,6 +1430,26 @@ function populatePoolSelects(pools) {
     if (current) dutiesPool.value = current;
   }
 
+  // DES Pre-Inspection facility select — grouped by market, value = pool.name
+  const desPoolSelect = document.getElementById('desPoolSelect');
+  if (desPoolSelect) {
+    const current = desPoolSelect.value;
+    while (desPoolSelect.options.length > 1) desPoolSelect.remove(1);
+    Array.from(desPoolSelect.querySelectorAll('optgroup')).forEach(g => g.remove());
+    groups.forEach(({ market, pools: mPools }) => {
+      const group = document.createElement('optgroup');
+      group.label = market;
+      mPools.forEach(pool => {
+        const opt = document.createElement('option');
+        opt.value = pool.name || pool.id;
+        opt.textContent = pool.name || pool.id;
+        group.appendChild(opt);
+      });
+      desPoolSelect.appendChild(group);
+    });
+    if (current) desPoolSelect.value = current;
+  }
+
   // Operational Status page facility select — grouped by market, value = pool.id
   const operationalPool = document.getElementById('operationalPoolLocation');
   if (operationalPool) {
@@ -1485,12 +1505,13 @@ const ROLE_DEFINITIONS = [
 const PERMISSION_DEFINITIONS = [
   { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
   { key: 'managerialReport', label: 'Managerial Report' },
+  { key: 'desPreInspection', label: 'DES Pre-Inspection' },
 ];
 let rolesPermissionsData = {
   roles: { poolManager: [], supervisor: [] },
   permissions: {
-    poolManager: { poolChemistryDashboard: false, managerialReport: false },
-    supervisor: { poolChemistryDashboard: false, managerialReport: false },
+    poolManager: { poolChemistryDashboard: false, managerialReport: false, desPreInspection: false },
+    supervisor: { poolChemistryDashboard: false, managerialReport: false, desPreInspection: false },
   },
   individualPermissions: {},
 };
@@ -1520,6 +1541,9 @@ function normalizeRolesPermissionsData(data = {}) {
   const roles = data.roles || {};
   const permissions = data.permissions || {};
   const individual = data.individualPermissions || {};
+  const normalizePermissionMap = (source = {}) => Object.fromEntries(
+    PERMISSION_DEFINITIONS.map(({ key }) => [key, !!source?.[key]])
+  );
   const normalizedIndividual = Object.fromEntries(Object.entries(individual).map(([key, value]) => {
     const permissionOverrides = {};
     PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
@@ -1535,14 +1559,8 @@ function normalizeRolesPermissionsData(data = {}) {
       supervisor: Array.isArray(roles.supervisor) ? roles.supervisor.map(normalizeIdentityKey).filter(Boolean) : [],
     },
     permissions: {
-      poolManager: {
-        poolChemistryDashboard: !!permissions.poolManager?.poolChemistryDashboard,
-        managerialReport: !!permissions.poolManager?.managerialReport,
-      },
-      supervisor: {
-        poolChemistryDashboard: !!permissions.supervisor?.poolChemistryDashboard,
-        managerialReport: !!permissions.supervisor?.managerialReport,
-      },
+      poolManager: normalizePermissionMap(permissions.poolManager),
+      supervisor: normalizePermissionMap(permissions.supervisor),
     },
     individualPermissions: normalizedIndividual,
   };
@@ -1550,7 +1568,7 @@ function normalizeRolesPermissionsData(data = {}) {
 
 function getEffectiveRolePermissionsForKeys(keys) {
   const normalizedKeys = new Set((keys || []).map(normalizeIdentityKey).filter(Boolean));
-  const effective = { poolChemistryDashboard: false, managerialReport: false };
+  const effective = Object.fromEntries(PERMISSION_DEFINITIONS.map(({ key }) => [key, false]));
   ROLE_DEFINITIONS.forEach(({ key }) => {
     const members = rolesPermissionsData.roles[key] || [];
     if (!members.some((memberKey) => normalizedKeys.has(memberKey))) return;
@@ -1582,8 +1600,9 @@ function getCurrentAccessProfile() {
   const keys = getCurrentIdentityKeys();
   const permissions = getEffectiveRolePermissionsForKeys(keys);
   if (isDeveloperUser()) {
-    permissions.poolChemistryDashboard = true;
-    permissions.managerialReport = true;
+    PERMISSION_DEFINITIONS.forEach(({ key }) => {
+      permissions[key] = true;
+    });
   }
   return {
     isDeveloper: isDeveloperUser(),
@@ -1616,6 +1635,7 @@ async function loadRolesPermissions() {
   cacheCurrentAccessProfile();
   window.setupDropdownVisibility?.();
   applyDashboardAccessMode();
+  enforceDesPreInspectionAccess();
   renderRolesPermissionsSettings();
   return rolesPermissionsData;
 }
@@ -1626,6 +1646,7 @@ async function saveRolesPermissions() {
   cacheCurrentAccessProfile();
   window.setupDropdownVisibility?.();
   applyDashboardAccessMode();
+  enforceDesPreInspectionAccess();
 }
 
 function hasPermission(permissionKey) {
@@ -1644,7 +1665,35 @@ function canAccessManagerialReport() {
   return hasPermission('managerialReport');
 }
 
+function canAccessDesPreInspection() {
+  return hasPermission('desPreInspection');
+}
+
 window.poolProCanAccessManagerialReport = canAccessManagerialReport;
+window.poolProCanAccessDesPreInspection = canAccessDesPreInspection;
+
+function isDesPreInspectionPage() {
+  return /\/des\/des\.html$/i.test(window.location.pathname);
+}
+
+function enforceDesPreInspectionAccess() {
+  if (!isDesPreInspectionPage()) return;
+  const allowed = canAccessDesPreInspection();
+  document.body.classList.toggle('des-access-denied', !allowed);
+  const container = document.querySelector('.container');
+  if (!container) return;
+  if (!allowed) {
+    container.innerHTML = `
+      <h2 class="page-content-title">DES Pre-Inspection</h2>
+      <div class="form-container">
+        <div class="section">
+          <h2>Access Required</h2>
+          <p>You do not have permission to view the DES Pre-Inspection form.</p>
+        </div>
+      </div>
+    `;
+  }
+}
 
 function isLifeguardSession() {
   try {
@@ -1728,7 +1777,9 @@ function maybeShowImportantUpdatesNotice() {
 window.setupDropdownVisibility = function () {
   const sup = isSupervisor();
   const canViewChemDashboard = canAccessPoolChemistryDashboard();
+  const canViewDesPreInspection = canAccessDesPreInspection();
   const lifeguard = isLifeguardSession() && !sup;
+  const limitedSettings = !sup && hasActivePoolProSession();
   ['training-setup', 'employees', 'testing', 'settings'].forEach(nav => {
     document.querySelectorAll(`[data-nav="${nav}"]`).forEach(el => {
       el.style.display = sup ? '' : 'none';
@@ -1741,7 +1792,14 @@ window.setupDropdownVisibility = function () {
   document.querySelectorAll('[data-nav="managerial-report"]').forEach((el) => {
     el.style.display = canAccessManagerialReport() ? '' : 'none';
   });
+  document.querySelectorAll('[data-nav="des-pre-inspection"]').forEach((el) => {
+    el.style.display = canViewDesPreInspection ? '' : 'none';
+  });
+  document.querySelectorAll('[data-nav="lifeguard-settings"]').forEach((el) => {
+    el.style.display = limitedSettings ? '' : 'none';
+  });
   document.querySelectorAll('.lifeguard-only').forEach((item) => {
+    if (item.dataset.nav === 'lifeguard-settings') return;
     item.style.display = lifeguard ? '' : 'none';
   });
   document.querySelectorAll('.dropdown-menu').forEach((m) => {
@@ -1813,6 +1871,146 @@ function ensureSettingsModalScrollBody() {
   modalContent.appendChild(scrollBody);
 }
 
+function ensureStandardSettingsSections() {
+  const modalContent = document.querySelector('#settingsModal .settings-modal-content');
+  if (!modalContent || document.getElementById('marketSection')) return;
+
+  const websiteSection = modalContent.querySelector('.settings-section');
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <div class="settings-section">
+      <h3>Market</h3>
+      <p class="section-subtitle">Select which markets' pools are visible on the supervisor dashboard.</p>
+      <div id="marketSection" class="sanitation-section overlay-disabled">
+        <div class="market-options">
+          <label class="market-option"><input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Columbia"> Columbia</label>
+          <label class="market-option"><input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Greenville"> Greenville</label>
+          <label class="market-option"><input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Charlotte"> Charlotte</label>
+          <label class="market-option"><input type="checkbox" class="market-filter-checkbox" name="marketFilter" value="Charleston"> Charleston</label>
+        </div>
+      </div>
+      <div class="toggle-btn">
+        <div class="sanitation-controls">
+          <button type="button" class="editAndSave active" id="marketEditBtn">Edit</button>
+          <button type="button" class="editAndSave" id="marketSaveBtn" disabled>Save</button>
+        </div>
+      </div>
+    </div>
+    <section class="settings-section settings-group" id="employeeSettings">
+      <h3>Employees</h3>
+      <p class="section-subtitle">Add employee information by uploading a master staffing file, or add employees individually.</p>
+      <div class="settings-row employee-file-row" style="margin-top: 20px;">
+        <input type="file" id="employeeFileInput" accept=".csv,.txt,.xlsx,.xls" />
+      </div>
+      <div class="settings-row employee-add-row">
+        <div class="settings-field">
+          <label for="employeeFirstNameInput">Preferred First Name</label>
+          <input type="text" id="employeeFirstNameInput" />
+        </div>
+        <div class="settings-field">
+          <label for="employeeLastNameInput">Last Name</label>
+          <input type="text" id="employeeLastNameInput" />
+        </div>
+        <div class="settings-field">
+          <label for="employeeIdInput">Email</label>
+          <input type="email" id="employeeIdInput" />
+        </div>
+        <div class="settings-field">
+          <label for="employeePhoneInput">Phone Number</label>
+          <input type="tel" id="employeePhoneInput" />
+        </div>
+        <div class="settings-field">
+          <label for="employeeHomePoolInput">Home Pool</label>
+          <select id="employeeHomePoolInput"><option value="">Select pool</option></select>
+        </div>
+      </div>
+      <div class="employee-add-btn-row">
+        <button type="button" class="submit-btn button-shadow employee-action-btn" id="employeeAddBtn">Add</button>
+      </div>
+      <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
+        <span class="filter-by-label">Filter By:</span>
+        <select id="employeeMarketFilter" class="training-filter-select">
+          <option value="all">Market</option>
+          <option value="Charleston">Charleston</option>
+          <option value="Charlotte">Charlotte</option>
+          <option value="Columbia">Columbia</option>
+          <option value="Greenville">Greenville</option>
+        </select>
+        <select id="employeePoolFilter" class="training-filter-select">
+          <option value="all">Home Pool</option>
+        </select>
+      </div>
+      <div id="employeeTableSection" class="sanitation-section overlay-disabled">
+        <table class="employee-table">
+          <thead>
+            <tr>
+              <th>Preferred First Name</th>
+              <th>Last Name</th>
+              <th>Email</th>
+              <th>Phone Number</th>
+              <th>Home Pool</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="employeesTableBody"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:10px;">
+        <button type="button" id="employeeDeleteAllBtn" class="submit-btn danger-button">Delete All Employees</button>
+      </div>
+    </section>
+    <div class="settings-section">
+      <div id="sanitationMethodsSection">
+        <h3>Sanitation Methods</h3>
+        <p class="section-subtitle">Sanitation methods are managed per market. Only markets selected below are shown.</p>
+        <div id="sanitationTablesContainer"></div>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h3>Data Storage</h3>
+      <button id="clearAllData" class="submit-btn">Clear All Chemistry Log Data</button>
+      <br>
+      <button id="exportCsvBtn" class="submit-btn">Export Data to CSV</button>
+    </div>
+    <div class="settings-section">
+      <h3>Security</h3>
+      <p class="section-subtitle">Control inactivity logout and confirmation requirements for destructive actions.</p>
+      <div class="security-content-wrap">
+        <div style="margin-top: 10px;">
+          <label for="securityTimeoutSelect">Auto-logout after inactivity</label>
+          <div style="margin-top: 4px;">
+            <select id="securityTimeoutSelect">
+              <option value="never">Never</option>
+              <option value="15">15 minutes</option>
+              <option value="30">30 minutes</option>
+              <option value="60">60 minutes</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top: 20px;">
+          <label style="display:flex;align-items:center;gap:8px;">
+            <input type="checkbox" id="securityRequirePassword" checked>
+            Require password confirmation before destructive actions
+          </label>
+        </div>
+      </div>
+      <div class="security-controls-row">
+        <button type="button" id="securitySaveBtn" class="editAndSave" style="margin-top: 4px;">Save</button>
+      </div>
+    </div>
+  `;
+
+  let anchor = websiteSection;
+  Array.from(wrapper.children).forEach((section) => {
+    if (anchor) {
+      anchor.insertAdjacentElement('afterend', section);
+      anchor = section;
+    } else {
+      modalContent.appendChild(section);
+    }
+  });
+}
+
 // ============================================================
 // POOL SECTIONS — show/hide pools 3-5 based on pool config
 // ============================================================
@@ -1851,10 +2049,11 @@ function getChemSectionIds() {
 }
 
 function getChemPoolOrdinalLabel(idx, fallbackTitle = '') {
-  if (idx === 0) return 'Primary Pool';
-  if (idx === 1) return 'Secondary Pool';
   const title = String(fallbackTitle || '').trim();
-  return title || `Pool ${idx + 1}`;
+  if (title) return title;
+  if (idx === 0) return 'Pool 1';
+  if (idx === 1) return 'Pool 2';
+  return `Pool ${idx + 1}`;
 }
 
 function ensureChemAutoControllerUploadSections() {
@@ -2003,10 +2202,11 @@ async function updateChemAutoControllerSections(poolDoc) {
     }
 
     const titleText = section.querySelector('h3')?.textContent?.trim() || `Pool ${idx + 1}`;
+    const poolDisplayName = rulesPool?.poolName || titleText;
     const desc = group.querySelector('.chem-auto-controller-desc');
     const note = group.querySelector('.chem-auto-controller-note');
     if (desc) {
-      desc.textContent = `Upload an image of the ${getChemPoolOrdinalLabel(idx, titleText)} auto controller.`;
+      desc.textContent = `Upload an image of the ${getChemPoolOrdinalLabel(idx, poolDisplayName)} auto controller.`;
     }
     if (note) {
       note.textContent = recentSubmission
@@ -4742,7 +4942,7 @@ function ensureRolesPermissionsSettingsSection() {
       <h4>Permissions</h4>
       <div class="table-scroll-wrap">
         <table class="employee-table roles-permissions-table">
-          <thead><tr><th>Role</th><th>Pool Chemistry Dashboard</th><th>Managerial Report</th></tr></thead>
+          <thead><tr><th>Role</th>${PERMISSION_DEFINITIONS.map(({ label }) => `<th>${escapeHtml(label)}</th>`).join('')}</tr></thead>
           <tbody id="rolePermissionsBody"></tbody>
         </table>
       </div>
@@ -6532,6 +6732,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   injectResourcesMenuLinks();
   injectDesPreInspectionMenuLinks();
   injectLifeguardSettingsMenuLinks();
+  ensureStandardSettingsSections();
   ensureResourcesSettingsSection();
   ensureSettingsModalScrollBody();
   setupAccountManagement();
@@ -6593,6 +6794,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (!hasFreshSupervisorToken()) clearSupervisorLoginState();
     }
     window.setupDropdownVisibility();
+    enforceDesPreInspectionAccess();
   });
 
   normalizeSharedHeaderCopy();

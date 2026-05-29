@@ -5,7 +5,6 @@ import {
   setDoc,
   serverTimestamp,
   writeBatch,
-  listenPools,
 } from '../firebase.js';
 
 const DES_PHOTO_STORAGE = 'firestoreDesPreInspectionPhoto';
@@ -50,20 +49,6 @@ function setMessage(text, isError = false) {
   msg.textContent = text || '';
   msg.classList.toggle('error', !!text && isError);
   msg.classList.toggle('success', !!text && !isError);
-}
-
-function renderPoolOptions(pools) {
-  const select = document.getElementById('desPoolSelect');
-  if (!select) return;
-  const current = select.value;
-  select.innerHTML = '<option value="">Select</option>';
-  [...pools].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''))).forEach((pool) => {
-    const option = document.createElement('option');
-    option.value = pool.name || pool.id;
-    option.textContent = pool.name || pool.id;
-    select.appendChild(option);
-  });
-  if (current) select.value = current;
 }
 
 function renderInspectionItems() {
@@ -136,6 +121,15 @@ function bindPhotoInputs() {
     selectedPhotos.set(itemId, existing.concat(incoming));
     input.value = '';
     renderPhotoPreview(itemId);
+  });
+}
+
+function bindTextareaAutoResize() {
+  document.addEventListener('input', (event) => {
+    const textarea = event.target.closest('.des-item-body textarea');
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${Math.max(72, textarea.scrollHeight)}px`;
   });
 }
 
@@ -330,13 +324,13 @@ async function handleSubmit(event) {
     setMessage('Submission failed.', true);
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = 'Submit DES Pre-Inspection';
+    submitBtn.textContent = 'Submit';
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
   renderInspectionItems();
   bindPhotoInputs();
-  listenPools(renderPoolOptions);
+  bindTextareaAutoResize();
   document.getElementById('desInspectionForm')?.addEventListener('submit', handleSubmit);
 });

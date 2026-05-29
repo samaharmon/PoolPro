@@ -6,9 +6,13 @@
   margin-top: 36px;
 }
 
+.des-form-card > h2 {
+  margin-bottom: 14px;
+}
+
 .des-form-note {
   color: #e5e5e5;
-  margin: -8px 0 22px;
+  margin: 0 0 32px;
 }
 
 .des-item-list {
@@ -52,7 +56,29 @@
 }
 
 .des-answer-group input[type="radio"] {
-  accent-color: #ff6b6b;
+  appearance: none;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 2px solid #d6d6d6;
+  background: #3a3a3a;
+  display: inline-grid;
+  place-content: center;
+  margin: 0;
+}
+
+.des-answer-group input[type="radio"]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff6b6b;
+  transform: scale(0);
+  transition: transform 0.14s ease;
+}
+
+.des-answer-group input[type="radio"]:checked::before {
+  transform: scale(1);
 }
 
 .des-item-body {
@@ -63,8 +89,18 @@
 
 .des-item-body textarea {
   width: 100%;
-  min-height: 92px;
-  resize: vertical;
+  min-height: 72px;
+  resize: none;
+  overflow-y: hidden;
+  padding: 8px;
+  border: 1px solid #666;
+  background: #3a3a3a;
+  color: #f0f0f0;
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .des-photo-picker {
