@@ -24,23 +24,14 @@
     <hr class="home-divider">
 
     <nav class="home-menu">
-      <button class="home-menu-item" data-target="chem">
-        <span>Pool Chemistry Log</span>
+      <button class="home-menu-item" data-access-role="lifeguard">
+        <span>Lifeguards</span>
       </button>
-      <button class="home-menu-item" data-target="training">
-        <span>Training Signup</span>
+      <button class="home-menu-item" data-access-role="manager">
+        <span>Managers</span>
       </button>
-      <button class="home-menu-item" data-target="duties">
-        <span>Cleanliness Report</span>
-      </button>
-      <button class="home-menu-item" data-target="operational">
-        <span>Operational Status Log</span>
-      </button>
-      <button class="home-menu-item" data-target="resources">
-        <span>Resources</span>
-      </button>
-      <button class="home-menu-item home-menu-item-supervisor" data-target="supervisor">
-        <span>Supervisor Tools</span>
+      <button class="home-menu-item" data-access-role="supervisor">
+        <span>Supervisors</span>
       </button>
     </nav>
   </main>
@@ -51,15 +42,9 @@
       <button class="close" id="homeLoginClose">&times;</button>
       <h2 id="homeModalTitle">Sign in</h2>
 
-      <!-- Lifeguard / Supervisor role toggle -->
-      <div class="home-role-toggle" id="roleToggle">
-        <button class="theme-toggle-option active" data-role="lifeguard">Lifeguard</button>
-        <button class="theme-toggle-option" data-role="supervisor">Supervisor</button>
-      </div>
-
       <form id="homeLoginForm">
         <div class="form-group">
-          <label id="homeUsernameLabel" for="homeUsernameInput">Username</label>
+          <label id="homeUsernameLabel" for="homeUsernameInput">Username or Email</label>
           <input type="text" id="homeUsernameInput" autocomplete="username">
         </div>
         <div class="form-group" id="homePasswordGroup">
