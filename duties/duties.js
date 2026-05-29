@@ -365,6 +365,9 @@ function normalizeRolesPermissionsData(data = {}) {
 }
 
 async function canAccessManagerialReport() {
+  if (typeof window.poolProCanAccessManagerialReport === 'function') {
+    return !!window.poolProCanAccessManagerialReport();
+  }
   const keys = getCurrentIdentityKeys();
   if (keys.includes(SITE_DEVELOPER_EMAIL)) return true;
   try {

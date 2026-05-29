@@ -1535,20 +1535,77 @@ const ROLE_PERMISSIONS_STORAGE_KEY = 'poolproRolePermissionsProfile';
 const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
 const DELETE_AUTH_USER_FUNCTION_URL = 'https://us-central1-chemlog-43c08.cloudfunctions.net/deleteAuthUserByEmail';
 const ROLE_DEFINITIONS = [
+  { key: 'lifeguard', label: 'Lifeguard' },
+  { key: 'attendant', label: 'Attendant' },
   { key: 'poolManager', label: 'Pool Manager' },
   { key: 'supervisor', label: 'Supervisor' },
 ];
 const PERMISSION_DEFINITIONS = [
-  { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
+  { key: 'poolChemistryLog', label: 'Pool Chemistry Log' },
+  { key: 'trainingSignup', label: 'Training Signup' },
+  { key: 'cleanlinessReport', label: 'Cleanliness Report' },
   { key: 'managerialReport', label: 'Managerial Report' },
+  { key: 'operationalStatusLog', label: 'Operational Status Log' },
+  { key: 'resources', label: 'Resources' },
   { key: 'desPreInspection', label: 'DES Pre-Inspection' },
+  { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
+  { key: 'trainingSetup', label: 'Training Setup' },
+  { key: 'performanceTracking', label: 'Performance Tracking' },
+  { key: 'auditingForms', label: 'Auditing Forms' },
+  { key: 'rulesEditor', label: 'Rules Editor' },
+  { key: 'settings', label: 'Settings' },
 ];
-let rolesPermissionsData = {
-  roles: { poolManager: [], supervisor: [] },
-  permissions: {
-    poolManager: { poolChemistryDashboard: false, managerialReport: false, desPreInspection: false },
-    supervisor: { poolChemistryDashboard: false, managerialReport: false, desPreInspection: false },
+const ROLE_DEFAULT_PERMISSIONS = {
+  lifeguard: {
+    poolChemistryLog: true,
+    trainingSignup: true,
+    cleanlinessReport: true,
+    managerialReport: false,
+    operationalStatusLog: true,
+    resources: true,
+    desPreInspection: false,
+    poolChemistryDashboard: false,
+    trainingSetup: false,
+    performanceTracking: false,
+    auditingForms: false,
+    rulesEditor: false,
+    settings: true,
   },
+  attendant: {
+    poolChemistryLog: true,
+    trainingSignup: false,
+    cleanlinessReport: false,
+    managerialReport: false,
+    operationalStatusLog: true,
+    resources: true,
+    desPreInspection: false,
+    poolChemistryDashboard: false,
+    trainingSetup: false,
+    performanceTracking: false,
+    auditingForms: false,
+    rulesEditor: false,
+    settings: true,
+  },
+  poolManager: {
+    poolChemistryLog: true,
+    trainingSignup: true,
+    cleanlinessReport: true,
+    managerialReport: true,
+    operationalStatusLog: true,
+    resources: true,
+    desPreInspection: true,
+    poolChemistryDashboard: false,
+    trainingSetup: false,
+    performanceTracking: false,
+    auditingForms: false,
+    rulesEditor: false,
+    settings: true,
+  },
+  supervisor: Object.fromEntries(PERMISSION_DEFINITIONS.map(({ key }) => [key, true])),
+};
+let rolesPermissionsData = {
+  roles: Object.fromEntries(ROLE_DEFINITIONS.map(({ key }) => [key, []])),
+  permissions: ROLE_DEFAULT_PERMISSIONS,
   individualPermissions: {},
 };
 
@@ -1558,7 +1615,14 @@ function normalizeIdentityKey(value) {
 
 function normalizeAccessMode(value) {
   const mode = (value || '').toString().trim().toLowerCase();
-  return ['lifeguard', 'manager', 'supervisor'].includes(mode) ? mode : '';
+  return ['attendant', 'lifeguard', 'manager', 'supervisor'].includes(mode) ? mode : '';
+}
+
+function getRoleKeyForAccessMode(accessMode) {
+  if (accessMode === 'manager') return 'poolManager';
+  if (accessMode === 'attendant') return 'attendant';
+  if (accessMode === 'supervisor') return 'supervisor';
+  return 'lifeguard';
 }
 
 function getRequestedAccessMode() {
@@ -1610,9 +1674,6 @@ function normalizeRolesPermissionsData(data = {}) {
   const roles = data.roles || {};
   const permissions = data.permissions || {};
   const individual = data.individualPermissions || {};
-  const normalizePermissionMap = (source = {}) => Object.fromEntries(
-    PERMISSION_DEFINITIONS.map(({ key }) => [key, !!source?.[key]])
-  );
   const normalizedIndividual = Object.fromEntries(Object.entries(individual).map(([key, value]) => {
     const permissionOverrides = {};
     PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
@@ -1623,16 +1684,53 @@ function normalizeRolesPermissionsData(data = {}) {
     return [normalizeIdentityKey(key), permissionOverrides];
   }));
   return {
-    roles: {
-      poolManager: Array.isArray(roles.poolManager) ? roles.poolManager.map(normalizeIdentityKey).filter(Boolean) : [],
-      supervisor: Array.isArray(roles.supervisor) ? roles.supervisor.map(normalizeIdentityKey).filter(Boolean) : [],
-    },
-    permissions: {
-      poolManager: normalizePermissionMap(permissions.poolManager),
-      supervisor: normalizePermissionMap(permissions.supervisor),
-    },
+    roles: Object.fromEntries(ROLE_DEFINITIONS.map(({ key }) => [
+      key,
+      Array.isArray(roles[key]) ? roles[key].map(normalizeIdentityKey).filter(Boolean) : [],
+    ])),
+    permissions: Object.fromEntries(ROLE_DEFINITIONS.map(({ key }) => [
+      key,
+      normalizePermissionMap(permissions[key], key),
+    ])),
     individualPermissions: normalizedIndividual,
   };
+}
+
+function normalizePermissionMap(source = {}, roleKey = '') {
+  const defaults = ROLE_DEFAULT_PERMISSIONS[roleKey] || {};
+  const legacyKeys = new Set(['poolChemistryDashboard', 'managerialReport', 'desPreInspection']);
+  const hasExpandedPermissionShape = PERMISSION_DEFINITIONS.some(({ key }) =>
+    !legacyKeys.has(key) && Object.prototype.hasOwnProperty.call(source || {}, key)
+  );
+  if (roleKey === 'supervisor' && !hasExpandedPermissionShape) {
+    return { ...defaults };
+  }
+  return Object.fromEntries(PERMISSION_DEFINITIONS.map(({ key }) => [
+    key,
+    Object.prototype.hasOwnProperty.call(source || {}, key) ? !!source[key] : !!defaults[key],
+  ]));
+}
+
+function applyIndividualPermissionOverrides(permissions, keys) {
+  const merged = { ...permissions };
+  PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
+    const overrides = Array.from(keys || [])
+      .map((identityKey) => rolesPermissionsData.individualPermissions?.[identityKey])
+      .filter((individual) => Object.prototype.hasOwnProperty.call(individual || {}, permissionKey))
+      .map((individual) => !!individual[permissionKey]);
+    if (overrides.includes(false)) {
+      merged[permissionKey] = false;
+    } else if (overrides.includes(true)) {
+      merged[permissionKey] = true;
+    }
+  });
+  return merged;
+}
+
+function getPermissionsForAccessMode(accessMode, keys = getCurrentIdentityKeys()) {
+  const roleKey = getRoleKeyForAccessMode(normalizeAccessMode(accessMode) || 'lifeguard');
+  const base = normalizePermissionMap(rolesPermissionsData.permissions?.[roleKey], roleKey);
+  return applyIndividualPermissionOverrides(base, new Set((keys || []).map(normalizeIdentityKey).filter(Boolean)));
 }
 
 function getEffectiveRolePermissionsForKeys(keys) {
@@ -1672,15 +1770,11 @@ function isDeveloperUser() {
 
 function getCurrentAccessProfile() {
   const keys = getCurrentIdentityKeys();
-  const permissions = getEffectiveRolePermissionsForKeys(keys);
-  if (isDeveloperUser()) {
-    PERMISSION_DEFINITIONS.forEach(({ key }) => {
-      permissions[key] = true;
-    });
-  }
+  const accessMode = getRequestedAccessMode();
+  const permissions = getPermissionsForAccessMode(accessMode, keys);
   return {
     isDeveloper: isDeveloperUser(),
-    accessMode: getRequestedAccessMode(),
+    accessMode,
     permissions,
   };
 }
@@ -1711,6 +1805,7 @@ async function loadRolesPermissions() {
   window.setupDropdownVisibility?.();
   applyDashboardAccessMode();
   enforceDesPreInspectionAccess();
+  enforceCurrentPageAccess();
   renderRolesPermissionsSettings();
   return rolesPermissionsData;
 }
@@ -1722,17 +1817,15 @@ async function saveRolesPermissions() {
   window.setupDropdownVisibility?.();
   applyDashboardAccessMode();
   enforceDesPreInspectionAccess();
+  enforceCurrentPageAccess();
 }
 
 function hasPermission(permissionKey) {
   const accessMode = getRequestedAccessMode();
-  if (accessMode === 'lifeguard') return false;
-  if (accessMode === 'manager' && permissionKey === 'poolChemistryDashboard') return false;
-  if (isDeveloperUser()) return true;
-  if (accessMode === 'supervisor' && isSupervisor()) return true;
-  if (accessMode === 'manager' && hasFreshSupervisorToken()) return permissionKey !== 'poolChemistryDashboard';
   const live = getCurrentAccessProfile();
-  if (live.permissions?.[permissionKey]) return true;
+  if (Object.prototype.hasOwnProperty.call(live.permissions || {}, permissionKey)) {
+    return !!live.permissions[permissionKey];
+  }
   const cached = readCachedAccessProfile();
   return !!cached?.permissions?.[permissionKey];
 }
@@ -1751,6 +1844,63 @@ function canAccessDesPreInspection() {
 
 window.poolProCanAccessManagerialReport = canAccessManagerialReport;
 window.poolProCanAccessDesPreInspection = canAccessDesPreInspection;
+
+function canAccessPage(permissionKey) {
+  return !permissionKey || hasPermission(permissionKey);
+}
+
+const NAV_PERMISSION_MAP = {
+  chem: 'poolChemistryLog',
+  'training-signup': 'trainingSignup',
+  duties: 'cleanlinessReport',
+  'managerial-report': 'managerialReport',
+  'operational-status': 'operationalStatusLog',
+  resources: 'resources',
+  'des-pre-inspection': 'desPreInspection',
+  dashboard: 'poolChemistryDashboard',
+  'training-setup': 'trainingSetup',
+  employees: 'performanceTracking',
+  testing: 'auditingForms',
+  settings: 'settings',
+  'lifeguard-settings': 'settings',
+};
+
+function getCurrentPagePermissionKey() {
+  const path = window.location.pathname;
+  if (/\/chem\/chem\.html$/i.test(path)) {
+    return window.location.hash === '#supervisorDashboard' ? 'poolChemistryDashboard' : 'poolChemistryLog';
+  }
+  if (/\/Training\/training\.html$/i.test(path) || /\/training\/training\.html$/i.test(path)) return 'trainingSignup';
+  if (/\/duties\/duties\.html$/i.test(path)) return 'cleanlinessReport';
+  if (/\/managerial\/managerial\.html$/i.test(path)) return 'managerialReport';
+  if (/\/operational\/operational\.html$/i.test(path)) return 'operationalStatusLog';
+  if (/\/resources\/resources\.html$/i.test(path)) return 'resources';
+  if (/\/des\/des\.html$/i.test(path)) return 'desPreInspection';
+  if (/\/employees\/employees\.html$/i.test(path)) return 'performanceTracking';
+  if (/\/testing\/testing\.html$/i.test(path)) return 'auditingForms';
+  if (/\/Editor\/newRules\.html$/i.test(path) || /\/editor\/newRules\.html$/i.test(path)) return 'rulesEditor';
+  return '';
+}
+
+function pageTitleForPermission(permissionKey) {
+  return PERMISSION_DEFINITIONS.find(({ key }) => key === permissionKey)?.label || 'This page';
+}
+
+function enforceCurrentPageAccess() {
+  const permissionKey = getCurrentPagePermissionKey();
+  if (!permissionKey || canAccessPage(permissionKey)) return;
+  const title = pageTitleForPermission(permissionKey);
+  const container = document.querySelector('.container') || document.querySelector('main') || document.body;
+  container.innerHTML = `
+    <h2 class="page-content-title">${escapeHtml(title)}</h2>
+    <div class="form-container">
+      <div class="section">
+        <h2>Access Required</h2>
+        <p>You do not have permission to view ${escapeHtml(title)}.</p>
+      </div>
+    </div>
+  `;
+}
 
 function isDesPreInspectionPage() {
   return /\/des\/des\.html$/i.test(window.location.pathname);
@@ -1857,25 +2007,26 @@ function maybeShowImportantUpdatesNotice() {
 // Called on DOMContentLoaded and exported so training.js can re-call after login.
 window.setupDropdownVisibility = function () {
   const sup = isSupervisor();
-  const canViewChemDashboard = canAccessPoolChemistryDashboard();
-  const canViewDesPreInspection = canAccessDesPreInspection();
   const accessMode = getRequestedAccessMode();
   const lifeguard = accessMode === 'lifeguard' && isLifeguardSession() && !sup;
-  const limitedSettings = !sup && hasActivePoolProSession();
-  ['training-setup', 'employees', 'testing', 'settings'].forEach(nav => {
-    document.querySelectorAll(`[data-nav="${nav}"]`).forEach(el => {
-      el.style.display = sup ? '' : 'none';
+  const limitedSettings = !sup && hasActivePoolProSession() && hasPermission('settings');
+  Object.entries(NAV_PERMISSION_MAP).forEach(([nav, permissionKey]) => {
+    document.querySelectorAll(`[data-nav="${nav}"]`).forEach((el) => {
+      const isSupervisorTool = el.classList.contains('supervisor-only');
+      if (nav === 'settings' && isSupervisorTool && !sup) {
+        el.style.display = 'none';
+        return;
+      }
+      if (['training-setup', 'employees', 'testing'].includes(nav) && !sup) {
+        el.style.display = 'none';
+        return;
+      }
+      el.style.display = hasPermission(permissionKey) ? '' : 'none';
     });
   });
   document.querySelectorAll('[data-nav="dashboard"]').forEach((el) => {
-    el.style.display = canViewChemDashboard ? '' : 'none';
+    el.style.display = hasPermission('poolChemistryDashboard') ? '' : 'none';
     el.textContent = sup ? 'Supervisor Dashboard' : 'Pool Chemistry Dashboard';
-  });
-  document.querySelectorAll('[data-nav="managerial-report"]').forEach((el) => {
-    el.style.display = canAccessManagerialReport() ? '' : 'none';
-  });
-  document.querySelectorAll('[data-nav="des-pre-inspection"]').forEach((el) => {
-    el.style.display = canViewDesPreInspection ? '' : 'none';
   });
   document.querySelectorAll('[data-nav="lifeguard-settings"]').forEach((el) => {
     el.style.display = limitedSettings ? '' : 'none';
@@ -1885,13 +2036,13 @@ window.setupDropdownVisibility = function () {
     item.style.display = lifeguard ? '' : 'none';
   });
   document.querySelectorAll('.dropdown-menu').forEach((m) => {
-    m.classList.toggle('supervisor-active', sup || canViewChemDashboard);
     m.classList.toggle('lifeguard-active', lifeguard);
     m.querySelectorAll('.supervisor-only').forEach((item) => {
       item.classList.remove('supervisor-group-start', 'supervisor-group-end');
     });
     const visibleSupervisorItems = Array.from(m.querySelectorAll('.supervisor-only'))
       .filter((item) => item.style.display !== 'none');
+    m.classList.toggle('supervisor-active', visibleSupervisorItems.length > 0);
     if (visibleSupervisorItems.length) {
       visibleSupervisorItems[0].classList.add('supervisor-group-start');
       visibleSupervisorItems[visibleSupervisorItems.length - 1].classList.add('supervisor-group-end');
@@ -4994,6 +5145,8 @@ function ensureRolesPermissionsSettingsSection() {
       <div class="settings-field">
         <label for="roleAssignmentSelect">Role</label>
         <select id="roleAssignmentSelect">
+          <option value="lifeguard">Lifeguard</option>
+          <option value="attendant">Attendant</option>
           <option value="poolManager">Pool Manager</option>
           <option value="supervisor">Supervisor</option>
         </select>
@@ -5005,6 +5158,24 @@ function ensureRolesPermissionsSettingsSection() {
       </div>
     </div>
     <div class="roles-tables-grid">
+      <div>
+        <h4>Lifeguards</h4>
+        <div class="table-scroll-wrap">
+          <table class="employee-table roles-table">
+            <thead><tr><th>Name</th><th>Email</th><th>Permissions</th></tr></thead>
+            <tbody id="lifeguardRoleBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h4>Attendants</h4>
+        <div class="table-scroll-wrap">
+          <table class="employee-table roles-table">
+            <thead><tr><th>Name</th><th>Email</th><th>Permissions</th><th>Remove</th></tr></thead>
+            <tbody id="attendantRoleBody"></tbody>
+          </table>
+        </div>
+      </div>
       <div>
         <h4>Pool Managers</h4>
         <div class="table-scroll-wrap">
@@ -5086,15 +5257,12 @@ function setupRolesPermissionsSearch() {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'roles-search-option';
-      button.textContent = `${employeeDisplayName(normalized)}${normalized.email ? ` — ${normalized.email}` : ''}`;
+      button.textContent = `${employeeDisplayName(normalized)}${normalized.email ? ` - ${normalized.email}` : ''}`;
       button.addEventListener('click', async () => {
-        const role = roleSelect.value || 'poolManager';
-        if (!rolesPermissionsData.roles[role]) rolesPermissionsData.roles[role] = [];
-        if (!rolesPermissionsData.roles[role].includes(key)) {
-          rolesPermissionsData.roles[role].push(key);
-          await saveRolesPermissions();
-          renderRolesPermissionsSettings();
-        }
+        const role = roleSelect.value || 'lifeguard';
+        assignEmployeeToRole(key, role);
+        await saveRolesPermissions();
+        renderRolesPermissionsSettings();
         input.value = '';
         results.innerHTML = '';
         results.classList.remove('visible');
@@ -5108,6 +5276,16 @@ function setupRolesPermissionsSearch() {
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.roles-search-field')) results.classList.remove('visible');
   });
+}
+
+function assignEmployeeToRole(memberKey, roleKey) {
+  ROLE_DEFINITIONS.forEach(({ key }) => {
+    rolesPermissionsData.roles[key] = (rolesPermissionsData.roles[key] || []).filter((existingKey) => existingKey !== memberKey);
+  });
+  if (!rolesPermissionsData.roles[roleKey]) rolesPermissionsData.roles[roleKey] = [];
+  if (!rolesPermissionsData.roles[roleKey].includes(memberKey)) {
+    rolesPermissionsData.roles[roleKey].push(memberKey);
+  }
 }
 
 function getRoleDefaultPermission(roleKey, permissionKey) {
@@ -5214,9 +5392,12 @@ function renderRoleMembers(roleKey, tbodyId) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   tbody.innerHTML = '';
-  const members = rolesPermissionsData.roles[roleKey] || [];
+  const baseMembers = roleKey === 'lifeguard'
+    ? employeesData.map((employee) => getEmployeeRoleKey(employee)).filter(Boolean)
+    : [];
+  const members = [...new Set(baseMembers.concat(rolesPermissionsData.roles[roleKey] || []))];
   if (!members.length) {
-    tbody.innerHTML = '<tr><td colspan="4">No users assigned.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${roleKey === 'lifeguard' ? 3 : 4}">No users assigned.</td></tr>`;
     return;
   }
   members.forEach((memberKey) => {
@@ -5228,7 +5409,7 @@ function renderRoleMembers(roleKey, tbodyId) {
       <td>${escapeHtml(displayName)}</td>
       <td>${escapeHtml(email)}</td>
       <td class="roles-row-permissions"></td>
-      <td class="actions-cell"></td>
+      ${roleKey === 'lifeguard' ? '' : '<td class="actions-cell"></td>'}
     `;
     const permissionsCell = tr.querySelector('.roles-row-permissions');
     const permissionsButton = document.createElement('button');
@@ -5248,16 +5429,18 @@ function renderRoleMembers(roleKey, tbodyId) {
     });
     permissionsCell.appendChild(summary);
 
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'submit-btn roles-remove-btn';
-    removeBtn.textContent = 'Remove';
-    removeBtn.addEventListener('click', async () => {
-      rolesPermissionsData.roles[roleKey] = (rolesPermissionsData.roles[roleKey] || []).filter((key) => key !== memberKey);
-      await saveRolesPermissions();
-      renderRolesPermissionsSettings();
-    });
-    tr.querySelector('.actions-cell').appendChild(removeBtn);
+    if (roleKey !== 'lifeguard') {
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'submit-btn roles-remove-btn';
+      removeBtn.textContent = 'Remove';
+      removeBtn.addEventListener('click', async () => {
+        rolesPermissionsData.roles[roleKey] = (rolesPermissionsData.roles[roleKey] || []).filter((key) => key !== memberKey);
+        await saveRolesPermissions();
+        renderRolesPermissionsSettings();
+      });
+      tr.querySelector('.actions-cell').appendChild(removeBtn);
+    }
     tbody.appendChild(tr);
   });
 }
@@ -5295,6 +5478,8 @@ function renderRolesPermissionsSettings() {
   if (!section) return;
   section.style.display = isDeveloperUser() ? '' : 'none';
   if (!isDeveloperUser()) return;
+  renderRoleMembers('lifeguard', 'lifeguardRoleBody');
+  renderRoleMembers('attendant', 'attendantRoleBody');
   renderRoleMembers('poolManager', 'poolManagerRoleBody');
   renderRoleMembers('supervisor', 'supervisorRoleBody');
   renderRolePermissionsTable();
@@ -8293,189 +8478,4 @@ async function hydrateDutyReportPhotos(root) {
         ? await getFirestoreDutyPhotoDataUrl(meta)
         : (meta.url || img.getAttribute('src') || '');
       if (!fullUrl) throw new Error('Duty photo URL is missing.');
-      img.src = fullUrl;
-      img.dataset.fullUrl = fullUrl;
-      img.title = meta.name || 'photo';
-      img.classList.remove('duty-report-photo--loading', 'duty-report-photo--error');
-      img.onclick = () => window.openPhotoModal(
-        fullUrl,
-        images.map((node) => node.dataset.fullUrl).filter(Boolean)
-      );
-    } catch (err) {
-      console.error('[Duties] Could not load submitted photo:', err);
-      img.classList.remove('duty-report-photo--loading');
-      img.classList.add('duty-report-photo--error');
-      img.removeAttribute('onclick');
-      img.title = 'Unable to load photo';
-    }
-  }));
-}
-
-function openDutyFormModal(sub) {
-  let modal = document.getElementById('dutyFormModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'dutyFormModal';
-    modal.addEventListener('click', (e) => { if (e.target === modal) window.closeDutyFormModal(); });
-    document.body.appendChild(modal);
-  }
-  modal.className = 'duty-report-modal';
-  modal.style.cssText = '';
-
-  const ts = toDateObject(sub.timestamp);
-  const esc = escapeHtml;
-  const reportTitle = getDutyReportTitle(sub);
-  const managerPanelTitle = sub?.reportType === 'managerial' ? 'Managerial Report Details' : 'Managers Only';
-
-  const photoSectionHtml = (label, photos) => {
-    if (!photos?.length) return '';
-    const imgs = photos.map((p) => {
-      const meta = encodeURIComponent(JSON.stringify({
-        url: p.url || '',
-        name: p.name || '',
-        source: p.source || '',
-        contentType: p.contentType || '',
-        dataUrlPrefix: p.dataUrlPrefix || '',
-        photoId: p.photoId || '',
-        submissionId: p.submissionId || sub.id || '',
-      }));
-      const initialSrc = isFirestoreDutyPhoto(p) ? EMPTY_INLINE_IMAGE : esc(p.url || EMPTY_INLINE_IMAGE);
-      const loadingClass = isFirestoreDutyPhoto(p) ? ' duty-report-photo--loading' : '';
-      return `<img src="${initialSrc}" alt="photo" class="duty-report-photo${loadingClass}"
-           data-duty-photo-meta="${meta}" />`;
-    }).join('');
-    return `<section class="duty-report-photo-section">
-      <h4>${esc(label)}</h4>
-      <div class="duty-report-photo-grid">${imgs}</div>
-    </section>`;
-  };
-
-  const photos = sub.photos || {};
-  const hasValue = (value) => value !== null && value !== undefined && value !== '';
-  const hasManagerData = hasValue(sub.bleachVolume) || hasValue(sub.muriaticAcid) ||
-    hasValue(sub.shockGranular) || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
-    photos.bleach?.length;
-
-  let cyaHtml = '';
-  if (sub.cyaReadings && Object.keys(sub.cyaReadings).length) {
-    const rows = Object.entries(sub.cyaReadings).map(([k, v]) => {
-      const label = k.replace('pool', 'Pool ');
-      return dutyScaleHtml(`${label} CYA`, v, '', 'cya');
-    }).join('');
-    cyaHtml = `<div class="duty-scale-group"><h4>CYA Levels</h4>${rows}</div>`;
-  }
-
-  modal.innerHTML = `
-    <div class="duty-report-modal-card">
-      <div class="modal-header duty-report-modal-header">
-        <h2>${esc(reportTitle)}</h2>
-        <button type="button" class="close" onclick="window.closeDutyFormModal()">&times;</button>
-      </div>
-      <div class="duty-report-modal-scroll">
-        <div class="duty-report-meta">
-          <p><strong>Pool:</strong> ${esc(sub.pool)}</p>
-          <p><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
-          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
-        </div>
-
-        ${photoSectionHtml('Deck', photos.deck)}
-        ${photoSectionHtml('Pool', photos.pool)}
-        ${photoSectionHtml('Skimmers', photos.skimmers)}
-        ${photoSectionHtml('Damaged Equipment', photos.damaged)}
-        ${photoSectionHtml('Bleach Feeders', photos.bleachFeeders)}
-        ${photoSectionHtml('DES Logbooks', photos.desLogbooks)}
-        ${photoSectionHtml('Fill Lines', photos.fillLines)}
-
-        ${sub.damagedNotes ? `<div class="duty-report-notes"><strong>Damaged Equipment Notes:</strong><span>${esc(sub.damagedNotes)}</span></div>` : ''}
-        ${sub.otherNotes ? `<div class="duty-report-notes"><strong>Other Notes:</strong><span>${esc(sub.otherNotes)}</span></div>` : ''}
-
-        ${hasManagerData ? `
-        <section class="duty-report-manager-panel">
-          <h3>${esc(managerPanelTitle)}</h3>
-          ${photoSectionHtml('Bleach Barrels', photos.bleach)}
-          ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
-          ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}
-          ${dutyScaleHtml('Shock / Granular', sub.shockGranular, '%', 'linear')}
-          ${cyaHtml}
-        </section>` : ''}
-      </div>
-    </div>`;
-
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
-  hydrateDutyReportPhotos(modal).catch((err) => {
-    console.error('[Duties] Could not hydrate submitted photos:', err);
-  });
-}
-
-window.closeDutyFormModal = function closeDutyFormModal() {
-  const modal = document.getElementById('dutyFormModal');
-  if (!modal) return;
-  modal.classList.remove('visible');
-  window.setTimeout(() => {
-    if (!modal.classList.contains('visible')) {
-      modal.style.display = 'none';
-    }
-  }, 250);
-};
-
-// Photo modal for submitted report images
-window.openPhotoModal = function(url, gallery = []) {
-  const urls = Array.isArray(gallery) && gallery.length ? gallery.filter(Boolean) : [url].filter(Boolean);
-  let currentIndex = Math.max(0, urls.indexOf(url));
-  let overlay = document.getElementById('photoViewOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'photoViewOverlay';
-    overlay.className = 'photo-view-overlay';
-    overlay.addEventListener('click', (event) => {
-      if (event.target === overlay) overlay.style.display = 'none';
-    });
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'photo-view-close';
-    close.setAttribute('aria-label', 'Close photo');
-    close.textContent = '×';
-    close.addEventListener('click', (event) => {
-      event.stopPropagation();
-      overlay.style.display = 'none';
-    });
-    const prev = document.createElement('button');
-    prev.type = 'button';
-    prev.className = 'photo-view-nav photo-view-nav--prev';
-    prev.setAttribute('aria-label', 'Previous photo');
-    prev.textContent = '‹';
-    const next = document.createElement('button');
-    next.type = 'button';
-    next.className = 'photo-view-nav photo-view-nav--next';
-    next.setAttribute('aria-label', 'Next photo');
-    next.textContent = '›';
-    const img = document.createElement('img');
-    img.id = 'photoViewImg';
-    img.className = 'photo-view-img';
-    [prev, next].forEach((btn) => {
-      btn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const activeUrls = overlay._poolProPhotoGallery || [];
-        if (activeUrls.length <= 1) return;
-        const delta = btn === prev ? -1 : 1;
-        const nextIndex = (Number(overlay.dataset.index || 0) + delta + activeUrls.length) % activeUrls.length;
-        overlay.dataset.index = String(nextIndex);
-        img.src = activeUrls[nextIndex];
-      });
-    });
-    overlay.appendChild(close);
-    overlay.appendChild(prev);
-    overlay.appendChild(img);
-    overlay.appendChild(next);
-    document.body.appendChild(overlay);
-  }
-  overlay._poolProPhotoGallery = urls;
-  overlay.dataset.index = String(currentIndex);
-  const img = document.getElementById('photoViewImg');
-  if (img) img.src = urls[currentIndex] || url;
-  overlay.querySelectorAll('.photo-view-nav').forEach((btn) => {
-    btn.hidden = urls.length <= 1;
-  });
-  overlay.style.display = 'flex';
-};
+      img.src 

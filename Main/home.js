@@ -20,7 +20,7 @@ const DESTINATIONS = {
 };
 
 const ACCESS_MODE_STORAGE_KEY = 'poolproAccessMode';
-const ACCESS_MODES = new Set(['lifeguard', 'manager', 'supervisor']);
+const ACCESS_MODES = new Set(['attendant', 'lifeguard', 'manager', 'supervisor']);
 const ROLE_PERMISSIONS_STORAGE_KEY = 'poolproRolePermissionsProfile';
 const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
 const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
@@ -37,12 +37,78 @@ const LOGIN_ATTEMPT_STORAGE_KEY = 'poolproLoginAttempts';
 const LOGIN_ATTEMPT_DOC_PREFIX = 'loginAttempt__';
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOGIN_ATTEMPT_LOCKOUT_MS = 15 * 60 * 1000;
-const HOME_ROLES_PERMISSIONS_EMPTY = {
-  roles: { poolManager: [], supervisor: [] },
-  permissions: {
-    poolManager: { poolChemistryDashboard: false, managerialReport: false, desPreInspection: false },
-    supervisor: { poolChemistryDashboard: false, managerialReport: false, desPreInspection: false },
+const ROLE_DEFINITIONS = [
+  { key: 'lifeguard', label: 'Lifeguard' },
+  { key: 'attendant', label: 'Attendant' },
+  { key: 'poolManager', label: 'Pool Manager' },
+  { key: 'supervisor', label: 'Supervisor' },
+];
+const PERMISSION_DEFINITIONS = [
+  { key: 'poolChemistryLog', label: 'Pool Chemistry Log' },
+  { key: 'trainingSignup', label: 'Training Signup' },
+  { key: 'cleanlinessReport', label: 'Cleanliness Report' },
+  { key: 'managerialReport', label: 'Managerial Report' },
+  { key: 'operationalStatusLog', label: 'Operational Status Log' },
+  { key: 'resources', label: 'Resources' },
+  { key: 'desPreInspection', label: 'DES Pre-Inspection' },
+  { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
+  { key: 'trainingSetup', label: 'Training Setup' },
+  { key: 'performanceTracking', label: 'Performance Tracking' },
+  { key: 'auditingForms', label: 'Auditing Forms' },
+  { key: 'rulesEditor', label: 'Rules Editor' },
+  { key: 'settings', label: 'Settings' },
+];
+const ROLE_DEFAULT_PERMISSIONS = {
+  lifeguard: {
+    poolChemistryLog: true,
+    trainingSignup: true,
+    cleanlinessReport: true,
+    managerialReport: false,
+    operationalStatusLog: true,
+    resources: true,
+    desPreInspection: false,
+    poolChemistryDashboard: false,
+    trainingSetup: false,
+    performanceTracking: false,
+    auditingForms: false,
+    rulesEditor: false,
+    settings: true,
   },
+  attendant: {
+    poolChemistryLog: true,
+    trainingSignup: false,
+    cleanlinessReport: false,
+    managerialReport: false,
+    operationalStatusLog: true,
+    resources: true,
+    desPreInspection: false,
+    poolChemistryDashboard: false,
+    trainingSetup: false,
+    performanceTracking: false,
+    auditingForms: false,
+    rulesEditor: false,
+    settings: true,
+  },
+  poolManager: {
+    poolChemistryLog: true,
+    trainingSignup: true,
+    cleanlinessReport: true,
+    managerialReport: true,
+    operationalStatusLog: true,
+    resources: true,
+    desPreInspection: true,
+    poolChemistryDashboard: false,
+    trainingSetup: false,
+    performanceTracking: false,
+    auditingForms: false,
+    rulesEditor: false,
+    settings: true,
+  },
+  supervisor: Object.fromEntries(PERMISSION_DEFINITIONS.map(({ key }) => [key, true])),
+};
+const HOME_ROLES_PERMISSIONS_EMPTY = {
+  roles: Object.fromEntries(ROLE_DEFINITIONS.map(({ key }) => [key, []])),
+  permissions: ROLE_DEFAULT_PERMISSIONS,
   individualPermissions: {},
 };
 
@@ -175,15 +241,23 @@ function getAccessModeLabel(mode = currentRole) {
   const normalized = normalizeAccessMode(mode);
   if (normalized === 'supervisor') return 'Supervisor';
   if (normalized === 'manager') return 'Manager';
-  return 'Lifeguard';
+  if (normalized === 'attendant') return 'Gate Attendant';
+  return 'Lifeguard/Attendant';
 }
 
-function normalizePermissionMap(source = {}) {
-  return {
-    poolChemistryDashboard: !!source.poolChemistryDashboard,
-    managerialReport: !!source.managerialReport,
-    desPreInspection: !!source.desPreInspection,
-  };
+function normalizePermissionMap(source = {}, roleKey = '') {
+  const defaults = ROLE_DEFAULT_PERMISSIONS[roleKey] || {};
+  const legacyKeys = new Set(['poolChemistryDashboard', 'managerialReport', 'desPreInspection']);
+  const hasExpandedPermissionShape = PERMISSION_DEFINITIONS.some(({ key }) =>
+    !legacyKeys.has(key) && Object.prototype.hasOwnProperty.call(source || {}, key)
+  );
+  if (roleKey === 'supervisor' && !hasExpandedPermissionShape) {
+    return { ...defaults };
+  }
+  return Object.fromEntries(PERMISSION_DEFINITIONS.map(({ key }) => [
+    key,
+    Object.prototype.hasOwnProperty.call(source || {}, key) ? !!source[key] : !!defaults[key],
+  ]));
 }
 
 function normalizeRolesPermissionsData(data = {}) {
@@ -192,7 +266,7 @@ function normalizeRolesPermissionsData(data = {}) {
   const individual = data.individualPermissions || {};
   const normalizedIndividual = Object.fromEntries(Object.entries(individual).map(([key, value]) => {
     const normalized = {};
-    ['poolChemistryDashboard', 'managerialReport', 'desPreInspection'].forEach((permissionKey) => {
+    PERMISSION_DEFINITIONS.forEach(({ key: permissionKey }) => {
       if (Object.prototype.hasOwnProperty.call(value || {}, permissionKey)) {
         normalized[permissionKey] = !!value[permissionKey];
       }
@@ -200,14 +274,14 @@ function normalizeRolesPermissionsData(data = {}) {
     return [normalizeIdentityKey(key), normalized];
   }));
   return {
-    roles: {
-      poolManager: Array.isArray(roles.poolManager) ? roles.poolManager.map(normalizeIdentityKey).filter(Boolean) : [],
-      supervisor: Array.isArray(roles.supervisor) ? roles.supervisor.map(normalizeIdentityKey).filter(Boolean) : [],
-    },
-    permissions: {
-      poolManager: normalizePermissionMap(permissions.poolManager),
-      supervisor: normalizePermissionMap(permissions.supervisor),
-    },
+    roles: Object.fromEntries(ROLE_DEFINITIONS.map(({ key }) => [
+      key,
+      Array.isArray(roles[key]) ? roles[key].map(normalizeIdentityKey).filter(Boolean) : [],
+    ])),
+    permissions: Object.fromEntries(ROLE_DEFINITIONS.map(({ key }) => [
+      key,
+      normalizePermissionMap(permissions[key], key),
+    ])),
     individualPermissions: normalizedIndividual,
   };
 }
@@ -230,7 +304,7 @@ async function loadHomeRolesPermissions() {
 function getEffectivePermissionsForKeys(keys) {
   const normalizedKeys = new Set((keys || []).map(normalizeIdentityKey).filter(Boolean));
   const effective = normalizePermissionMap();
-  ['poolManager', 'supervisor'].forEach((roleKey) => {
+  ROLE_DEFINITIONS.forEach(({ key: roleKey }) => {
     const members = homeRolesPermissionsData.roles?.[roleKey] || [];
     if (!members.some((memberKey) => normalizedKeys.has(memberKey))) return;
     Object.entries(homeRolesPermissionsData.permissions?.[roleKey] || {}).forEach(([permissionKey, enabled]) => {
@@ -301,16 +375,30 @@ function cacheHomeAccessProfile(keys) {
 async function assertAccessModeAllowed(mode, keys) {
   const requestedMode = normalizeAccessMode(mode);
   const normalizedKeys = (keys || []).map(normalizeIdentityKey).filter(Boolean);
-  if (requestedMode === 'lifeguard') {
-    return;
-  }
-
   await loadHomeRolesPermissions();
   const developer = isDeveloperKey(normalizedKeys);
   const supervisorMember = hasRoleMembership(normalizedKeys, 'supervisor');
   const managerMember = hasRoleMembership(normalizedKeys, 'poolManager');
+  const attendantMember = hasRoleMembership(normalizedKeys, 'attendant');
+  const lifeguardMember = hasRoleMembership(normalizedKeys, 'lifeguard');
   const permissions = getEffectivePermissionsForKeys(normalizedKeys);
   const hasManagerPermission = !!(permissions.managerialReport || permissions.desPreInspection);
+
+  if (requestedMode === 'lifeguard') {
+    if (developer || supervisorMember || managerMember || lifeguardMember || !attendantMember) {
+      cacheHomeAccessProfile(normalizedKeys);
+      return;
+    }
+    throw new Error('This account does not have lifeguard access.');
+  }
+
+  if (requestedMode === 'attendant') {
+    if (developer || supervisorMember || managerMember || lifeguardMember || attendantMember || normalizedKeys.length) {
+      cacheHomeAccessProfile(normalizedKeys);
+      return;
+    }
+    throw new Error('This account does not have gate attendant access.');
+  }
 
   if (requestedMode === 'supervisor') {
     if (developer || supervisorMember) {
@@ -859,7 +947,7 @@ function setRole(role) {
     passwordInput.autocomplete = 'current-password';
     showCreateAccountBtn?.classList.add('hidden');
     if (currentView !== 'login') setModalView('login');
-  } else if (currentRole === 'manager') {
+  } else if (currentRole === 'manager' || currentRole === 'attendant') {
     usernameLabel.textContent = 'Username or Email';
     usernameInput.type = 'text';
     usernameInput.autocomplete = 'username';
@@ -1029,6 +1117,7 @@ function buildSignupRecords({ username, firstName, lastName, email, phone, homeP
     lastName,
     phone,
     homePool,
+    role: 'lifeguard',
   };
 
   const accountData = {
@@ -1039,6 +1128,7 @@ function buildSignupRecords({ username, firstName, lastName, email, phone, homeP
     lastName,
     phone,
     homePool,
+    role: 'lifeguard',
     phoneLinked: false,
     createdAt: new Date().toISOString(),
   };
@@ -1796,101 +1886,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     clearPendingVerificationContext();
     setModalView('login');
   });
-  verifyBackBtn?.addEventListener('click', async () => {
-    await signOut(auth).catch(() => {});
-    resetVerificationState();
-    clearPendingVerificationContext();
-    setModalView('login');
-  });
-  verifyResendBtn?.addEventListener('click', async () => {
-    try {
-      await sendVerificationEmail({ isResend: true });
-    } catch (err) {
-      const code = err.code || '';
-      const friendly = code === 'auth/operation-not-allowed'
-        ? 'Email/password sign-in is not enabled yet.'
-        : code === 'auth/too-many-requests'
-          ? 'Too many attempts. Wait a few minutes, then resend.'
-        : (err.message || 'Unable to resend the verification email.');
-      setMessage(verifyMessageEl, friendly, true);
-    }
-  });
-  modal?.addEventListener('click', async (event) => {
-    if (event.target !== modal) return;
-    if (auth.currentUser && currentRole !== 'supervisor') {
-      await signOut(auth).catch(() => {});
-    }
-    closeModal();
-  });
-
-  const pendingContext = loadPendingVerificationContext();
-  if (pendingContext?.username && auth.currentUser) {
-    const pendingMode = pendingContext.emailAuthMode || EMAIL_AUTH_MODE_VERIFY;
-    const pendingAccessMode = normalizeAccessMode(pendingContext.accessMode || 'lifeguard');
-    const account = await getLifeguardAccount(pendingContext.username);
-    if (auth.currentUser.emailVerified) {
-      pendingVerification = {
-        username: pendingContext.username,
-        account,
-        target: pendingContext.target || getDestinationPath(),
-        origin: handledVerificationRedirect ? 'redirect-resume' : 'resume',
-        force: true,
-        emailAuthMode: pendingMode,
-        accessMode: pendingAccessMode,
-      };
-      await requirePasswordLoginAfterVerification('Your email has been verified. Sign in with your username and password to continue.');
-      return;
-    }
-    openVerificationView({
-      username: pendingContext.username,
-      account,
-      target: pendingContext.target || getDestinationPath(),
-      force: true,
-      origin: handledVerificationRedirect ? 'redirect-resume' : 'resume',
-      emailAuthMode: pendingMode,
-      accessMode: pendingAccessMode,
-    });
-  }
-
-  if (handledVerificationRedirect) return;
-
-  let initialRole = 'lifeguard';
-  try {
-    const stored = localStorage.getItem(ACCESS_MODE_STORAGE_KEY);
-    if (ACCESS_MODES.has(stored)) initialRole = stored;
-  } catch (err) {
-    console.warn('Could not read stored role; defaulting to lifeguard', err);
-  }
-
-  setRole(initialRole);
-  setModalView('login');
-});
-
-window.addEventListener('focus', async () => {
-  if (!pendingVerification || !auth.currentUser) return;
-  try {
-    await auth.currentUser.reload();
-    if (auth.currentUser.emailVerified) {
-      await confirmVerifiedEmail();
-    }
-  } catch (_) {
-    // Ignore transient reload issues while waiting on verification.
-  }
-});
-
-document.addEventListener('visibilitychange', async () => {
-  if (document.visibilityState !== 'visible') return;
-  if (!pendingVerification || !auth.currentUser) return;
-  try {
-    await auth.currentUser.reload();
-    if (auth.currentUser.emailVerified) {
-      await confirmVerifiedEmail();
-    }
-  } catch (_) {
-    // Ignore transient reload issues while waiting on verification.
-  }
-});
-
-window.addEventListener('pageshow', (event) => {
-  if (event.persisted) window.location.reload();
-});
+  verifyBackBtn?.addEventListener('click'
