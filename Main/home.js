@@ -19,6 +19,11 @@ const DESTINATIONS = {
   supervisor: 'chem/chem.html#supervisorDashboard'
 };
 
+const ACCESS_MODE_STORAGE_KEY = 'poolproAccessMode';
+const ACCESS_MODES = new Set(['lifeguard', 'manager', 'supervisor']);
+const ROLE_PERMISSIONS_STORAGE_KEY = 'poolproRolePermissionsProfile';
+const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
+const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
 const ROLE_STORAGE_KEY = 'chemlogRole';
 const VERIFY_CONTEXT_KEY = 'poolproPendingLifeguardVerification';
 const VERIFY_WINDOW_MS = 5 * 60 * 60 * 1000;
@@ -32,6 +37,14 @@ const LOGIN_ATTEMPT_STORAGE_KEY = 'poolproLoginAttempts';
 const LOGIN_ATTEMPT_DOC_PREFIX = 'loginAttempt__';
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOGIN_ATTEMPT_LOCKOUT_MS = 15 * 60 * 1000;
+const HOME_ROLES_PERMISSIONS_EMPTY = {
+  roles: { poolManager: [], supervisor: [] },
+  permissions: {
+    poolManager: { poolChemistryDashboard: false, managerialReport: false, desPreInspection: false },
+    supervisor: { poolChemistryDashboard: false, managerialReport: false, desPreInspection: false },
+  },
+  individualPermissions: {},
+};
 
 let pendingTarget = null;
 let currentRole = 'lifeguard';
@@ -39,6 +52,7 @@ let currentView = 'login';
 let employeesCache = [];
 let employeeDocSnapshot = [];
 let homePoolOptions = [];
+let homeRolesPermissionsData = HOME_ROLES_PERMISSIONS_EMPTY;
 let pendingVerification = null;
 let verifyCooldownUntil = 0;
 let verifyCooldownTimer = null;
@@ -139,6 +153,178 @@ function normalizePhoneE164(raw) {
   if (digits.length === 10) return `+1${digits}`;
   if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
   return '';
+}
+
+function normalizeAccessMode(value) {
+  const mode = String(value || '').trim().toLowerCase();
+  return ACCESS_MODES.has(mode) ? mode : 'lifeguard';
+}
+
+function persistAccessMode(mode) {
+  const normalized = normalizeAccessMode(mode);
+  try {
+    localStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalized);
+    sessionStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalized);
+  } catch (err) {
+    console.warn('Could not persist PoolPro access mode:', err);
+  }
+  return normalized;
+}
+
+function getAccessModeLabel(mode = currentRole) {
+  const normalized = normalizeAccessMode(mode);
+  if (normalized === 'supervisor') return 'Supervisor';
+  if (normalized === 'manager') return 'Manager';
+  return 'Lifeguard';
+}
+
+function normalizePermissionMap(source = {}) {
+  return {
+    poolChemistryDashboard: !!source.poolChemistryDashboard,
+    managerialReport: !!source.managerialReport,
+    desPreInspection: !!source.desPreInspection,
+  };
+}
+
+function normalizeRolesPermissionsData(data = {}) {
+  const roles = data.roles || {};
+  const permissions = data.permissions || {};
+  const individual = data.individualPermissions || {};
+  const normalizedIndividual = Object.fromEntries(Object.entries(individual).map(([key, value]) => {
+    const normalized = {};
+    ['poolChemistryDashboard', 'managerialReport', 'desPreInspection'].forEach((permissionKey) => {
+      if (Object.prototype.hasOwnProperty.call(value || {}, permissionKey)) {
+        normalized[permissionKey] = !!value[permissionKey];
+      }
+    });
+    return [normalizeIdentityKey(key), normalized];
+  }));
+  return {
+    roles: {
+      poolManager: Array.isArray(roles.poolManager) ? roles.poolManager.map(normalizeIdentityKey).filter(Boolean) : [],
+      supervisor: Array.isArray(roles.supervisor) ? roles.supervisor.map(normalizeIdentityKey).filter(Boolean) : [],
+    },
+    permissions: {
+      poolManager: normalizePermissionMap(permissions.poolManager),
+      supervisor: normalizePermissionMap(permissions.supervisor),
+    },
+    individualPermissions: normalizedIndividual,
+  };
+}
+
+function normalizeIdentityKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function loadHomeRolesPermissions() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID));
+    homeRolesPermissionsData = normalizeRolesPermissionsData(snap.exists() ? snap.data() : {});
+  } catch (err) {
+    console.error('Failed to load home roles and permissions:', err);
+    homeRolesPermissionsData = normalizeRolesPermissionsData({});
+  }
+  return homeRolesPermissionsData;
+}
+
+function getEffectivePermissionsForKeys(keys) {
+  const normalizedKeys = new Set((keys || []).map(normalizeIdentityKey).filter(Boolean));
+  const effective = normalizePermissionMap();
+  ['poolManager', 'supervisor'].forEach((roleKey) => {
+    const members = homeRolesPermissionsData.roles?.[roleKey] || [];
+    if (!members.some((memberKey) => normalizedKeys.has(memberKey))) return;
+    Object.entries(homeRolesPermissionsData.permissions?.[roleKey] || {}).forEach(([permissionKey, enabled]) => {
+      if (enabled) effective[permissionKey] = true;
+    });
+  });
+  Object.keys(effective).forEach((permissionKey) => {
+    const overrides = Array.from(normalizedKeys)
+      .map((identityKey) => homeRolesPermissionsData.individualPermissions?.[identityKey])
+      .filter((individual) => Object.prototype.hasOwnProperty.call(individual || {}, permissionKey))
+      .map((individual) => !!individual[permissionKey]);
+    if (overrides.includes(false)) effective[permissionKey] = false;
+    else if (overrides.includes(true)) effective[permissionKey] = true;
+  });
+  return effective;
+}
+
+function hasRoleMembership(keys, roleKey) {
+  const normalizedKeys = new Set((keys || []).map(normalizeIdentityKey).filter(Boolean));
+  return (homeRolesPermissionsData.roles?.[roleKey] || []).some((memberKey) => normalizedKeys.has(memberKey));
+}
+
+function isDeveloperKey(keys) {
+  return (keys || []).map(normalizeIdentityKey).includes(SITE_DEVELOPER_EMAIL);
+}
+
+function getIdentityKeysForAccount(account, username) {
+  return [
+    account?.employeeEmail,
+    account?.authEmail,
+    account?.email,
+    account?.id,
+    account?.username,
+    username,
+  ].map(normalizeIdentityKey).filter(Boolean);
+}
+
+function getIdentityKeysForSupervisor(email) {
+  const authEmail = normalizeIdentityKey(auth.currentUser?.email);
+  return [email, authEmail].map(normalizeIdentityKey).filter(Boolean);
+}
+
+function getStoredSupervisorEmail() {
+  try {
+    const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
+    return normalizeIdentityKey(token?.username);
+  } catch (_) {
+    return '';
+  }
+}
+
+function cacheHomeAccessProfile(keys) {
+  const normalizedKeys = (keys || []).map(normalizeIdentityKey).filter(Boolean);
+  const permissions = getEffectivePermissionsForKeys(normalizedKeys);
+  if (isDeveloperKey(normalizedKeys)) {
+    Object.keys(permissions).forEach((permissionKey) => {
+      permissions[permissionKey] = true;
+    });
+  }
+  try {
+    localStorage.setItem(ROLE_PERMISSIONS_STORAGE_KEY, JSON.stringify({
+      isDeveloper: isDeveloperKey(normalizedKeys),
+      permissions,
+    }));
+  } catch (_) { /* ignore */ }
+}
+
+async function assertAccessModeAllowed(mode, keys) {
+  const requestedMode = normalizeAccessMode(mode);
+  const normalizedKeys = (keys || []).map(normalizeIdentityKey).filter(Boolean);
+  if (requestedMode === 'lifeguard') {
+    return;
+  }
+
+  await loadHomeRolesPermissions();
+  const developer = isDeveloperKey(normalizedKeys);
+  const supervisorMember = hasRoleMembership(normalizedKeys, 'supervisor');
+  const managerMember = hasRoleMembership(normalizedKeys, 'poolManager');
+  const permissions = getEffectivePermissionsForKeys(normalizedKeys);
+  const hasManagerPermission = !!(permissions.managerialReport || permissions.desPreInspection);
+
+  if (requestedMode === 'supervisor') {
+    if (developer || supervisorMember) {
+      cacheHomeAccessProfile(normalizedKeys);
+      return;
+    }
+    throw new Error('This account does not have supervisor access.');
+  }
+
+  if (developer || supervisorMember || managerMember || hasManagerPermission) {
+    cacheHomeAccessProfile(normalizedKeys);
+    return;
+  }
+  throw new Error('This account does not have manager access.');
 }
 
 function maskEmail(email) {
@@ -350,13 +536,14 @@ function targetKeyFromDestinationPath(target) {
   return entry?.[0] === 'supervisor' ? 'chem' : (entry?.[0] || 'chem');
 }
 
-function buildVerificationActionUrl({ username, target, emailAuthMode }) {
+function buildVerificationActionUrl({ username, target, emailAuthMode, accessMode }) {
   const url = new URL(window.location.href);
   url.search = '';
   url.hash = '';
   url.searchParams.set('username', normalizeUsername(username));
   url.searchParams.set('target', sanitizeTarget(target));
   if (emailAuthMode) url.searchParams.set('authMode', emailAuthMode);
+  if (accessMode) url.searchParams.set('accessMode', normalizeAccessMode(accessMode));
   return url.toString();
 }
 
@@ -454,18 +641,21 @@ function setModalView(view) {
         ? 'Verify Identity'
         : view === 'reset'
           ? 'Reset Password'
-          : 'Sign in';
+          : `${getAccessModeLabel()} Sign In`;
   }
 
   if (view === 'reset') {
-    const isLifeguard = currentRole === 'lifeguard';
-    if (resetFieldLabel) resetFieldLabel.textContent = isLifeguard ? 'Username' : 'Email';
-    if (resetCopyEl) resetCopyEl.textContent = isLifeguard
-      ? 'Enter your username and we\'ll send a password reset link to your registered email.'
-      : 'Enter your email address and we\'ll send you a link to reset your password.';
+    const isSupervisorLogin = currentRole === 'supervisor';
+    const isManagerLogin = currentRole === 'manager';
+    if (resetFieldLabel) resetFieldLabel.textContent = isSupervisorLogin ? 'Email' : 'Username or Email';
+    if (resetCopyEl) resetCopyEl.textContent = isSupervisorLogin
+      ? 'Enter your email address and we\'ll send you a link to reset your password.'
+      : isManagerLogin
+        ? 'Enter your username or email and we\'ll send a password reset link to your registered email.'
+        : 'Enter your username or email and we\'ll send a password reset link to your registered email.';
     if (resetFieldInput) {
-      resetFieldInput.type = isLifeguard ? 'text' : 'email';
-      resetFieldInput.autocomplete = isLifeguard ? 'username' : 'email';
+      resetFieldInput.type = isSupervisorLogin ? 'email' : 'text';
+      resetFieldInput.autocomplete = isSupervisorLogin ? 'email' : 'username';
       resetFieldInput.focus();
     }
     setMessage(resetMessageEl, '');
@@ -535,10 +725,12 @@ function populatePoolOptions() {
   if (currentValue) createPoolInput.value = currentValue;
 }
 
-function persistLifeguardSession(employee, username) {
+function persistLifeguardSession(employee, username, accessMode = 'lifeguard') {
   const normalizedEmployee = normalizeEmployeeRecord(employee);
+  const normalizedAccessMode = persistAccessMode(accessMode);
   const session = {
     role: 'lifeguard',
+    accessMode: normalizedAccessMode,
     emailVerified: true,
     verificationVersion: LIFEGUARD_SESSION_VERIFICATION_VERSION,
     verifiedAt: new Date().toISOString(),
@@ -555,7 +747,9 @@ function persistLifeguardSession(employee, username) {
   sessionStorage.setItem('chemlogEmployeeUsername', session.username);
   sessionStorage.setItem('chemlogEmployeeFirstName', session.firstName);
   sessionStorage.setItem('chemlogEmployeeLastName', session.lastName);
+  sessionStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalizedAccessMode);
   localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
+  localStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalizedAccessMode);
   localStorage.setItem(LIFEGUARD_SESSION_KEY, JSON.stringify(session));
   localStorage.removeItem('loginToken');
   localStorage.removeItem('ChemLogSupervisor');
@@ -571,7 +765,9 @@ function clearLifeguardSession() {
   sessionStorage.removeItem('chemlogEmployeeUsername');
   sessionStorage.removeItem('chemlogEmployeeFirstName');
   sessionStorage.removeItem('chemlogEmployeeLastName');
+  sessionStorage.removeItem(ACCESS_MODE_STORAGE_KEY);
   localStorage.removeItem(ROLE_STORAGE_KEY);
+  localStorage.removeItem(ACCESS_MODE_STORAGE_KEY);
   localStorage.removeItem(LIFEGUARD_SESSION_KEY);
 }
 
@@ -614,11 +810,13 @@ function clearSupervisorSession() {
   localStorage.removeItem('ChemLogSupervisor');
   localStorage.removeItem('loginToken');
   localStorage.removeItem(ROLE_STORAGE_KEY);
+  localStorage.removeItem(ACCESS_MODE_STORAGE_KEY);
+  sessionStorage.removeItem(ACCESS_MODE_STORAGE_KEY);
 }
 
-function buildLifeguardAgreementContext(account, username) {
+function buildLifeguardAgreementContext(account, username, accessMode = 'lifeguard') {
   return {
-    role: 'lifeguard',
+    role: normalizeAccessMode(accessMode),
     email: (account?.employeeEmail || account?.authEmail || '').toString().trim().toLowerCase(),
     username: normalizeUsername(username || account?.username || ''),
     firstName: (account?.firstName || '').toString().trim(),
@@ -628,10 +826,10 @@ function buildLifeguardAgreementContext(account, username) {
   };
 }
 
-function buildSupervisorAgreementContext(email) {
+function buildSupervisorAgreementContext(email, accessMode = 'supervisor') {
   const user = auth.currentUser;
   return {
-    role: 'supervisor',
+    role: normalizeAccessMode(accessMode),
     email: (user?.email || email || '').toString().trim().toLowerCase(),
     username: (user?.email || email || '').toString().trim().toLowerCase(),
     displayName: (user?.displayName || '').toString().trim(),
@@ -640,33 +838,19 @@ function buildSupervisorAgreementContext(email) {
 }
 
 function setRole(role) {
-  currentRole = role;
-
-  try {
-    localStorage.setItem(ROLE_STORAGE_KEY, role);
-  } catch (err) {
-    console.warn('Could not persist selected role on home page:', err);
-  }
+  currentRole = normalizeAccessMode(role);
 
   const options = roleToggle?.querySelectorAll('.theme-toggle-option') || [];
   options.forEach((opt) => {
-    opt.classList.toggle('active', opt.dataset.role === role);
+    opt.classList.toggle('active', opt.dataset.role === currentRole);
   });
 
   const thumb = document.getElementById('roleToggleThumb');
   if (thumb) {
-    thumb.style.transform = role === 'lifeguard' ? 'translateX(0%)' : 'translateX(100%)';
+    thumb.style.transform = currentRole === 'lifeguard' ? 'translateX(0%)' : 'translateX(100%)';
   }
 
-  if (role === 'lifeguard') {
-    usernameLabel.textContent = 'Username';
-    usernameInput.type = 'text';
-    usernameInput.autocomplete = 'username';
-    passwordLabel.textContent = 'Password';
-    passwordInput.type = 'password';
-    passwordInput.autocomplete = 'current-password';
-    showCreateAccountBtn?.classList.remove('hidden');
-  } else {
+  if (currentRole === 'supervisor') {
     usernameLabel.textContent = 'Email';
     usernameInput.type = 'email';
     usernameInput.autocomplete = 'email';
@@ -675,6 +859,23 @@ function setRole(role) {
     passwordInput.autocomplete = 'current-password';
     showCreateAccountBtn?.classList.add('hidden');
     if (currentView !== 'login') setModalView('login');
+  } else if (currentRole === 'manager') {
+    usernameLabel.textContent = 'Username or Email';
+    usernameInput.type = 'text';
+    usernameInput.autocomplete = 'username';
+    passwordLabel.textContent = 'Password';
+    passwordInput.type = 'password';
+    passwordInput.autocomplete = 'current-password';
+    showCreateAccountBtn?.classList.add('hidden');
+    if (currentView !== 'login') setModalView('login');
+  } else {
+    usernameLabel.textContent = 'Username or Email';
+    usernameInput.type = 'text';
+    usernameInput.autocomplete = 'username';
+    passwordLabel.textContent = 'Password';
+    passwordInput.type = 'password';
+    passwordInput.autocomplete = 'current-password';
+    showCreateAccountBtn?.classList.remove('hidden');
   }
 
   updateFirstTimeCallout();
@@ -689,11 +890,11 @@ function updateFirstTimeCallout() {
 }
 
 function openModal(target) {
-  pendingTarget = target;
-  const isSupervisorEntry = target === 'supervisor';
-  setRole(isSupervisorEntry ? 'supervisor' : 'lifeguard');
+  const role = normalizeAccessMode(target);
+  pendingTarget = 'chem';
+  setRole(role);
   if (roleToggle) roleToggle.style.display = 'none';
-  modal.style.display = 'block';
+  modal.style.display = 'flex';
   requestAnimationFrame(() => modal.classList.add('visible'));
   resetForms();
   setModalView('login');
@@ -935,8 +1136,10 @@ async function requireVerifiedCurrentUserForAccount(account) {
   }
 }
 
-async function finalizeLifeguardAccess({ username, account, target, method }) {
+async function finalizeLifeguardAccess({ username, account, target, method, accessMode = 'lifeguard' }) {
   await requireVerifiedCurrentUserForAccount(account);
+  const normalizedAccessMode = normalizeAccessMode(accessMode);
+  await assertAccessModeAllowed(normalizedAccessMode, getIdentityKeysForAccount(account, username));
   stopVerifyStatusPoller();
   clearPendingVerificationContext();
 
@@ -951,11 +1154,11 @@ async function finalizeLifeguardAccess({ username, account, target, method }) {
   }
 
   markDeviceVerified(account.employeeEmail || account.authEmail || '');
-  persistLifeguardSession(buildEmployeeFromAccount(account), username);
+  persistLifeguardSession(buildEmployeeFromAccount(account), username, normalizedAccessMode);
   resetVerificationState();
   closeModal();
 
-  const accepted = await requireUserAgreement(buildLifeguardAgreementContext(account, username), {
+  const accepted = await requireUserAgreement(buildLifeguardAgreementContext(account, username, normalizedAccessMode), {
     onDecline: async () => {
       clearLifeguardSession();
     },
@@ -968,6 +1171,7 @@ async function finalizeLifeguardAccess({ username, account, target, method }) {
 async function requirePasswordLoginAfterVerification(message) {
   const targetPath = pendingVerification?.target || getDestinationPath();
   const targetKey = targetKeyFromDestinationPath(targetPath);
+  const accessMode = normalizeAccessMode(pendingVerification?.accessMode || currentRole);
 
   stopVerifyStatusPoller();
   clearPendingVerificationContext();
@@ -975,11 +1179,11 @@ async function requirePasswordLoginAfterVerification(message) {
   await signOut(auth).catch(() => {});
   clearLifeguardSession();
 
-  if (modal && modal.style.display !== 'block') {
-    openModal(targetKey);
+  if (modal && modal.style.display !== 'flex') {
+    openModal(accessMode);
   } else {
     pendingTarget = targetKey;
-    setRole('lifeguard');
+    setRole(accessMode);
     setModalView('login');
   }
 
@@ -996,9 +1200,11 @@ function openVerificationView({
   force = false,
   origin = 'login',
   emailAuthMode = EMAIL_AUTH_MODE_VERIFY,
+  accessMode = currentRole,
 }) {
   const normalizedUsername = normalizeUsername(username);
   const targetPath = sanitizeTarget(target || getDestinationPath());
+  const normalizedAccessMode = normalizeAccessMode(accessMode);
   const email = (account.employeeEmail || getAuthEmail(account) || '').trim().toLowerCase();
   const priorContext = loadPendingVerificationContext();
   const priorEmail = (priorContext?.email || '').trim().toLowerCase();
@@ -1006,7 +1212,8 @@ function openVerificationView({
     priorContext?.username === normalizedUsername &&
     priorEmail &&
     priorEmail === email &&
-    priorContext?.emailAuthMode === emailAuthMode
+    priorContext?.emailAuthMode === emailAuthMode &&
+    normalizeAccessMode(priorContext?.accessMode) === normalizedAccessMode
       ? Number(priorContext.sentAt || 0)
       : 0;
 
@@ -1017,6 +1224,7 @@ function openVerificationView({
     origin,
     force,
     emailAuthMode,
+    accessMode: normalizedAccessMode,
   };
 
   savePendingVerificationContext({
@@ -1025,6 +1233,7 @@ function openVerificationView({
     target: pendingVerification.target,
     sentAt: priorSentAt,
     emailAuthMode,
+    accessMode: normalizedAccessMode,
   });
 
   if (verifySubtitleEl) {
@@ -1048,6 +1257,7 @@ function openVerificationView({
     existingEmail &&
     existingEmail === email &&
     existingContext?.emailAuthMode === emailAuthMode &&
+    normalizeAccessMode(existingContext?.accessMode) === normalizedAccessMode &&
     Number(existingContext?.sentAt || 0) > 0 &&
     (Date.now() - Number(existingContext.sentAt)) < VERIFY_EMAIL_RESEND_MS
   ) {
@@ -1081,7 +1291,8 @@ function openVerificationView({
   });
 }
 
-function markSupervisorLoggedIn(email) {
+function markSupervisorLoggedIn(email, accessMode = 'supervisor') {
+  const normalizedAccessMode = persistAccessMode(accessMode);
   try {
     localStorage.setItem('trainingSupervisorLoggedIn', 'true');
     localStorage.setItem('training_supervisor_logged_in_v1', 'true');
@@ -1089,6 +1300,8 @@ function markSupervisorLoggedIn(email) {
     const expires = Date.now() + VERIFY_WINDOW_MS;
     localStorage.setItem('loginToken', JSON.stringify({ username: email || 'supervisor', expires }));
     localStorage.setItem(ROLE_STORAGE_KEY, 'supervisor');
+    localStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalizedAccessMode);
+    sessionStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalizedAccessMode);
     localStorage.removeItem(LIFEGUARD_SESSION_KEY);
     markDeviceVerified(email);
   } catch (err) {
@@ -1096,24 +1309,26 @@ function markSupervisorLoggedIn(email) {
   }
 }
 
-async function authenticateSupervisor(email, password) {
+async function authenticateSupervisor(email, password, accessMode = 'supervisor') {
   const e = (email || '').trim();
   const p = password || '';
   if (!e || !p) throw new Error('Please enter your email and password.');
   await assertLoginAttemptsRemaining('supervisor', e);
 
   try {
-    if (window.supervisorSignIn) {
-      await window.supervisorSignIn(e, p);
-    } else {
-      await signInWithEmailAndPassword(auth, e, p);
-      markSupervisorLoggedIn(e);
-    }
+    await signInWithEmailAndPassword(auth, e, p);
+    await assertAccessModeAllowed(accessMode, getIdentityKeysForSupervisor(e));
+    markSupervisorLoggedIn(e, accessMode);
     await clearLoginFailures('supervisor', e);
   } catch (err) {
     const code = err.code || '';
     if (code === 'agreement/required') {
       await clearLoginFailures('supervisor', e);
+      throw err;
+    }
+    if ((err.message || '').includes('access')) {
+      await signOut(auth).catch(() => {});
+      clearSupervisorSession();
       throw err;
     }
     if (
@@ -1134,17 +1349,26 @@ async function authenticateSupervisor(email, password) {
   }
 }
 
-async function authenticateLifeguard(usernameRaw, passwordRaw) {
-  const username = normalizeUsername(usernameRaw);
+async function authenticateLifeguard(usernameRaw, passwordRaw, accessMode = 'lifeguard') {
+  const rawLogin = String(usernameRaw || '').trim();
+  const looksLikeEmail = rawLogin.includes('@');
+  let username = normalizeUsername(rawLogin);
   const password = passwordRaw || '';
-  if (!username || !password) throw new Error('Please enter your username and password.');
+  if (!rawLogin || !password) throw new Error('Please enter your username and password.');
   await assertLoginAttemptsRemaining('lifeguard', username);
 
   let account;
   try {
-    account = await getLifeguardAccount(username);
+    if (looksLikeEmail) {
+      account = await findLifeguardAccountByEmail(rawLogin);
+      if (!account) throw new Error('Username not found. Create an account first, then ask your supervisor for help if the issue persists.');
+      username = normalizeUsername(account.username || username);
+    } else {
+      account = await getLifeguardAccount(username);
+    }
   } catch (err) {
     if ((err?.message || '').toLowerCase().includes('username not found')) {
+      if (looksLikeEmail) throw err;
       const state = await recordLoginFailure('lifeguard', username);
       if (state.blockedUntil && state.blockedUntil > Date.now()) {
         throw createLoginLockoutError(state.blockedUntil - Date.now());
@@ -1184,6 +1408,7 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
       target: getDestinationPath(),
       origin: 'login',
       emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
+      accessMode,
     });
     return { requiresVerification: true };
   }
@@ -1193,8 +1418,34 @@ async function authenticateLifeguard(usernameRaw, passwordRaw) {
     account,
     target: getDestinationPath(),
     method: 'password-login',
+    accessMode,
   });
   return { requiresVerification: false };
+}
+
+async function authenticateForCurrentRole(identifier, password) {
+  const accessMode = normalizeAccessMode(currentRole);
+  const login = String(identifier || '').trim();
+
+  if (accessMode === 'supervisor') {
+    await authenticateSupervisor(login, password, 'supervisor');
+    return { requiresVerification: false, authType: 'supervisor', accessMode };
+  }
+
+  if (login.includes('@')) {
+    try {
+      const result = await authenticateLifeguard(login, password, accessMode);
+      return { ...result, authType: 'lifeguard', accessMode };
+    } catch (err) {
+      const message = (err?.message || '').toLowerCase();
+      if (!message.includes('username not found')) throw err;
+      await authenticateSupervisor(login, password, accessMode);
+      return { requiresVerification: false, authType: 'supervisor', accessMode };
+    }
+  }
+
+  const result = await authenticateLifeguard(login, password, accessMode);
+  return { ...result, authType: 'lifeguard', accessMode };
 }
 
 async function sendVerificationEmail({ isResend = false } = {}) {
@@ -1220,6 +1471,7 @@ async function sendVerificationEmail({ isResend = false } = {}) {
       username: pendingVerification.username,
       target: pendingVerification.target,
       emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
+      accessMode: pendingVerification.accessMode,
     }),
     handleCodeInApp: false,
   });
@@ -1280,12 +1532,13 @@ async function handleEmailVerificationRedirect() {
     }
 
     const target = sanitizeTarget(url.searchParams.get('target') || loadPendingVerificationContext()?.target || DESTINATIONS.chem);
+    const accessMode = normalizeAccessMode(url.searchParams.get('accessMode') || loadPendingVerificationContext()?.accessMode || 'lifeguard');
 
     window.history.replaceState({}, document.title, window.location.pathname);
     clearPendingVerificationContext();
     resetVerificationState();
     await signOut(auth).catch(() => {});
-    openModal(targetKeyFromDestinationPath(target));
+    openModal(accessMode || targetKeyFromDestinationPath(target));
     setMessage(messageEl, 'Email verified. Sign in with your username and password.', false);
   } catch (err) {
     console.error('Email verification redirect failed:', err);
@@ -1302,15 +1555,12 @@ async function handleSubmit(event) {
   setMessage(messageEl, '');
 
   try {
-    if (currentRole === 'lifeguard') {
-      const result = await authenticateLifeguard(usernameInput.value, passwordInput.value);
-      if (result?.requiresVerification) return;
-      return;
-    }
+    const result = await authenticateForCurrentRole(usernameInput.value, passwordInput.value);
+    if (result?.requiresVerification) return;
+    if (result?.authType !== 'supervisor') return;
 
-    await authenticateSupervisor(usernameInput.value, passwordInput.value);
     closeModal();
-    const accepted = await requireUserAgreement(buildSupervisorAgreementContext(usernameInput.value), {
+    const accepted = await requireUserAgreement(buildSupervisorAgreementContext(usernameInput.value, result.accessMode), {
       onDecline: async () => {
         await signOut(auth).catch(() => {});
         clearSupervisorSession();
@@ -1322,7 +1572,7 @@ async function handleSubmit(event) {
     console.error('Home login failed:', err);
     const code = err.code || '';
     const friendly = code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential'
-      ? (currentRole === 'lifeguard'
+      ? (currentRole !== 'supervisor'
         ? 'Username not found. Create an account first, then ask your supervisor for help if the issue persists.'
         : 'Email not found or password incorrect.')
       : code === 'agreement/required'
@@ -1437,14 +1687,17 @@ async function handleResetPasswordSubmit(event) {
   setMessage(resetMessageEl, '');
   const value = (resetFieldInput?.value || '').trim();
   if (!value) {
-    setMessage(resetMessageEl, currentRole === 'lifeguard' ? 'Please enter your username.' : 'Please enter your email.', true);
+    setMessage(resetMessageEl, currentRole === 'supervisor' ? 'Please enter your email.' : 'Please enter your username or email.', true);
     return;
   }
 
   try {
     let resetEmail = value;
-    if (currentRole === 'lifeguard') {
-      const account = await getLifeguardAccount(normalizeUsername(value));
+    if (currentRole !== 'supervisor') {
+      const account = value.includes('@')
+        ? await findLifeguardAccountByEmail(value)
+        : await getLifeguardAccount(normalizeUsername(value));
+      if (!account) throw new Error('Username not found.');
       resetEmail = account.authEmail || account.employeeEmail || '';
       if (!resetEmail) throw new Error('No email address found for this username. Contact your supervisor.');
     }
@@ -1454,7 +1707,7 @@ async function handleResetPasswordSubmit(event) {
   } catch (err) {
     const code = err.code || '';
     const friendly = code === 'auth/user-not-found' || code === 'auth/invalid-email'
-      ? (currentRole === 'lifeguard' ? 'Username not found.' : 'No account found for that email.')
+      ? (currentRole === 'supervisor' ? 'No account found for that email.' : 'Username not found.')
       : (err.message || 'Could not send reset email. Please try again.');
     setMessage(resetMessageEl, friendly, true);
   }
@@ -1462,24 +1715,40 @@ async function handleResetPasswordSubmit(event) {
 
 function wireMenu() {
   document.querySelectorAll('.home-menu-item').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const target = btn.dataset.target;
-      pendingTarget = target;
-      if (target === 'supervisor') {
-        if (hasFreshSupervisorSession()) {
+    btn.addEventListener('click', async () => {
+      const requestedMode = normalizeAccessMode(btn.dataset.accessRole || btn.dataset.target);
+      pendingTarget = 'chem';
+
+      if (hasFreshSupervisorSession()) {
+        try {
+          await assertAccessModeAllowed(requestedMode, getIdentityKeysForSupervisor(getStoredSupervisorEmail()));
+          persistAccessMode(requestedMode);
           window.location.href = getDestinationPath();
-          return;
+        } catch (err) {
+          openModal(requestedMode);
+          setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
         }
-        openModal(target);
         return;
       }
 
-      if (getStoredLifeguardSession() || hasFreshSupervisorSession()) {
-        window.location.href = getDestinationPath();
+      const storedLifeguardSession = getStoredLifeguardSession();
+      if (storedLifeguardSession && requestedMode !== 'supervisor') {
+        try {
+          await assertAccessModeAllowed(requestedMode, [
+            storedLifeguardSession.email,
+            storedLifeguardSession.employeeId,
+            storedLifeguardSession.username,
+          ]);
+          persistAccessMode(requestedMode);
+          window.location.href = getDestinationPath();
+        } catch (err) {
+          openModal(requestedMode);
+          setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
+        }
         return;
       }
 
-      openModal(target);
+      openModal(requestedMode);
     });
   });
 }
@@ -1505,7 +1774,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   form?.addEventListener('submit', handleSubmit);
   createAccountForm?.addEventListener('submit', handleCreateAccountSubmit);
   closeBtn?.addEventListener('click', async () => {
-    if (auth.currentUser && currentRole === 'lifeguard') {
+    if (auth.currentUser && currentRole !== 'supervisor') {
       await signOut(auth).catch(() => {});
     }
     closeModal();
@@ -1545,7 +1814,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   modal?.addEventListener('click', async (event) => {
     if (event.target !== modal) return;
-    if (auth.currentUser && currentRole === 'lifeguard') {
+    if (auth.currentUser && currentRole !== 'supervisor') {
       await signOut(auth).catch(() => {});
     }
     closeModal();
@@ -1554,6 +1823,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const pendingContext = loadPendingVerificationContext();
   if (pendingContext?.username && auth.currentUser) {
     const pendingMode = pendingContext.emailAuthMode || EMAIL_AUTH_MODE_VERIFY;
+    const pendingAccessMode = normalizeAccessMode(pendingContext.accessMode || 'lifeguard');
     const account = await getLifeguardAccount(pendingContext.username);
     if (auth.currentUser.emailVerified) {
       pendingVerification = {
@@ -1563,6 +1833,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         origin: handledVerificationRedirect ? 'redirect-resume' : 'resume',
         force: true,
         emailAuthMode: pendingMode,
+        accessMode: pendingAccessMode,
       };
       await requirePasswordLoginAfterVerification('Your email has been verified. Sign in with your username and password to continue.');
       return;
@@ -1574,6 +1845,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       force: true,
       origin: handledVerificationRedirect ? 'redirect-resume' : 'resume',
       emailAuthMode: pendingMode,
+      accessMode: pendingAccessMode,
     });
   }
 
@@ -1581,8 +1853,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let initialRole = 'lifeguard';
   try {
-    const stored = localStorage.getItem(ROLE_STORAGE_KEY);
-    if (stored === 'supervisor' || stored === 'lifeguard') initialRole = stored;
+    const stored = localStorage.getItem(ACCESS_MODE_STORAGE_KEY);
+    if (ACCESS_MODES.has(stored)) initialRole = stored;
   } catch (err) {
     console.warn('Could not read stored role; defaulting to lifeguard', err);
   }

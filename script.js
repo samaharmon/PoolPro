@@ -890,6 +890,7 @@ window.logout = async function () {
     localStorage.removeItem('loginToken');
     localStorage.removeItem('ChemLogSupervisor');
     localStorage.removeItem('chemlogRole');
+    clearRequestedAccessMode();
     localStorage.removeItem(ROLE_PERMISSIONS_STORAGE_KEY);
     localStorage.removeItem(LIFEGUARD_SESSION_KEY);
     localStorage.removeItem('trainingSupervisorLoggedIn');
@@ -914,6 +915,7 @@ function clearSupervisorLoginState() {
     const hasLifeguardSession = !!getStoredLifeguardSession() || sessionStorage.getItem('chemlogRole') === 'lifeguard';
     if (!hasLifeguardSession) {
       localStorage.removeItem('chemlogRole');
+      clearRequestedAccessMode();
       localStorage.removeItem(ROLE_PERMISSIONS_STORAGE_KEY);
     }
   } catch (_) { /* ignore */ }
@@ -921,12 +923,14 @@ function clearSupervisorLoginState() {
 
 function writeLifeguardSessionToSessionStorage(session) {
   if (!session) return;
+  const accessMode = normalizeAccessMode(session.accessMode || localStorage.getItem(ACCESS_MODE_STORAGE_KEY)) || 'lifeguard';
   sessionStorage.setItem('chemlogRole', 'lifeguard');
   sessionStorage.setItem('chemlogEmployeeEmail', session.email || '');
   sessionStorage.setItem('chemlogEmployeeId', session.employeeId || session.email || '');
   sessionStorage.setItem('chemlogEmployeeUsername', session.username || '');
   sessionStorage.setItem('chemlogEmployeeFirstName', session.firstName || '');
   sessionStorage.setItem('chemlogEmployeeLastName', session.lastName || '');
+  persistRequestedAccessMode(accessMode);
 }
 
 function hasFreshSupervisorToken() {
@@ -952,6 +956,7 @@ function getStoredLifeguardSession() {
     if (!hasIdentity || !hasVerifiedMarker || !expires || Date.now() >= expires) {
       localStorage.removeItem(LIFEGUARD_SESSION_KEY);
       if (localStorage.getItem('chemlogRole') === 'lifeguard') localStorage.removeItem('chemlogRole');
+      if (!hasFreshSupervisorToken()) clearRequestedAccessMode();
       return null;
     }
     return session;
@@ -978,6 +983,7 @@ function clearStoredLifeguardSession() {
   try {
     localStorage.removeItem(LIFEGUARD_SESSION_KEY);
     if (localStorage.getItem('chemlogRole') === 'lifeguard') localStorage.removeItem('chemlogRole');
+    if (!hasFreshSupervisorToken()) clearRequestedAccessMode();
   } catch (_) { /* ignore */ }
 }
 
@@ -1045,6 +1051,23 @@ async function enforceAgreementForCurrentUser() {
 // Firebase Auth sign-in bridge — used by home.js and training.js
 window.supervisorSignIn = async function (email, password) {
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  const signedInEmail = normalizeIdentityKey(userCredential.user?.email || email);
+  try {
+    const snap = await getDoc(doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID));
+    rolesPermissionsData = normalizeRolesPermissionsData(snap.exists() ? snap.data() : {});
+    const keys = [signedInEmail, normalizeIdentityKey(email)];
+    const canUseSupervisorMode = keys.includes(SITE_DEVELOPER_EMAIL) || hasRoleMembershipForKeys(keys, 'supervisor');
+    if (!canUseSupervisorMode) {
+      await signOut(auth).catch(() => {});
+      clearSupervisorLoginState();
+      throw new Error('This account does not have supervisor access.');
+    }
+  } catch (err) {
+    if ((err?.message || '').includes('supervisor access')) throw err;
+    await signOut(auth).catch(() => {});
+    clearSupervisorLoginState();
+    throw err;
+  }
   // Sync localStorage flags so isSupervisor() works synchronously
   const expires = Date.now() + SESSION_WINDOW_MS;
   localStorage.setItem('loginToken', JSON.stringify({ username: email, expires }));
@@ -1053,6 +1076,7 @@ window.supervisorSignIn = async function (email, password) {
   localStorage.setItem('training_supervisor_logged_in_v1', 'true');
   localStorage.setItem('chemlogTrainingSupervisorLoggedIn', 'true');
   localStorage.setItem('chemlogRole', 'supervisor');
+  persistRequestedAccessMode('supervisor');
   localStorage.removeItem(LIFEGUARD_SESSION_KEY);
 
   const accepted = await enforceAgreementForCurrentUser();
@@ -1495,6 +1519,7 @@ function populatePoolSelects(pools) {
 // ============================================================
 
 const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
+const ACCESS_MODE_STORAGE_KEY = 'poolproAccessMode';
 const ROLE_PERMISSIONS_STORAGE_KEY = 'poolproRolePermissionsProfile';
 const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
 const DELETE_AUTH_USER_FUNCTION_URL = 'https://us-central1-chemlog-43c08.cloudfunctions.net/deleteAuthUserByEmail';
@@ -1518,6 +1543,39 @@ let rolesPermissionsData = {
 
 function normalizeIdentityKey(value) {
   return (value || '').toString().trim().toLowerCase();
+}
+
+function normalizeAccessMode(value) {
+  const mode = (value || '').toString().trim().toLowerCase();
+  return ['lifeguard', 'manager', 'supervisor'].includes(mode) ? mode : '';
+}
+
+function getRequestedAccessMode() {
+  try {
+    const storedMode = normalizeAccessMode(
+      sessionStorage.getItem(ACCESS_MODE_STORAGE_KEY) ||
+      localStorage.getItem(ACCESS_MODE_STORAGE_KEY)
+    );
+    if (storedMode) return storedMode;
+  } catch (_) { /* ignore */ }
+  if (hasFreshSupervisorToken()) return 'supervisor';
+  return 'lifeguard';
+}
+
+function persistRequestedAccessMode(mode) {
+  const normalized = normalizeAccessMode(mode) || 'lifeguard';
+  try {
+    sessionStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalized);
+    localStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalized);
+  } catch (_) { /* ignore */ }
+  return normalized;
+}
+
+function clearRequestedAccessMode() {
+  try {
+    sessionStorage.removeItem(ACCESS_MODE_STORAGE_KEY);
+    localStorage.removeItem(ACCESS_MODE_STORAGE_KEY);
+  } catch (_) { /* ignore */ }
 }
 
 function getEmployeeRoleKey(employee) {
@@ -1592,6 +1650,11 @@ function getEffectiveRolePermissionsForKeys(keys) {
   return effective;
 }
 
+function hasRoleMembershipForKeys(keys, roleKey) {
+  const normalizedKeys = new Set((keys || []).map(normalizeIdentityKey).filter(Boolean));
+  return (rolesPermissionsData.roles?.[roleKey] || []).some((memberKey) => normalizedKeys.has(memberKey));
+}
+
 function isDeveloperUser() {
   return getCurrentIdentityKeys().includes(SITE_DEVELOPER_EMAIL);
 }
@@ -1606,6 +1669,7 @@ function getCurrentAccessProfile() {
   }
   return {
     isDeveloper: isDeveloperUser(),
+    accessMode: getRequestedAccessMode(),
     permissions,
   };
 }
@@ -1650,7 +1714,12 @@ async function saveRolesPermissions() {
 }
 
 function hasPermission(permissionKey) {
+  const accessMode = getRequestedAccessMode();
+  if (accessMode === 'lifeguard') return false;
+  if (accessMode === 'manager' && permissionKey === 'poolChemistryDashboard') return false;
   if (isDeveloperUser()) return true;
+  if (accessMode === 'supervisor' && isSupervisor()) return true;
+  if (accessMode === 'manager' && hasFreshSupervisorToken()) return permissionKey !== 'poolChemistryDashboard';
   const live = getCurrentAccessProfile();
   if (live.permissions?.[permissionKey]) return true;
   const cached = readCachedAccessProfile();
@@ -1708,6 +1777,7 @@ function isLifeguardSession() {
 }
 
 function isSupervisor() {
+  if (getRequestedAccessMode() !== 'supervisor') return false;
   if (isDeveloperUser()) return true;
   try {
     const supervisorHint = localStorage.getItem('ChemLogSupervisor') === 'true' ||
@@ -1778,7 +1848,8 @@ window.setupDropdownVisibility = function () {
   const sup = isSupervisor();
   const canViewChemDashboard = canAccessPoolChemistryDashboard();
   const canViewDesPreInspection = canAccessDesPreInspection();
-  const lifeguard = isLifeguardSession() && !sup;
+  const accessMode = getRequestedAccessMode();
+  const lifeguard = accessMode === 'lifeguard' && isLifeguardSession() && !sup;
   const limitedSettings = !sup && hasActivePoolProSession();
   ['training-setup', 'employees', 'testing', 'settings'].forEach(nav => {
     document.querySelectorAll(`[data-nav="${nav}"]`).forEach(el => {
