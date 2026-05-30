@@ -5125,6 +5125,9 @@ function findEmployeeByRoleKey(roleKey) {
   return employeesData.find((employee) => getEmployeeRoleKey(employee) === key) || null;
 }
 
+const ROLE_MEMBERS_PER_PAGE = 10;
+const roleMemberPages = Object.fromEntries(ROLE_DEFINITIONS.map(({ key }) => [key, 1]));
+
 function ensureRolesPermissionsSettingsSection() {
   if (document.getElementById('rolesPermissionsSettings')) {
     setupSettingsAccordions();
@@ -5396,11 +5399,16 @@ function renderRoleMembers(roleKey, tbodyId) {
     ? employeesData.map((employee) => getEmployeeRoleKey(employee)).filter(Boolean)
     : [];
   const members = [...new Set(baseMembers.concat(rolesPermissionsData.roles[roleKey] || []))];
+  const totalPages = Math.max(1, Math.ceil(members.length / ROLE_MEMBERS_PER_PAGE));
+  if (!roleMemberPages[roleKey] || roleMemberPages[roleKey] > totalPages) roleMemberPages[roleKey] = totalPages;
+  const pageStart = (roleMemberPages[roleKey] - 1) * ROLE_MEMBERS_PER_PAGE;
+  const pageMembers = members.slice(pageStart, pageStart + ROLE_MEMBERS_PER_PAGE);
   if (!members.length) {
     tbody.innerHTML = `<tr><td colspan="${roleKey === 'lifeguard' ? 3 : 4}">No users assigned.</td></tr>`;
+    renderRolePagination(roleKey, tbody, totalPages);
     return;
   }
-  members.forEach((memberKey) => {
+  pageMembers.forEach((memberKey) => {
     const employee = findEmployeeByRoleKey(memberKey);
     const displayName = employee ? employeeDisplayName(employee) : memberKey;
     const email = normalizeEmployeeRecord(employee || { email: memberKey }).email || memberKey;
@@ -5443,6 +5451,68 @@ function renderRoleMembers(roleKey, tbodyId) {
     }
     tbody.appendChild(tr);
   });
+  renderRolePagination(roleKey, tbody, totalPages);
+}
+
+function renderRolePagination(roleKey, tbody, totalPages) {
+  const tableWrap = tbody?.closest('.table-scroll-wrap');
+  if (!tableWrap) return;
+  const insertAfter = tableWrap.parentElement?.classList.contains('table-scroll-shell')
+    ? tableWrap.parentElement
+    : tableWrap;
+  insertAfter.parentElement?.querySelector(`[data-role-pagination="${roleKey}"]`)?.remove();
+  if (totalPages <= 1) return;
+
+  const container = document.createElement('div');
+  container.className = 'emp-pagination-row roles-pagination-row';
+  container.dataset.rolePagination = roleKey;
+
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'emp-pagination-arrow';
+  backBtn.textContent = '←';
+  if (roleMemberPages[roleKey] > 1) {
+    backBtn.addEventListener('click', () => {
+      roleMemberPages[roleKey] -= 1;
+      renderRolesPermissionsSettings();
+    });
+  } else {
+    backBtn.style.visibility = 'hidden';
+    backBtn.disabled = true;
+  }
+  container.appendChild(backBtn);
+
+  const select = document.createElement('select');
+  select.className = 'training-filter-select emp-pagination-select';
+  for (let page = 1; page <= totalPages; page++) {
+    const option = document.createElement('option');
+    option.value = String(page);
+    option.textContent = `Page ${page}`;
+    if (page === roleMemberPages[roleKey]) option.selected = true;
+    select.appendChild(option);
+  }
+  select.addEventListener('change', () => {
+    roleMemberPages[roleKey] = Number(select.value) || 1;
+    renderRolesPermissionsSettings();
+  });
+  container.appendChild(select);
+
+  const fwdBtn = document.createElement('button');
+  fwdBtn.type = 'button';
+  fwdBtn.className = 'emp-pagination-arrow';
+  fwdBtn.textContent = '→';
+  if (roleMemberPages[roleKey] < totalPages) {
+    fwdBtn.addEventListener('click', () => {
+      roleMemberPages[roleKey] += 1;
+      renderRolesPermissionsSettings();
+    });
+  } else {
+    fwdBtn.style.visibility = 'hidden';
+    fwdBtn.disabled = true;
+  }
+  container.appendChild(fwdBtn);
+
+  insertAfter.insertAdjacentElement('afterend', container);
 }
 
 function renderRolePermissionsTable() {
@@ -8420,247 +8490,4 @@ function openDesPreInspectionModal(sub) {
   const photoHtml = (photos) => {
     if (!Array.isArray(photos) || !photos.length) return '';
     return `<div class="duty-report-photo-grid des-inspection-photo-grid">
-      ${photos.map((photo) => {
-        const meta = encodeURIComponent(JSON.stringify(photo || {}));
-        return `<img src="${EMPTY_INLINE_IMAGE}" alt="${esc(photo?.name || 'DES photo')}" class="duty-report-photo duty-report-photo--loading" data-des-photo-meta="${meta}">`;
-      }).join('')}
-    </div>`;
-  };
-  const items = getDesInspectionItems(sub);
-  modal.innerHTML = `
-    <div class="duty-report-modal-card des-inspection-modal-card">
-      <div class="modal-header duty-report-modal-header">
-        <h2>DES Pre-Inspection</h2>
-        <button type="button" class="close" onclick="window.closeDesPreInspectionModal()">&times;</button>
-      </div>
-      <div class="duty-report-modal-scroll">
-        <div class="duty-report-meta">
-          <p><strong>Pool:</strong> ${esc(sub.pool || '—')}</p>
-          <p><strong>Respondent:</strong> ${esc(sub.respondentName || sub.submitterName || sub.submitterEmail || '—')}</p>
-          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
-        </div>
-        <section class="des-inspection-item-list">
-          ${items.length ? items.map((item) => `
-            <article class="des-inspection-review-item">
-              <h3>${esc(item.label || item.id || 'Inspection item')}</h3>
-              <p><strong>Answer:</strong> ${esc(item.answer || '—')}</p>
-              ${item.notes ? `<div class="duty-report-notes"><strong>Notes:</strong><span>${esc(item.notes)}</span></div>` : ''}
-              ${photoHtml(item.photos)}
-            </article>
-          `).join('') : '<p>No inspection item details were recorded.</p>'}
-        </section>
-      </div>
-    </div>`;
-
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
-  hydrateDesInspectionPhotos(modal).catch((err) => {
-    console.error('[DES] Could not hydrate submitted photos:', err);
-  });
-}
-
-window.closeDesPreInspectionModal = function closeDesPreInspectionModal() {
-  const modal = document.getElementById('desInspectionModal');
-  if (!modal) return;
-  modal.classList.remove('visible');
-  window.setTimeout(() => {
-    if (!modal.classList.contains('visible')) modal.style.display = 'none';
-  }, 250);
-};
-
-async function hydrateDutyReportPhotos(root) {
-  if (!root) return;
-  const images = Array.from(root.querySelectorAll('[data-duty-photo-meta]'));
-  await Promise.all(images.map(async (img) => {
-    try {
-      const meta = JSON.parse(decodeURIComponent(img.dataset.dutyPhotoMeta || ''));
-      const fullUrl = isFirestoreDutyPhoto(meta)
-        ? await getFirestoreDutyPhotoDataUrl(meta)
-        : (meta.url || img.getAttribute('src') || '');
-      if (!fullUrl) throw new Error('Duty photo URL is missing.');
-      img.src = fullUrl;
-      img.dataset.fullUrl = fullUrl;
-      img.title = meta.name || 'photo';
-      img.classList.remove('duty-report-photo--loading', 'duty-report-photo--error');
-      img.onclick = () => window.openPhotoModal(
-        fullUrl,
-        images.map((node) => node.dataset.fullUrl).filter(Boolean)
-      );
-    } catch (err) {
-      console.error('[Duties] Could not load submitted photo:', err);
-      img.classList.remove('duty-report-photo--loading');
-      img.classList.add('duty-report-photo--error');
-      img.removeAttribute('onclick');
-      img.title = 'Unable to load photo';
-    }
-  }));
-}
-
-function openDutyFormModal(sub) {
-  let modal = document.getElementById('dutyFormModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'dutyFormModal';
-    modal.addEventListener('click', (e) => { if (e.target === modal) window.closeDutyFormModal(); });
-    document.body.appendChild(modal);
-  }
-  modal.className = 'duty-report-modal';
-  modal.style.cssText = '';
-
-  const ts = toDateObject(sub.timestamp);
-  const esc = escapeHtml;
-  const reportTitle = getDutyReportTitle(sub);
-  const managerPanelTitle = sub?.reportType === 'managerial' ? 'Managerial Report Details' : 'Managers Only';
-
-  const photoSectionHtml = (label, photos) => {
-    if (!photos?.length) return '';
-    const imgs = photos.map((p) => {
-      const meta = encodeURIComponent(JSON.stringify({
-        url: p.url || '',
-        name: p.name || '',
-        source: p.source || '',
-        contentType: p.contentType || '',
-        dataUrlPrefix: p.dataUrlPrefix || '',
-        photoId: p.photoId || '',
-        submissionId: p.submissionId || sub.id || '',
-      }));
-      const initialSrc = isFirestoreDutyPhoto(p) ? EMPTY_INLINE_IMAGE : esc(p.url || EMPTY_INLINE_IMAGE);
-      const loadingClass = isFirestoreDutyPhoto(p) ? ' duty-report-photo--loading' : '';
-      return `<img src="${initialSrc}" alt="photo" class="duty-report-photo${loadingClass}"
-           data-duty-photo-meta="${meta}" />`;
-    }).join('');
-    return `<section class="duty-report-photo-section">
-      <h4>${esc(label)}</h4>
-      <div class="duty-report-photo-grid">${imgs}</div>
-    </section>`;
-  };
-
-  const photos = sub.photos || {};
-  const hasValue = (value) => value !== null && value !== undefined && value !== '';
-  const hasManagerData = hasValue(sub.bleachVolume) || hasValue(sub.muriaticAcid) ||
-    hasValue(sub.shockGranular) || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
-    photos.bleach?.length;
-
-  let cyaHtml = '';
-  if (sub.cyaReadings && Object.keys(sub.cyaReadings).length) {
-    const rows = Object.entries(sub.cyaReadings).map(([k, v]) => {
-      const label = k.replace('pool', 'Pool ');
-      return dutyScaleHtml(`${label} CYA`, v, '', 'cya');
-    }).join('');
-    cyaHtml = `<div class="duty-scale-group"><h4>CYA Levels</h4>${rows}</div>`;
-  }
-
-  modal.innerHTML = `
-    <div class="duty-report-modal-card">
-      <div class="modal-header duty-report-modal-header">
-        <h2>${esc(reportTitle)}</h2>
-        <button type="button" class="close" onclick="window.closeDutyFormModal()">&times;</button>
-      </div>
-      <div class="duty-report-modal-scroll">
-        <div class="duty-report-meta">
-          <p><strong>Pool:</strong> ${esc(sub.pool)}</p>
-          <p><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
-          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
-        </div>
-
-        ${photoSectionHtml('Deck', photos.deck)}
-        ${photoSectionHtml('Pool', photos.pool)}
-        ${photoSectionHtml('Skimmers', photos.skimmers)}
-        ${photoSectionHtml('Damaged Equipment', photos.damaged)}
-        ${photoSectionHtml('Bleach Feeders', photos.bleachFeeders)}
-        ${photoSectionHtml('DES Logbooks', photos.desLogbooks)}
-        ${photoSectionHtml('Fill Lines', photos.fillLines)}
-
-        ${sub.damagedNotes ? `<div class="duty-report-notes"><strong>Damaged Equipment Notes:</strong><span>${esc(sub.damagedNotes)}</span></div>` : ''}
-        ${sub.otherNotes ? `<div class="duty-report-notes"><strong>Other Notes:</strong><span>${esc(sub.otherNotes)}</span></div>` : ''}
-
-        ${hasManagerData ? `
-        <section class="duty-report-manager-panel">
-          <h3>${esc(managerPanelTitle)}</h3>
-          ${photoSectionHtml('Bleach Barrels', photos.bleach)}
-          ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
-          ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}
-          ${dutyScaleHtml('Shock / Granular', sub.shockGranular, '%', 'linear')}
-          ${cyaHtml}
-        </section>` : ''}
-      </div>
-    </div>`;
-
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
-  hydrateDutyReportPhotos(modal).catch((err) => {
-    console.error('[Duties] Could not hydrate submitted photos:', err);
-  });
-}
-
-window.closeDutyFormModal = function closeDutyFormModal() {
-  const modal = document.getElementById('dutyFormModal');
-  if (!modal) return;
-  modal.classList.remove('visible');
-  window.setTimeout(() => {
-    if (!modal.classList.contains('visible')) {
-      modal.style.display = 'none';
-    }
-  }, 250);
-};
-
-// Photo modal for submitted report images
-window.openPhotoModal = function(url, gallery = []) {
-  const urls = Array.isArray(gallery) && gallery.length ? gallery.filter(Boolean) : [url].filter(Boolean);
-  let currentIndex = Math.max(0, urls.indexOf(url));
-  let overlay = document.getElementById('photoViewOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'photoViewOverlay';
-    overlay.className = 'photo-view-overlay';
-    overlay.addEventListener('click', (event) => {
-      if (event.target === overlay) overlay.style.display = 'none';
-    });
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'photo-view-close';
-    close.setAttribute('aria-label', 'Close photo');
-    close.textContent = '×';
-    close.addEventListener('click', (event) => {
-      event.stopPropagation();
-      overlay.style.display = 'none';
-    });
-    const prev = document.createElement('button');
-    prev.type = 'button';
-    prev.className = 'photo-view-nav photo-view-nav--prev';
-    prev.setAttribute('aria-label', 'Previous photo');
-    prev.textContent = '‹';
-    const next = document.createElement('button');
-    next.type = 'button';
-    next.className = 'photo-view-nav photo-view-nav--next';
-    next.setAttribute('aria-label', 'Next photo');
-    next.textContent = '›';
-    const img = document.createElement('img');
-    img.id = 'photoViewImg';
-    img.className = 'photo-view-img';
-    [prev, next].forEach((btn) => {
-      btn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const activeUrls = overlay._poolProPhotoGallery || [];
-        if (activeUrls.length <= 1) return;
-        const delta = btn === prev ? -1 : 1;
-        const nextIndex = (Number(overlay.dataset.index || 0) + delta + activeUrls.length) % activeUrls.length;
-        overlay.dataset.index = String(nextIndex);
-        img.src = activeUrls[nextIndex];
-      });
-    });
-    overlay.appendChild(close);
-    overlay.appendChild(prev);
-    overlay.appendChild(img);
-    overlay.appendChild(next);
-    document.body.appendChild(overlay);
-  }
-  overlay._poolProPhotoGallery = urls;
-  overlay.dataset.index = String(currentIndex);
-  const img = document.getElementById('photoViewImg');
-  if (img) img.src = urls[currentIndex] || url;
-  overlay.querySelectorAll('.photo-view-nav').forEach((btn) => {
-    btn.hidden = urls.length <= 1;
-  });
-  overlay.style.display = 'flex';
-};
+      ${photos.map((photo

@@ -3368,6 +3368,72 @@ textarea,
   min-width: 760px;
 }
 
+.roles-permissions-section .table-scroll-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.roles-permissions-section .table-scroll-wrap > .roles-table,
+.roles-permissions-section .table-scroll-wrap > .roles-permissions-table {
+  table-layout: auto;
+  width: max(100%, var(--table-min-width, 760px));
+}
+
+.roles-permissions-section .table-scroll-wrap > .roles-table {
+  --table-min-width: 760px;
+}
+
+.roles-permissions-section .table-scroll-wrap > .roles-permissions-table {
+  --table-min-width: 1180px;
+}
+
+.roles-permissions-section .table-scroll-wrap > .roles-table th,
+.roles-permissions-section .table-scroll-wrap > .roles-table td,
+.roles-permissions-section .table-scroll-wrap > .roles-permissions-table th,
+.roles-permissions-section .table-scroll-wrap > .roles-permissions-table td {
+  width: auto;
+  min-width: 0;
+}
+
+.roles-permissions-section .table-scroll-wrap > .roles-table th:nth-child(1),
+.roles-permissions-section .table-scroll-wrap > .roles-table td:nth-child(1) { min-width: 160px; }
+
+.roles-permissions-section .table-scroll-wrap > .roles-table th:nth-child(2),
+.roles-permissions-section .table-scroll-wrap > .roles-table td:nth-child(2) { min-width: 230px; }
+
+.roles-permissions-section .table-scroll-wrap > .roles-table th:nth-child(3),
+.roles-permissions-section .table-scroll-wrap > .roles-table td:nth-child(3) {
+  min-width: 340px;
+  white-space: normal;
+}
+
+.roles-permissions-section .table-scroll-wrap > .roles-table th:nth-child(4),
+.roles-permissions-section .table-scroll-wrap > .roles-table td:nth-child(4) {
+  min-width: 110px;
+  text-align: center;
+}
+
+.roles-permissions-section .table-scroll-wrap > .roles-permissions-table th,
+.roles-permissions-section .table-scroll-wrap > .roles-permissions-table td {
+  min-width: 104px;
+  text-align: center;
+}
+
+.roles-permissions-section .table-scroll-wrap > .roles-permissions-table th:first-child,
+.roles-permissions-section .table-scroll-wrap > .roles-permissions-table td:first-child {
+  min-width: 140px;
+  text-align: left;
+}
+
+.roles-pagination-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 12px auto 18px;
+  width: 100%;
+}
+
 .roles-inline-check {
   display: flex;
   align-items: center;
@@ -4953,24 +5019,38 @@ body.dark-mode .dash-value-popover {
   }
 
   .dashboard-pool-table {
-    --table-min-width: 700px;
-    table-layout: fixed;
+    --table-min-width: 100%;
+    table-layout: auto;
+  }
+
+  #supervisorDashboard .table-scroll-wrap > .dashboard-pool-table {
+    min-width: 100% !important;
+    width: max-content !important;
+  }
+
+  #supervisorDashboard .dashboard-pool-table th,
+  #supervisorDashboard .dashboard-pool-table td {
+    width: auto !important;
+    max-width: none;
+    min-width: 0;
+    padding: 7px 7px;
+    white-space: nowrap;
   }
 
   #supervisorDashboard #dashboardContent .table-scroll-wrap > .dashboard-pool-table {
-    min-width: var(--table-min-width, 700px) !important;
-    width: max(100%, var(--table-min-width, 700px)) !important;
+    min-width: 100% !important;
+    width: max-content !important;
   }
 
   #supervisorDashboard #dashboardContent .dashboard-pool-table th,
   #supervisorDashboard #dashboardContent .dashboard-pool-table td {
-    padding: 8px 6px;
+    padding: 7px 7px;
   }
 
   #supervisorDashboard #dashboardContent .dashboard-pool-table th:nth-child(1),
   #supervisorDashboard #dashboardContent .dashboard-pool-table td:nth-child(1) {
-    width: 18% !important;
-    max-width: 126px;
+    min-width: 108px;
+    max-width: 136px;
     white-space: normal;
     overflow-wrap: anywhere;
   }
@@ -4979,7 +5059,7 @@ body.dark-mode .dash-value-popover {
   #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(2),
   #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(3),
   #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(3) {
-    width: 11% !important;
+    min-width: 44px;
     text-align: center;
   }
 
@@ -4989,17 +5069,17 @@ body.dark-mode .dash-value-popover {
   #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(5),
   #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(6),
   #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(6) {
-    width: 20% !important;
+    min-width: 92px;
   }
 
   #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(1),
   #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(1) {
-    width: 16% !important;
+    min-width: 102px;
   }
 
   #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(2),
   #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(2) {
-    width: 11% !important;
+    min-width: 78px;
     text-align: center;
   }
 
@@ -5007,7 +5087,7 @@ body.dark-mode .dash-value-popover {
   #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(3),
   #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(4),
   #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(4) {
-    width: 10% !important;
+    min-width: 44px;
     text-align: center;
   }
 
@@ -5017,7 +5097,7 @@ body.dark-mode .dash-value-popover {
   #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(6),
   #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(7),
   #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(7) {
-    width: 17.666% !important;
+    min-width: 86px;
   }
 
   .dashboard-operational-table {
