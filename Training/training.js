@@ -18,6 +18,10 @@ let activePublicTypeFilter = 'all';
 let activePublicCityFilter = 'all';
 const adminScheduleOpenState = {};
 const publicScheduleOpenState = {};
+const adminScheduleEditState = {};
+let selectedAdminSessionId = '';
+let selectedAdminSessionMonth = '';
+let trainingUndoState = null;
 
 // Market derived from lifeguard's selected home pool (filters signup session dropdown)
 let activeSignupMarket = '';
@@ -427,6 +431,121 @@ function updateSessionSelectForType(typeKey, el) {
 
 // ---------- Admin (supervisor) handlers ----------
 
+function isAnyAdminScheduleEditable() {
+  return Object.values(adminScheduleEditState).some(Boolean);
+}
+
+function clearTrainingSessionForm(el) {
+  if (el.marketSelect) el.marketSelect.value = '';
+  if (el.trainingTypeInput) el.trainingTypeInput.value = '';
+  if (el.dateInput) el.dateInput.value = '';
+  if (el.startTimeSelect) el.startTimeSelect.value = '';
+  if (el.endTimeSelect) el.endTimeSelect.value = '';
+  if (el.poolSelect) el.poolSelect.value = '';
+  if (el.addressInput) el.addressInput.value = '';
+  if (el.capacityInput) el.capacityInput.value = '';
+  if (el.notesInput) el.notesInput.value = '';
+  if (el.sessionIdInput) el.sessionIdInput.value = '';
+  if (el.multiDayCheckbox) el.multiDayCheckbox.checked = false;
+  if (el.startDateInput) el.startDateInput.value = '';
+  if (el.endDateInput) el.endDateInput.value = '';
+  if (el.startDaySelect) el.startDaySelect.value = '';
+  if (el.endDaySelect) el.endDaySelect.value = '';
+  window._currentDayTimes = {};
+  setMultiDayUI(el, false);
+  updateCapacityInfo(null, el);
+}
+
+function ensureTrainingSessionActionButtons(el) {
+  const saveBtn = el.saveSessionBtn;
+  if (!saveBtn) return;
+
+  if (!saveBtn.parentElement?.classList.contains('training-session-action-row')) {
+    const row = document.createElement('div');
+    row.className = 'training-session-action-row employee-action-row';
+    saveBtn.parentElement.insertBefore(row, saveBtn);
+    row.appendChild(saveBtn);
+  }
+
+  const row = saveBtn.parentElement;
+  if (!document.getElementById('deleteTrainingSessionBtn')) {
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.id = 'deleteTrainingSessionBtn';
+    deleteBtn.className = 'submit-btn button-shadow employee-action-btn hidden';
+    deleteBtn.textContent = 'Delete';
+    row.appendChild(deleteBtn);
+  }
+
+  if (!document.getElementById('undoTrainingSessionBtn')) {
+    const undoBtn = document.createElement('button');
+    undoBtn.type = 'button';
+    undoBtn.id = 'undoTrainingSessionBtn';
+    undoBtn.className = 'submit-btn button-shadow employee-action-btn hidden';
+    undoBtn.textContent = 'Undo';
+    row.appendChild(undoBtn);
+  }
+}
+
+function syncTrainingSessionActionButtons(el) {
+  ensureTrainingSessionActionButtons(el);
+  const deleteBtn = document.getElementById('deleteTrainingSessionBtn');
+  const undoBtn = document.getElementById('undoTrainingSessionBtn');
+  const selectedEditable = selectedAdminSessionId
+    && selectedAdminSessionMonth
+    && adminScheduleEditState[selectedAdminSessionMonth];
+  const anyEditable = isAnyAdminScheduleEditable();
+
+  if (deleteBtn) deleteBtn.classList.toggle('hidden', !selectedEditable);
+  if (undoBtn) undoBtn.classList.toggle('hidden', !(anyEditable && trainingUndoState));
+}
+
+function setTrainingUndoAction(action, el) {
+  trainingUndoState = action || null;
+  syncTrainingSessionActionButtons(el);
+}
+
+function selectAdminTrainingRow(sessionId, monthKey, el) {
+  if (!adminScheduleEditState[monthKey]) return;
+  const session = trainingSessions.find((s) => s.id === sessionId);
+  if (!session) return;
+  selectedAdminSessionId = sessionId;
+  selectedAdminSessionMonth = monthKey;
+  handleEditSessionClick(sessionId, el);
+  syncTrainingSessionActionButtons(el);
+  renderAdminTables(el);
+}
+
+function setAdminScheduleEditable(monthKey, editable, el) {
+  adminScheduleEditState[monthKey] = !!editable;
+  if (!editable && selectedAdminSessionMonth === monthKey) {
+    selectedAdminSessionId = '';
+    selectedAdminSessionMonth = '';
+    clearTrainingSessionForm(el);
+  }
+  syncTrainingSessionActionButtons(el);
+  renderAdminTables(el);
+}
+
+async function undoLastTrainingAction(el) {
+  if (!trainingUndoState) return;
+  const { type, session, index } = trainingUndoState;
+  if (type === 'delete' && session) {
+    const restoreIndex = Math.max(0, Math.min(index ?? trainingSessions.length, trainingSessions.length));
+    trainingSessions.splice(restoreIndex, 0, normalizeSession(session));
+    selectedAdminSessionId = session.id || '';
+    selectedAdminSessionMonth = getMonthKeyFromDateString(session.date) || '';
+    if (selectedAdminSessionMonth) adminScheduleEditState[selectedAdminSessionMonth] = true;
+    saveSessions();
+    handleEditSessionClick(selectedAdminSessionId, el);
+    renderAdminTables(el);
+  }
+  setTrainingUndoAction(null, el);
+  if (el.trainingMonthSelect && el.trainingMonthSelect.value) {
+    updateSessionSelectForType(el.trainingMonthSelect.value, el);
+  }
+}
+
 function handleSaveSession(el) {
   const trainingType = el.trainingTypeInput?.value || '';
   const market = el.marketSelect?.value || '';
@@ -557,6 +676,8 @@ function handleSaveSession(el) {
   }
 
   saveSessions();
+  selectedAdminSessionId = '';
+  selectedAdminSessionMonth = '';
   renderAdminTables(el);
   if (el.trainingMonthSelect && el.trainingMonthSelect.value) {
     updateSessionSelectForType(el.trainingMonthSelect.value, el);
@@ -567,26 +688,8 @@ function handleSaveSession(el) {
   messageEl.textContent = 'Training session saved.';
   messageEl.classList.add('success');
 
-  // Clear the form after saving
-  if (el.marketSelect) el.marketSelect.value = '';
-  if (el.trainingTypeInput) el.trainingTypeInput.value = '';
-  if (el.dateInput) el.dateInput.value = '';
-  if (el.startTimeSelect) el.startTimeSelect.value = '';
-  if (el.endTimeSelect) el.endTimeSelect.value = '';
-  if (el.poolSelect) el.poolSelect.value = '';
-  if (el.addressInput) el.addressInput.value = '';
-  if (el.capacityInput) el.capacityInput.value = '';
-  if (el.notesInput) el.notesInput.value = '';
-  if (el.sessionIdInput) el.sessionIdInput.value = '';
-  // Reset multi-day fields
-  if (el.multiDayCheckbox) el.multiDayCheckbox.checked = false;
-  if (el.startDateInput) el.startDateInput.value = '';
-  if (el.endDateInput) el.endDateInput.value = '';
-  if (el.startDaySelect) el.startDaySelect.value = '';
-  if (el.endDaySelect) el.endDaySelect.value = '';
-  window._currentDayTimes = {};
-  setMultiDayUI(el, false);
-  updateCapacityInfo(null, el);
+  clearTrainingSessionForm(el);
+  syncTrainingSessionActionButtons(el);
 }
 
 function handleEditSessionClick(sessionId, el) {
@@ -657,7 +760,7 @@ function handleDeleteSessionClick(sessionId, el) {
   const idx = trainingSessions.findIndex((s) => s.id === sessionId);
   if (idx === -1) return;
 
-  const session = trainingSessions[idx];
+  const session = normalizeSession(trainingSessions[idx]);
   const taken = Array.isArray(session.attendees) ?
     session.attendees.length
     : 0;
@@ -670,30 +773,20 @@ function handleDeleteSessionClick(sessionId, el) {
   }
 
   trainingSessions.splice(idx, 1);
+  selectedAdminSessionId = '';
+  selectedAdminSessionMonth = '';
+  setTrainingUndoAction({ type: 'delete', session, index: idx }, el);
   saveSessions();
   renderAdminTables(el);
 
   if (el.sessionIdInput && el.sessionIdInput.value === sessionId) {
-    el.sessionIdInput.value = '';
-    if (el.marketSelect) el.marketSelect.value = '';
-    if (el.dateInput) el.dateInput.value = '';
-    if (el.startTimeSelect) el.startTimeSelect.value = '';
-    if (el.endTimeSelect) el.endTimeSelect.value = '';
-    if (el.poolSelect) el.poolSelect.value = '';
-    if (el.addressInput) el.addressInput.value = '';
-    if (el.capacityInput) el.capacityInput.value = '';
-    if (el.notesInput) el.notesInput.value = '';
-    if (el.multiDayCheckbox) el.multiDayCheckbox.checked = false;
-    if (el.startDateInput) el.startDateInput.value = '';
-    if (el.endDateInput) el.endDateInput.value = '';
-    window._currentDayTimes = {};
-    setMultiDayUI(el, false);
-    updateCapacityInfo(null, el);
+    clearTrainingSessionForm(el);
   }
 
   if (el.trainingMonthSelect && el.trainingMonthSelect.value) {
     updateSessionSelectForType(el.trainingMonthSelect.value, el);
   }
+  syncTrainingSessionActionButtons(el);
 }
 
 function getDayDate(startDate, dayNum) {
@@ -703,7 +796,7 @@ function getDayDate(startDate, dayNum) {
   return d.toISOString().split('T')[0];
 }
 
-function buildScheduleTableSection(sessions, isAdmin) {
+function buildScheduleTableSection(sessions, isAdmin, el = null) {
   // Group into month buckets
   const byMonth = {};
   for (const session of sessions) {
@@ -736,6 +829,25 @@ function buildScheduleTableSection(sessions, isAdmin) {
       toggle.querySelector('.emp-metrics-arrow').textContent = '▾';
     }
 
+    const monthEditable = !!adminScheduleEditState[mKey];
+
+    if (isAdmin) {
+      const controlsRow = document.createElement('div');
+      controlsRow.className = 'toggle-btn training-month-edit-row';
+      controlsRow.innerHTML = `
+        <div class="sanitation-controls training-month-controls" data-training-month="${mKey}">
+          <div class="sanitation-controls-thumb"></div>
+          <button type="button" class="editAndSave ${monthEditable ? 'active' : ''}" data-training-edit-month="${mKey}" ${monthEditable ? 'disabled' : ''}>Edit</button>
+          <button type="button" class="editAndSave ${monthEditable ? '' : 'active'}" data-training-save-month="${mKey}" ${monthEditable ? '' : 'disabled'}>Save</button>
+        </div>
+      `;
+      const thumb = controlsRow.querySelector('.sanitation-controls-thumb');
+      if (thumb) thumb.style.transform = monthEditable ? 'translateX(0%)' : 'translateX(100%)';
+      controlsRow.querySelector('[data-training-edit-month]')?.addEventListener('click', () => setAdminScheduleEditable(mKey, true, el));
+      controlsRow.querySelector('[data-training-save-month]')?.addEventListener('click', () => setAdminScheduleEditable(mKey, false, el));
+      contentWrap.appendChild(controlsRow);
+    }
+
     const table = document.createElement('table');
     table.className = isAdmin
       ? 'schedule-table training-schedule-table training-schedule-table--admin'
@@ -743,7 +855,7 @@ function buildScheduleTableSection(sessions, isAdmin) {
 
     const thead = document.createElement('thead');
     thead.innerHTML = isAdmin
-      ? `<tr><th>Training Type</th><th>Date &amp; Time</th><th>Location</th><th>Notes</th><th>Spots Filled</th><th>Actions</th></tr>`
+      ? `<tr><th>Training Type</th><th>Date &amp; Time</th><th>Location</th><th>Notes</th><th>Spots Filled</th></tr>`
       : `<tr><th>Training Type</th><th>Date &amp; Time</th><th>Location</th><th>Notes</th><th>Spots Filled</th></tr>`;
     table.appendChild(thead);
 
@@ -751,6 +863,14 @@ function buildScheduleTableSection(sessions, isAdmin) {
 
     for (const session of monthSessions) {
       const row = document.createElement('tr');
+      row.dataset.sessionId = session.id;
+      if (isAdmin && monthEditable) {
+        row.classList.add('training-row-clickable');
+        row.addEventListener('click', () => selectAdminTrainingRow(session.id, mKey, el));
+      }
+      if (isAdmin && monthEditable && session.id === selectedAdminSessionId) {
+        row.classList.add('training-row-selected');
+      }
 
       // Col 1: Training Type
       const typeCell = document.createElement('td');
@@ -795,41 +915,23 @@ function buildScheduleTableSection(sessions, isAdmin) {
 
       if (capacity && taken >= capacity) row.classList.add('session-row-full');
 
-      if (isAdmin) {
-        const actionsCell = document.createElement('td');
-        actionsCell.classList.add('actions-cell');
-
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.textContent = 'Edit';
-        editBtn.className = 'editAndSave edit-training-btn';
-        editBtn.dataset.sessionId = session.id;
-        actionsCell.appendChild(editBtn);
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.textContent = 'Delete';
-        deleteBtn.className = 'editAndSave danger-button delete-training-btn';
-        deleteBtn.dataset.sessionId = session.id;
-        deleteBtn.style.marginTop = '6px';
-        actionsCell.appendChild(deleteBtn);
-
-        const rosterBtn = document.createElement('button');
-        rosterBtn.type = 'button';
-        rosterBtn.textContent = 'Roster';
-        rosterBtn.className = 'editAndSave roster-training-btn';
-        rosterBtn.dataset.sessionId = session.id;
-        rosterBtn.style.marginTop = '6px';
-        actionsCell.appendChild(rosterBtn);
-
-        row.appendChild(actionsCell);
-      }
-
       tbody.appendChild(row);
     }
 
     table.appendChild(tbody);
-    contentWrap.appendChild(table);
+    const tableShell = document.createElement('div');
+    tableShell.className = `training-edit-table-shell${isAdmin && monthEditable ? ' is-editable' : ' is-locked'}`;
+    tableShell.appendChild(table);
+    if (isAdmin) {
+      const overlay = document.createElement('div');
+      overlay.className = 'training-table-body-overlay';
+      overlay.setAttribute('aria-hidden', 'true');
+      tableShell.appendChild(overlay);
+      requestAnimationFrame(() => {
+        tableShell.style.setProperty('--training-header-height', `${thead.offsetHeight || 44}px`);
+      });
+    }
+    contentWrap.appendChild(tableShell);
     toggle.addEventListener('click', () => {
       contentWrap.classList.toggle('hidden');
       const open = !contentWrap.classList.contains('hidden');
@@ -858,14 +960,21 @@ function renderAdminTables(el) {
   if (!container) return;
 
   const sorted = applyFiltersAndSort(activeAdminTypeFilter, activeAdminCityFilter);
+  if (selectedAdminSessionId && !sorted.some((session) => session.id === selectedAdminSessionId)) {
+    selectedAdminSessionId = '';
+    selectedAdminSessionMonth = '';
+    clearTrainingSessionForm(el);
+  }
 
   container.innerHTML = '';
   if (!sorted.length) {
     container.innerHTML = '<p style="text-align:center;color:#888;font-style:italic;margin:20px 0;">No trainings fit these filters.</p>';
+    syncTrainingSessionActionButtons(el);
     return;
   }
 
-  container.appendChild(buildScheduleTableSection(sorted, true));
+  container.appendChild(buildScheduleTableSection(sorted, true, el));
+  syncTrainingSessionActionButtons(el);
 }
 
 function renderPublicTables(el) {
@@ -880,7 +989,7 @@ function renderPublicTables(el) {
     return;
   }
 
-  container.appendChild(buildScheduleTableSection(sorted, false));
+  container.appendChild(buildScheduleTableSection(sorted, false, el));
 }
 
 // Multi-day UI helpers
@@ -932,6 +1041,8 @@ function saveDayTimes(el, dayNum) {
 
 function setupAdmin(el) {
   if (!el.scheduleSection || !el.saveSessionBtn) return;
+  ensureTrainingSessionActionButtons(el);
+  syncTrainingSessionActionButtons(el);
 
   // Wire dual filter dropdowns for admin tables
   const typeFilter = document.getElementById('adminTrainingTypeFilter');
@@ -1001,26 +1112,12 @@ function setupAdmin(el) {
     handleSaveSession(el);
   });
 
-  el.scheduleSection.addEventListener('click', (evt) => {
-    const editBtn = evt.target.closest('.edit-training-btn');
-    if (editBtn) {
-      const id = editBtn.dataset.sessionId;
-      if (id) handleEditSessionClick(id, el);
-      return;
-    }
+  document.getElementById('deleteTrainingSessionBtn')?.addEventListener('click', () => {
+    if (selectedAdminSessionId) handleDeleteSessionClick(selectedAdminSessionId, el);
+  });
 
-    const deleteBtn = evt.target.closest('.delete-training-btn');
-    if (deleteBtn) {
-      const id = deleteBtn.dataset.sessionId;
-      if (id) handleDeleteSessionClick(id, el);
-      return;
-    }
-
-    const rosterBtn = evt.target.closest('.roster-training-btn');
-    if (rosterBtn) {
-      const id = rosterBtn.dataset.sessionId;
-      if (id) openRosterModal(id);
-    }
+  document.getElementById('undoTrainingSessionBtn')?.addEventListener('click', async () => {
+    await undoLastTrainingAction(el);
   });
 }
 

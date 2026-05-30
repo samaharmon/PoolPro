@@ -508,4 +508,20 @@ html {
     flex-direction: column;
   }
 
-  .home-form-actions .sub
+  .home-form-actions .submit-btn {
+    width: 100%;
+  }
+
+  .home-verify-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-first-time-callout {
+    grid-template-columns: 1fr;
+  }
+
+  .home-create-link-btn {
+    width: 100%;
+  }
+}
