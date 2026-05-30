@@ -85,43 +85,6 @@
         </div>
 
         <div id="publicScheduledTablesContainer"></div>
-        </div>
-
-    <br>
-    <br>
-
-    <h3>Training Signup Form</h3>
-      <form id="trainingSignupForm">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="trainingMonth">Training Type</label>
-            <select id="trainingMonth" name="trainingMonth" required>
-              <option value="">Select training type</option>
-              <option value="HR Orientation">HR Orientation</option>
-              <option value="On-Site Orientation">On-Site Orientation</option>
-              <option value="ARC Certification">ARC Certification</option>
-              <option value="ARC Recertification">ARC Recertification</option>
-              <option value="In-Service">In-Service</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group">
-            <label for="trainingSession">Training Date &amp; Location</label>
-            <select id="trainingSession" name="trainingSession" required>
-              <option value="">Select a training type first</option>
-              <!-- Options populated by training.js based on supervisor config -->
-            </select>
-            <small class="help-text">
-              Sessions are set by your supervisor. Make sure you pick the correct pool/area.
-            </small>
-          </div>
-        </div>
-
-        <button type="submit" class="submit-btn">Submit Signup</button>
-        <p class="form-message" id="signupMessage"></p>
-      </form>
     </section>
 
     <!-- Supervisor configuration panel, styled like Settings → Schedule Trainings -->
@@ -338,6 +301,23 @@
           <button type="button" id="attendanceAddBtn" class="submit-btn">Add</button>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+  <!-- Training Signup Confirmation Modal -->
+<div id="trainingSignupConfirmModal" class="modal training-signup-confirm-modal" style="display:none;">
+  <div class="modal-content training-signup-confirm-card">
+    <div class="modal-header">
+      <h2>Confirm Training Signup</h2>
+      <button type="button" class="attendance-close-btn" id="trainingSignupModalClose">&times;</button>
+    </div>
+
+    <div class="training-signup-confirm-body" id="trainingSignupConfirmBody"></div>
+
+    <div class="training-signup-confirm-actions" id="trainingSignupConfirmActions">
+      <button type="button" class="editAndSave" id="trainingSignupCancelBtn">Cancel</button>
+      <button type="button" class="submit-btn" id="trainingSignupConfirmBtn">Sign Up</button>
     </div>
   </div>
 </div>

@@ -3743,3 +3743,140 @@ body {
     top: var(--training-header-height, 54px);
   }
 }
+
+@media (min-width: 769px) {
+  .training-main {
+    width: min(1600px, calc(100% - 28px));
+    max-width: 1600px;
+  }
+}
+
+#trainingAdminPanel,
+#trainingAdminPanel .training-card {
+  width: 100%;
+}
+
+.training-signup-row {
+  cursor: pointer;
+}
+
+.training-signup-row:hover td {
+  background-color: rgba(255, 128, 128, 0.12) !important;
+}
+
+.training-signup-confirm-modal {
+  z-index: 6000;
+  background-color: rgba(0, 0, 0, 0.72);
+}
+
+.training-signup-confirm-modal .training-signup-confirm-card {
+  width: min(560px, calc(100vw - 28px));
+  max-width: calc(100vw - 28px);
+  margin: 0 auto;
+  background-color: #2e2e2e;
+  color: #fff;
+  border: 2px solid #69140e;
+  padding: 0;
+}
+
+.training-signup-confirm-card .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 14px;
+  background: linear-gradient(135deg, #69140e, #202834);
+  border-bottom: 2px solid #ff8080;
+}
+
+.training-signup-confirm-card .modal-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.4rem;
+}
+
+.training-signup-confirm-body {
+  padding: 24px;
+}
+
+.training-signup-modal-copy {
+  margin: 0 0 18px;
+  color: #ddd;
+}
+
+.training-signup-summary-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+}
+
+.training-signup-summary-list div {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #555;
+}
+
+.training-signup-summary-list dt {
+  color: #ffb3b3;
+  font-weight: 700;
+}
+
+.training-signup-summary-list dd {
+  margin: 0;
+  color: #fff;
+  line-height: 1.35;
+}
+
+.training-signup-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 0 24px 24px;
+}
+
+.training-signup-success-banner,
+.training-signup-modal-error {
+  padding: 12px 14px;
+  border: 1px solid #4f8d5a;
+  background: #243b2b;
+  color: #fff;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.training-signup-modal-error {
+  border-color: #8f1a12;
+  background: #4a1714;
+}
+
+.training-signup-reminder-box {
+  border: 2px solid #d6a800;
+  background: #3d330f;
+  color: #ffeaa3;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+
+.training-signup-reminder-box strong {
+  display: block;
+  color: #ffd84d;
+  margin-bottom: 8px;
+}
+
+.training-signup-reminder-box p {
+  margin: 0;
+  color: #ffeaa3;
+}
+
+@media (max-width: 560px) {
+  .training-signup-summary-list div {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .training-signup-confirm-actions {
+    flex-direction: column;
+  }
+}

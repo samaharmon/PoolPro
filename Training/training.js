@@ -816,6 +816,49 @@ function getDayDate(startDate, dayNum) {
   return formatDateInputValue(d);
 }
 
+function getTrainingSessionDateTimeMarkup(session) {
+  if (!session) return '';
+  if (session.multiDay && session.dayTimes && Object.keys(session.dayTimes).length > 0) {
+    const dayNums = Object.keys(session.dayTimes).sort((a, b) => Number(a) - Number(b));
+    return dayNums.map((dayNum, idx) => {
+      const dt = session.dayTimes[dayNum];
+      const dayDate = getDayDate(session.startDate || session.date, Number(dayNum));
+      const timeRange = formatTimeRange(dt.startTime, dt.endTime);
+      const sep = idx > 0 ? ' class="multi-day-day-sep"' : '';
+      return `<div${sep} class="multi-day-row"><strong>Day ${dayNum}:</strong> ${formatDateNice(dayDate)}${timeRange ? ` / ${timeRange}` : ''}</div>`;
+    }).join('');
+  }
+
+  const timeRange = formatTimeRange(session.startTime, session.endTime);
+  return formatDateNice(session.date) + (timeRange ? `<br>${timeRange}` : '');
+}
+
+function getTrainingSessionDateTimeText(session) {
+  if (!session) return '';
+  if (session.multiDay && session.dayTimes && Object.keys(session.dayTimes).length > 0) {
+    const dayNums = Object.keys(session.dayTimes).sort((a, b) => Number(a) - Number(b));
+    return dayNums.map((dayNum) => {
+      const dt = session.dayTimes[dayNum];
+      const dayDate = getDayDate(session.startDate || session.date, Number(dayNum));
+      const timeRange = formatTimeRange(dt.startTime, dt.endTime);
+      return `Day ${dayNum}: ${formatDateNice(dayDate)}${timeRange ? ` / ${timeRange}` : ''}`;
+    }).join('\n');
+  }
+
+  const timeRange = formatTimeRange(session.startTime, session.endTime);
+  return [formatDateNice(session.date), timeRange].filter(Boolean).join(' / ');
+}
+
+function getTrainingSessionLocationText(session) {
+  return [session?.pool, session?.address].filter(Boolean).join('\n');
+}
+
+function isTrainingSessionFull(session) {
+  const taken = Array.isArray(session?.attendees) ? session.attendees.length : 0;
+  const capacity = session?.capacity || 0;
+  return !!(capacity && taken >= capacity);
+}
+
 function buildScheduleTableSection(sessions, isAdmin, el = null) {
   // Group into month buckets
   const byMonth = {};
@@ -888,6 +931,10 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
         row.classList.add('training-row-clickable');
         row.addEventListener('click', () => selectAdminTrainingRow(session.id, mKey, el));
       }
+      if (!isAdmin) {
+        row.classList.add('training-row-clickable', 'training-signup-row');
+        row.addEventListener('click', () => openTrainingSignupModal(session.id, el));
+      }
       if (isAdmin && monthEditable && session.id === selectedAdminSessionId) {
         row.classList.add('training-row-selected');
       }
@@ -899,20 +946,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
 
       // Col 2: Date & Time
       const dateTimeCell = document.createElement('td');
-      if (session.multiDay && session.dayTimes && Object.keys(session.dayTimes).length > 0) {
-        const dayNums = Object.keys(session.dayTimes).sort((a, b) => Number(a) - Number(b));
-        const parts = dayNums.map((dayNum, idx) => {
-          const dt = session.dayTimes[dayNum];
-          const dayDate = getDayDate(session.startDate || session.date, Number(dayNum));
-          const timeRange = formatTimeRange(dt.startTime, dt.endTime);
-          const sep = idx > 0 ? ' class="multi-day-day-sep"' : '';
-          return `<div${sep} class="multi-day-row"><strong>Day ${dayNum}:</strong> ${formatDateNice(dayDate)}${timeRange ? ` / ${timeRange}` : ''}</div>`;
-        });
-        dateTimeCell.innerHTML = parts.join('');
-      } else {
-        const timeRange = formatTimeRange(session.startTime, session.endTime);
-        dateTimeCell.innerHTML = formatDateNice(session.date) + (timeRange ? `<br>${timeRange}` : '');
-      }
+      dateTimeCell.innerHTML = getTrainingSessionDateTimeMarkup(session);
       row.appendChild(dateTimeCell);
 
       // Col 3: Location (14px, no smaller sub-text)
@@ -1391,44 +1425,89 @@ function waitForCurrentTrainingEmployeeRecord(timeoutMs = 4000) {
   });
 }
 
-function setupSignup(el) {
-  const form = el.signupForm;
-  if (!form || !el.trainingMonthSelect || !el.trainingSessionSelect) return;
+let pendingTrainingSignupSessionId = '';
 
-  refreshSignupMarketFromEmployee(el);
-  window.addEventListener('poolpro:employees-loaded', () => refreshSignupMarketFromEmployee(el));
-  window.addEventListener('poolpro:pools-ready', () => refreshSignupMarketFromEmployee(el));
-  [el.guardEmployeeIdInput, el.guardNameInput, el.guardPoolInput]
-    .filter(Boolean)
-    .forEach((field) => {
-      field.required = false;
-      field.removeAttribute('required');
-    });
+function getTrainingSignupModalEls() {
+  return {
+    modal: document.getElementById('trainingSignupConfirmModal'),
+    body: document.getElementById('trainingSignupConfirmBody'),
+    actions: document.getElementById('trainingSignupConfirmActions'),
+    confirmBtn: document.getElementById('trainingSignupConfirmBtn'),
+    cancelBtn: document.getElementById('trainingSignupCancelBtn'),
+    closeBtn: document.getElementById('trainingSignupModalClose'),
+  };
+}
 
-  // Backwards compatible support for older cached markup that still has a home pool select.
-  if (el.guardPoolInput) {
-    el.guardPoolInput.addEventListener('change', () => {
-      const select = el.guardPoolInput;
-      const selectedOpt = select.options[select.selectedIndex];
-      const group = selectedOpt?.parentElement;
-      activeSignupMarket = (group && group.tagName === 'OPTGROUP') ? group.label : '';
-      updateSessionSelectForType(el.trainingMonthSelect?.value || '', el);
-    });
+function closeTrainingSignupModal() {
+  const { modal, confirmBtn } = getTrainingSignupModalEls();
+  pendingTrainingSignupSessionId = '';
+  if (confirmBtn) confirmBtn.disabled = false;
+  if (modal) modal.style.display = 'none';
+}
+
+function showTrainingSignupModalError(message) {
+  const { body } = getTrainingSignupModalEls();
+  if (!body) return;
+  const existing = body.querySelector('.training-signup-modal-error');
+  if (existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.className = 'training-signup-modal-error';
+  banner.textContent = message;
+  body.prepend(banner);
+}
+
+function showTrainingSignupSuccess(session) {
+  const { body, actions } = getTrainingSignupModalEls();
+  if (!body) return;
+  body.innerHTML = `
+    <div class="training-signup-success-banner">You are signed up for this training.</div>
+    <div class="training-signup-reminder-box">
+      <strong>REMINDER!</strong>
+      <p>Add this event to your calendar immediately and arrive 5 minutes early. You will not receive email reminders for the event.</p>
+    </div>
+    <dl class="training-signup-summary-list" aria-label="Signed up training details">
+      <div><dt>Training Type</dt><dd>${session.trainingType || ''}</dd></div>
+      <div><dt>Date &amp; Time</dt><dd>${getTrainingSessionDateTimeText(session).replace(/\n/g, '<br>')}</dd></div>
+      <div><dt>Location</dt><dd>${getTrainingSessionLocationText(session).replace(/\n/g, '<br>')}</dd></div>
+    </dl>
+  `;
+  if (actions) actions.style.display = 'none';
+}
+
+function renderTrainingSignupConfirmation(session) {
+  const { body, actions, confirmBtn } = getTrainingSignupModalEls();
+  if (!body) return;
+  const full = isTrainingSessionFull(session);
+  body.innerHTML = `
+    <p class="training-signup-modal-copy">Confirm that you want to sign up for this training.</p>
+    <dl class="training-signup-summary-list">
+      <div><dt>Training Type</dt><dd>${session.trainingType || ''}</dd></div>
+      <div><dt>Date &amp; Time</dt><dd>${getTrainingSessionDateTimeText(session).replace(/\n/g, '<br>')}</dd></div>
+      <div><dt>Location</dt><dd>${getTrainingSessionLocationText(session).replace(/\n/g, '<br>')}</dd></div>
+    </dl>
+    ${full ? '<div class="training-signup-modal-error">This training is full. Please choose another session.</div>' : ''}
+  `;
+  if (actions) actions.style.display = '';
+  if (confirmBtn) confirmBtn.disabled = full;
+}
+
+async function submitTrainingSignupForSession(sessionId, el) {
+  const session = trainingSessions.find((s) => s.id === sessionId);
+  if (!session) {
+    showTrainingSignupModalError('Could not find the selected session. Please try again.');
+    return false;
   }
 
-  el.trainingMonthSelect.addEventListener('change', (evt) => {
-    const monthKey = evt.target.value || '';
-    updateSessionSelectForType(monthKey, el);
-  });
+  if (isTrainingSessionFull(session)) {
+    showTrainingSignupModalError('Sorry, that session is already full. Please pick another option.');
+    renderPublicTables(el);
+    return false;
+  }
 
-  form.addEventListener('submit', async (evt) => {
-    evt.preventDefault();
-    const msgEl = el.signupMessage;
-    if (!msgEl) return;
+  const { confirmBtn } = getTrainingSignupModalEls();
+  if (confirmBtn) confirmBtn.disabled = true;
 
-    msgEl.textContent = '';
-    msgEl.classList.remove('success', 'error');
-
+  try {
     const employeeRecord = await waitForCurrentTrainingEmployeeRecord();
     const employeeId = getTrainingEmployeePrimaryKey(employeeRecord);
     const firstName = employeeRecord.firstName || '';
@@ -1436,42 +1515,10 @@ function setupSignup(el) {
     const homePool = employeeRecord.homePool || '';
     const phone = employeeRecord.phone || '';
     const email = normalizeTrainingIdentityKey(employeeRecord.email || (employeeId.includes('@') ? employeeId : ''));
-    const trainingTypeKey = el.trainingMonthSelect.value;
-    const sessionId = el.trainingSessionSelect.value;
 
     if (!employeeId) {
-      msgEl.textContent =
-        'PoolPro could not identify your employee profile. Please log out and sign in again.';
-      msgEl.classList.add('error');
-      return;
-    }
-
-    if (!trainingTypeKey || !sessionId) {
-      msgEl.textContent =
-        'Please choose a training type and training session.';
-      msgEl.classList.add('error');
-      return;
-    }
-
-    const session = trainingSessions.find((s) => s.id === sessionId);
-    if (!session) {
-      msgEl.textContent =
-        'Could not find the selected session. Please try again.';
-      msgEl.classList.add('error');
-      return;
-    }
-
-    const taken = Array.isArray(session.attendees) ?
-      session.attendees.length
-      : 0;
-    const capacity = session.capacity || 0;
-
-    if (capacity && taken >= capacity) {
-      msgEl.textContent =
-        'Sorry, that session is already full. Please pick another option.';
-      msgEl.classList.add('error');
-      updateSessionSelectForType(trainingTypeKey, el);
-      return;
+      showTrainingSignupModalError('PoolPro could not identify your employee profile. Please log out and sign in again.');
+      return false;
     }
 
     const alreadySignedUp =
@@ -1482,9 +1529,8 @@ function setupSignup(el) {
       });
 
     if (alreadySignedUp) {
-      msgEl.textContent = 'You are already signed up for this session.';
-      msgEl.classList.add('error');
-      return;
+      showTrainingSignupModalError('You are already signed up for this session.');
+      return false;
     }
 
     const attendee = {
@@ -1505,10 +1551,8 @@ function setupSignup(el) {
     }
     session.attendees.push(attendee);
 
-    // Persist to localStorage
     saveSessions();
 
-    // Also persist to Firestore if available
     if (window.addTrainingSignupToSchedule) {
       window.addTrainingSignupToSchedule({
         sessionId,
@@ -1522,12 +1566,43 @@ function setupSignup(el) {
       });
     }
 
-    msgEl.textContent =
-      'You are signed up! Your supervisor will see this on the schedule.';
-    msgEl.classList.add('success');
+    renderPublicTables(el);
+    showTrainingSignupSuccess(session);
+    return true;
+  } finally {
+    if (confirmBtn) confirmBtn.disabled = false;
+  }
+}
 
-    // Reload after a short delay so the updated Spots Filled counts reflect
-    setTimeout(() => location.reload(), 1500);
+function openTrainingSignupModal(sessionId, el) {
+  const session = trainingSessions.find((s) => s.id === sessionId);
+  const { modal } = getTrainingSignupModalEls();
+  if (!session || !modal) return;
+  pendingTrainingSignupSessionId = sessionId;
+  renderTrainingSignupConfirmation(session);
+  modal.style.display = 'flex';
+}
+
+function setupSignup(el) {
+  refreshSignupMarketFromEmployee(el);
+  window.addEventListener('poolpro:employees-loaded', () => refreshSignupMarketFromEmployee(el));
+  window.addEventListener('poolpro:pools-ready', () => refreshSignupMarketFromEmployee(el));
+  [el.guardEmployeeIdInput, el.guardNameInput, el.guardPoolInput, el.trainingMonthSelect, el.trainingSessionSelect]
+    .filter(Boolean)
+    .forEach((field) => {
+      field.required = false;
+      field.removeAttribute('required');
+    });
+
+  const { modal, confirmBtn, cancelBtn, closeBtn } = getTrainingSignupModalEls();
+  confirmBtn?.addEventListener('click', async () => {
+    if (!pendingTrainingSignupSessionId) return;
+    await submitTrainingSignupForSession(pendingTrainingSignupSessionId, el);
+  });
+  cancelBtn?.addEventListener('click', closeTrainingSignupModal);
+  closeBtn?.addEventListener('click', closeTrainingSignupModal);
+  modal?.addEventListener('click', (event) => {
+    if (event.target === modal) closeTrainingSignupModal();
   });
 }
 
