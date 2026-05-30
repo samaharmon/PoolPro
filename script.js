@@ -1951,11 +1951,20 @@ function isSupervisor() {
   }
 }
 
-const IMPORTANT_UPDATES_NOTICE_STORAGE_KEY = 'poolproImportantUpdatesNoticeDismissed_v1';
-const IMPORTANT_UPDATES_NOTICE_END = new Date(2026, 4, 31, 0, 0, 0, 0);
+const IMPORTANT_UPDATES_NOTICE_CONFIG = {
+  enabled: false,
+  storageKey: 'poolproImportantUpdatesNoticeDismissed_v2',
+  title: '',
+  items: [],
+  endAt: null,
+};
 
 function isImportantUpdatesNoticeActive() {
-  return Date.now() < IMPORTANT_UPDATES_NOTICE_END.getTime();
+  const config = IMPORTANT_UPDATES_NOTICE_CONFIG;
+  if (!config.enabled || !Array.isArray(config.items) || !config.items.length) return false;
+  if (!config.endAt) return true;
+  const endAt = config.endAt instanceof Date ? config.endAt : new Date(config.endAt);
+  return !Number.isNaN(endAt.getTime()) && Date.now() < endAt.getTime();
 }
 
 function hasActivePoolProSession() {
@@ -1966,7 +1975,7 @@ function hasActivePoolProSession() {
 
 function dismissImportantUpdatesNotice() {
   try {
-    sessionStorage.setItem(IMPORTANT_UPDATES_NOTICE_STORAGE_KEY, 'true');
+    sessionStorage.setItem(IMPORTANT_UPDATES_NOTICE_CONFIG.storageKey, 'true');
   } catch (_) {
     // Ignore storage failures; the close button should still hide the notice.
   }
@@ -1975,8 +1984,9 @@ function dismissImportantUpdatesNotice() {
 
 function maybeShowImportantUpdatesNotice() {
   if (!isImportantUpdatesNoticeActive() || !hasActivePoolProSession()) return;
+  const config = IMPORTANT_UPDATES_NOTICE_CONFIG;
   try {
-    if (sessionStorage.getItem(IMPORTANT_UPDATES_NOTICE_STORAGE_KEY) === 'true') return;
+    if (sessionStorage.getItem(config.storageKey) === 'true') return;
   } catch (_) {
     // Continue without persistence if sessionStorage is unavailable.
   }
@@ -1988,15 +1998,12 @@ function maybeShowImportantUpdatesNotice() {
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-labelledby', 'importantUpdatesNoticeTitle');
+  const listItems = config.items.map((item) => `<li>${escapeHtml(item)}</li>`).join('');
   overlay.innerHTML = `
     <button type="button" class="important-updates-close" aria-label="Close important updates">&times;</button>
     <div class="important-updates-card">
-      <h2 id="importantUpdatesNoticeTitle">IMPORTANT UPDATES:</h2>
-      <ol type="a">
-        <li>Lifeguards must fill out Cleanliness Reports (in the dropdown menu) every night.</li>
-        <li>Use the Operation Status Log page to log when you (1) turn a fill line or hose on/off, (2) turn the chlorine feeder up/down, (3) close/reopen a pool for any reason.</li>
-        <li><strong>MANAGERS:</strong> fill out Managerial Reports every Friday.</li>
-      </ol>
+      <h2 id="importantUpdatesNoticeTitle">${escapeHtml(config.title || 'Important Updates')}</h2>
+      <ol type="a">${listItems}</ol>
     </div>
   `;
   overlay.querySelector('.important-updates-close')?.addEventListener('click', dismissImportantUpdatesNotice);
