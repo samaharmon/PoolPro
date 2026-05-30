@@ -941,6 +941,8 @@ function writeLifeguardSessionToSessionStorage(session) {
   sessionStorage.setItem('chemlogEmployeeUsername', session.username || '');
   sessionStorage.setItem('chemlogEmployeeFirstName', session.firstName || '');
   sessionStorage.setItem('chemlogEmployeeLastName', session.lastName || '');
+  sessionStorage.setItem('chemlogEmployeeHomePool', session.homePool || '');
+  sessionStorage.setItem('chemlogEmployeePhone', session.phone || '');
   persistRequestedAccessMode(accessMode);
 }
 
@@ -4409,6 +4411,11 @@ let employeePage = 1;
 let employeeTableEditable = false;
 let employeeUndoState = null;
 const EMPLOYEES_PER_PAGE = 10;
+let resolvePoolProEmployeesReady = null;
+window.poolProEmployeesLoaded = false;
+window.poolProEmployeesReady = new Promise((resolve) => {
+  resolvePoolProEmployeesReady = resolve;
+});
 
 function ensureEmployeeSettingsUi() {
   const tableSection = document.getElementById('employeeTableSection');
@@ -4583,6 +4590,16 @@ async function loadEmployees() {
     renderEmployeesTable();
   } catch (err) {
     console.error('[ChemLog] Error loading employees:', err);
+  } finally {
+    const normalizedEmployees = employeesData.map(normalizeEmployeeRecord);
+    window.poolProEmployeesLoaded = true;
+    if (resolvePoolProEmployeesReady) {
+      resolvePoolProEmployeesReady(normalizedEmployees);
+      resolvePoolProEmployeesReady = null;
+    }
+    window.dispatchEvent(new CustomEvent('poolpro:employees-loaded', {
+      detail: { employees: normalizedEmployees },
+    }));
   }
 }
 
@@ -7011,7 +7028,36 @@ window.getEmployeeByID = function (idOrEmail) {
 };
 window.getEmployeeByEmail = window.getEmployeeByID;
 
-window.addTrainingSignupToSchedule = async function ({ sessionId, firstName, lastName, homePool, email }) {
+window.getCurrentEmployeeRecord = function () {
+  const sessionEmail = (sessionStorage.getItem('chemlogEmployeeEmail') || '').trim().toLowerCase();
+  const sessionId = (sessionStorage.getItem('chemlogEmployeeId') || '').trim().toLowerCase();
+  const sessionUsername = (sessionStorage.getItem('chemlogEmployeeUsername') || '').trim().toLowerCase();
+  const supervisorEmail = (auth.currentUser?.email || getStoredSupervisorEmail() || '').trim().toLowerCase();
+  const keys = [sessionEmail, sessionId, sessionUsername, supervisorEmail].filter(Boolean);
+  const matched = employeesData
+    .map(normalizeEmployeeRecord)
+    .find((employee) => keys.some((key) =>
+      employee.email === key ||
+      String(employee.id || '').toLowerCase() === key ||
+      employee.username === key
+    ));
+  const fallback = normalizeEmployeeRecord({
+    email: sessionEmail || supervisorEmail || '',
+    id: sessionId || sessionEmail || supervisorEmail || '',
+    username: sessionUsername || '',
+    firstName: sessionStorage.getItem('chemlogEmployeeFirstName') || '',
+    lastName: sessionStorage.getItem('chemlogEmployeeLastName') || '',
+    homePool: sessionStorage.getItem('chemlogEmployeeHomePool') || '',
+    phone: sessionStorage.getItem('chemlogEmployeePhone') || '',
+  });
+  return matched ? normalizeEmployeeRecord({ ...fallback, ...matched }) : fallback;
+};
+
+window.getPoolMarketByName = function (poolName) {
+  return getPoolMarket(poolName || '');
+};
+
+window.addTrainingSignupToSchedule = async function ({ sessionId, firstName, lastName, homePool, email, employeeId, username, phone }) {
   if (!sessionId) return;
   try {
     await addDoc(collection(db, 'trainingSignups'), {
@@ -7020,6 +7066,9 @@ window.addTrainingSignupToSchedule = async function ({ sessionId, firstName, las
       lastName: lastName || '',
       homePool: homePool || '',
       email: email || '',
+      employeeId: employeeId || email || '',
+      username: username || '',
+      phone: phone || '',
       signedUpAt: new Date().toISOString()
     });
   } catch (err) {

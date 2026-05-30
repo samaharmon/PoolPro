@@ -827,6 +827,8 @@ function persistLifeguardSession(employee, username, accessMode = 'lifeguard') {
     username: normalizeUsername(username || normalizedEmployee.username || ''),
     firstName: normalizedEmployee.firstName || '',
     lastName: normalizedEmployee.lastName || '',
+    homePool: normalizedEmployee.homePool || '',
+    phone: normalizedEmployee.phone || '',
     expires: Date.now() + VERIFY_WINDOW_MS,
   };
   sessionStorage.setItem('chemlogRole', 'lifeguard');
@@ -835,6 +837,8 @@ function persistLifeguardSession(employee, username, accessMode = 'lifeguard') {
   sessionStorage.setItem('chemlogEmployeeUsername', session.username);
   sessionStorage.setItem('chemlogEmployeeFirstName', session.firstName);
   sessionStorage.setItem('chemlogEmployeeLastName', session.lastName);
+  sessionStorage.setItem('chemlogEmployeeHomePool', session.homePool);
+  sessionStorage.setItem('chemlogEmployeePhone', session.phone);
   sessionStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalizedAccessMode);
   localStorage.setItem(ROLE_STORAGE_KEY, 'lifeguard');
   localStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalizedAccessMode);

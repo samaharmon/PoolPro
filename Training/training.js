@@ -1291,12 +1291,121 @@ function openRosterModal(sessionId) {
 
 // ---------- Lifeguard signup handlers ----------
 
+function normalizeTrainingIdentityKey(value) {
+  return (value || '').toString().trim().toLowerCase();
+}
+
+function mergeTrainingEmployeeSources(...sources) {
+  return sources.filter(Boolean).reduce((merged, source) => {
+    const normalized = {
+      id: source.id || source.employeeId || '',
+      employeeId: source.employeeId || source.id || source.email || '',
+      email: source.email || source.employeeEmail || source.authEmail || '',
+      username: source.username || '',
+      firstName: source.firstName || source.name || '',
+      lastName: source.lastName || '',
+      homePool: source.homePool || source.pool || '',
+      phone: source.phone || '',
+    };
+    Object.entries(normalized).forEach(([key, value]) => {
+      const cleanValue = (value || '').toString().trim();
+      if (cleanValue) merged[key] = cleanValue;
+    });
+    return merged;
+  }, {});
+}
+
+function getStoredTrainingEmployeeRecord() {
+  let storedSession = {};
+  try {
+    storedSession = JSON.parse(localStorage.getItem('poolproLifeguardSession') || '{}') || {};
+  } catch (_) {
+    storedSession = {};
+  }
+
+  return mergeTrainingEmployeeSources(storedSession, {
+    email: sessionStorage.getItem('chemlogEmployeeEmail') || '',
+    employeeId: sessionStorage.getItem('chemlogEmployeeId') || '',
+    username: sessionStorage.getItem('chemlogEmployeeUsername') || '',
+    firstName: sessionStorage.getItem('chemlogEmployeeFirstName') || '',
+    lastName: sessionStorage.getItem('chemlogEmployeeLastName') || '',
+    homePool: sessionStorage.getItem('chemlogEmployeeHomePool') || '',
+    phone: sessionStorage.getItem('chemlogEmployeePhone') || '',
+  });
+}
+
+function getCurrentTrainingEmployeeRecord() {
+  const stored = getStoredTrainingEmployeeRecord();
+  const helperRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  const lookupKey = helperRecord?.email || helperRecord?.employeeId || stored.email || stored.employeeId || stored.username;
+  const tableRecord = lookupKey && typeof window.getEmployeeByID === 'function'
+    ? window.getEmployeeByID(lookupKey)
+    : null;
+  return mergeTrainingEmployeeSources(stored, helperRecord, tableRecord);
+}
+
+function getTrainingEmployeePrimaryKey(employee) {
+  return normalizeTrainingIdentityKey(employee.email || employee.employeeId || employee.id || employee.username);
+}
+
+function getTrainingEmployeeMarket(employee) {
+  const homePool = (employee.homePool || '').trim();
+  if (!homePool) return '';
+  if (typeof window.getPoolMarketByName === 'function') {
+    return window.getPoolMarketByName(homePool) || '';
+  }
+  return '';
+}
+
+function refreshSignupMarketFromEmployee(el) {
+  const employee = getCurrentTrainingEmployeeRecord();
+  activeSignupMarket = getTrainingEmployeeMarket(employee);
+  if (el?.trainingMonthSelect?.value) {
+    updateSessionSelectForType(el.trainingMonthSelect.value, el);
+  }
+}
+
+function waitForCurrentTrainingEmployeeRecord(timeoutMs = 4000) {
+  const initial = getCurrentTrainingEmployeeRecord();
+  if (getTrainingEmployeePrimaryKey(initial) && (initial.homePool || window.poolProEmployeesLoaded)) {
+    return Promise.resolve(initial);
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeoutId = null;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
+      window.removeEventListener('poolpro:employees-loaded', finish);
+      resolve(getCurrentTrainingEmployeeRecord());
+    };
+    window.addEventListener('poolpro:employees-loaded', finish, { once: true });
+    timeoutId = window.setTimeout(finish, timeoutMs);
+    if (window.poolProEmployeesReady && typeof window.poolProEmployeesReady.then === 'function') {
+      window.poolProEmployeesReady.then(finish).catch(finish);
+    }
+  });
+}
+
 function setupSignup(el) {
   const form = el.signupForm;
   if (!form || !el.trainingMonthSelect || !el.trainingSessionSelect) return;
 
-  // When the lifeguard picks their home pool, derive the market from the optgroup
-  // label and re-filter the session dropdown to that market only.
+  refreshSignupMarketFromEmployee(el);
+  window.addEventListener('poolpro:employees-loaded', () => refreshSignupMarketFromEmployee(el));
+  window.addEventListener('poolpro:pools-ready', () => refreshSignupMarketFromEmployee(el));
+  [el.guardEmployeeIdInput, el.guardNameInput, el.guardPoolInput]
+    .filter(Boolean)
+    .forEach((field) => {
+      field.required = false;
+      field.removeAttribute('required');
+    });
+
+  // Backwards compatible support for older cached markup that still has a home pool select.
   if (el.guardPoolInput) {
     el.guardPoolInput.addEventListener('change', () => {
       const select = el.guardPoolInput;
@@ -1312,7 +1421,7 @@ function setupSignup(el) {
     updateSessionSelectForType(monthKey, el);
   });
 
-  form.addEventListener('submit', (evt) => {
+  form.addEventListener('submit', async (evt) => {
     evt.preventDefault();
     const msgEl = el.signupMessage;
     if (!msgEl) return;
@@ -1320,16 +1429,26 @@ function setupSignup(el) {
     msgEl.textContent = '';
     msgEl.classList.remove('success', 'error');
 
-    const employeeId = (el.guardEmployeeIdInput?.value.trim() || '').toLowerCase();
-    const preferredName = el.guardNameInput?.value.trim();
-    const name = preferredName;
-    const homePool = el.guardPoolInput?.value.trim();
+    const employeeRecord = await waitForCurrentTrainingEmployeeRecord();
+    const employeeId = getTrainingEmployeePrimaryKey(employeeRecord);
+    const firstName = employeeRecord.firstName || '';
+    const lastName = employeeRecord.lastName || '';
+    const homePool = employeeRecord.homePool || '';
+    const phone = employeeRecord.phone || '';
+    const email = normalizeTrainingIdentityKey(employeeRecord.email || (employeeId.includes('@') ? employeeId : ''));
     const trainingTypeKey = el.trainingMonthSelect.value;
     const sessionId = el.trainingSessionSelect.value;
 
-    if (!employeeId || !employeeId.includes('@') || !name || !homePool || !trainingTypeKey || !sessionId) {
+    if (!employeeId) {
       msgEl.textContent =
-        'Please fill out all fields and choose a training session.';
+        'PoolPro could not identify your employee profile. Please log out and sign in again.';
+      msgEl.classList.add('error');
+      return;
+    }
+
+    if (!trainingTypeKey || !sessionId) {
+      msgEl.textContent =
+        'Please choose a training type and training session.';
       msgEl.classList.add('error');
       return;
     }
@@ -1357,7 +1476,10 @@ function setupSignup(el) {
 
     const alreadySignedUp =
       Array.isArray(session.attendees) &&
-      session.attendees.some((att) => att.employeeId === employeeId);
+      session.attendees.some((att) => {
+        const attendeeKey = normalizeTrainingIdentityKey(att.employeeId || att.email || att.username || att.id);
+        return attendeeKey && attendeeKey === employeeId;
+      });
 
     if (alreadySignedUp) {
       msgEl.textContent = 'You are already signed up for this session.';
@@ -1365,16 +1487,13 @@ function setupSignup(el) {
       return;
     }
 
-    // Look up employee data from employees table via employee ID
-    const empRecord = window.getEmployeeByID ? window.getEmployeeByID(employeeId) : null;
-    const lastName = empRecord?.lastName || '';
-    const phone = empRecord?.phone || '';
-
     const attendee = {
       id: 'att_' + Math.random().toString(36).slice(2, 9),
       employeeId,
-      name,
-      firstName: preferredName,
+      email,
+      username: employeeRecord.username || '',
+      name: firstName,
+      firstName,
       lastName,
       homePool,
       phone,
@@ -1393,10 +1512,13 @@ function setupSignup(el) {
     if (window.addTrainingSignupToSchedule) {
       window.addTrainingSignupToSchedule({
         sessionId,
-        firstName: name,
-        lastName: '',
+        firstName,
+        lastName,
         homePool,
-        email: ''
+        email,
+        employeeId,
+        username: employeeRecord.username || '',
+        phone
       });
     }
 
