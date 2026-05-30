@@ -140,10 +140,29 @@ function saveSessions() {
 const MONTH_KEYS = ['january','february','march','april','may','june','july','august','september','october','november','december'];
 const MONTH_LABELS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+function parseTrainingDateOnly(dateStr) {
+  if (!dateStr) return null;
+  const value = String(dateStr).trim();
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) {
+    return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0, 0);
+  }
+  const d = new Date(value.includes('T') ? value : `${value}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateInputValue(dateObj) {
+  if (!(dateObj instanceof Date) || Number.isNaN(dateObj.getTime())) return '';
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getMonthKeyFromDateString(dateStr) {
   if (!dateStr) return null;
-  const d = new Date(dateStr + 'T12:00:00'); // noon to avoid timezone edge cases
-  if (Number.isNaN(d.getTime())) return null;
+  const d = parseTrainingDateOnly(dateStr);
+  if (!d) return null;
   return MONTH_KEYS[d.getMonth()];
 }
 
@@ -156,8 +175,8 @@ function formatTimeRange(startTime, endTime) {
 
 function formatDateNice(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return dateStr;
+  const d = parseTrainingDateOnly(dateStr);
+  if (!d) return dateStr;
   const month = d.toLocaleString(undefined, { month: 'short' });
   const day = d.getDate();
   const year = d.getFullYear();
@@ -791,9 +810,10 @@ function handleDeleteSessionClick(sessionId, el) {
 
 function getDayDate(startDate, dayNum) {
   if (!startDate) return '';
-  const d = new Date(startDate + 'T12:00:00');
+  const d = parseTrainingDateOnly(startDate);
+  if (!d) return '';
   d.setDate(d.getDate() + dayNum - 1);
-  return d.toISOString().split('T')[0];
+  return formatDateInputValue(d);
 }
 
 function buildScheduleTableSection(sessions, isAdmin, el = null) {
