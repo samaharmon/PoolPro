@@ -3303,6 +3303,30 @@ body {
   min-width: 100% !important;
 }
 
+.scheduled-section .table-scroll-shell::before,
+.scheduled-section .table-scroll-shell::after {
+  width: 34px;
+  height: var(--table-scroll-shadow-height, calc(100% - 8px));
+  z-index: 12;
+}
+
+.scheduled-section .table-scroll-shell::before {
+  left: 0;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.42), transparent);
+}
+
+.scheduled-section .table-scroll-shell::after {
+  right: 0;
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.42), transparent);
+}
+
+.scheduled-section .table-scroll-wrap,
+.scheduled-section .table-scroll-wrap.has-overflow-left,
+.scheduled-section .table-scroll-wrap.has-overflow-right,
+.scheduled-section .table-scroll-wrap.has-overflow-left.has-overflow-right {
+  background-image: none !important;
+}
+
 .training-schedule-table th,
 .training-schedule-table td {
   width: auto !important;
