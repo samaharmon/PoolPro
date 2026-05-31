@@ -1,7 +1,7 @@
 html {
   --poolpro-accent-gradient: linear-gradient(135deg, rgba(105, 20, 14, 0.92), rgba(32, 40, 52, 0.92));
-  background-color: #666;
-  background-image: var(--poolpro-accent-gradient), linear-gradient(#666, #666);
+  background-color: #000;
+  background-image: var(--poolpro-accent-gradient), linear-gradient(#000, #000);
   background-repeat: no-repeat, no-repeat;
   background-position: top, bottom;
   background-size: 100% calc(120px + env(safe-area-inset-top, 0px)), 100% calc(120px + env(safe-area-inset-bottom, 0px));
@@ -9,7 +9,7 @@ html {
 }
 
 body {
-  background-color: white;
+  background-color: #000;
   min-height: 100vh;
   min-height: 100dvh;
   background-clip: content-box;
