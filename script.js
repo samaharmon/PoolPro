@@ -73,9 +73,12 @@ const CHEM_CONTROLLER_IMAGE_QUALITY = 0.72;
 const CHEM_CONTROLLER_COMPRESS_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
 const CHEM_AUTO_CONTROLLER_REUSE_WINDOW_MS = 30 * 60 * 1000;
 window.trainingSchedule = trainingSchedule;
-window.addEventListener('load', () => {
+function markPageLoaded() {
   document.body.classList.add('page-loaded');
-});
+}
+markPageLoaded();
+window.addEventListener('DOMContentLoaded', markPageLoaded);
+window.addEventListener('load', markPageLoaded);
 
 // PoolPro now uses dark styling by default across the app.
 localStorage.setItem('chemlogDarkMode', 'true');
@@ -434,6 +437,20 @@ function hideSharedModalOverlayIfUnused() {
     }
   }, 250);
 }
+
+function resetOrphanedSharedModalOverlay() {
+  const overlay = document.getElementById('settingsOverlay');
+  if (!overlay) return;
+  const settingsModal = document.getElementById('settingsModal');
+  const feedbackModal = document.getElementById('feedbackModal');
+  const settingsOpen = settingsModal?.classList.contains('visible');
+  const feedbackOpen = feedbackModal?.classList.contains('visible');
+  if (settingsOpen || feedbackOpen) return;
+  overlay.classList.remove('visible');
+  overlay.style.display = 'none';
+}
+
+window.addEventListener('load', resetOrphanedSharedModalOverlay);
 
 window.openSettings = function () {
   ensureAccountManagementSection();
@@ -7212,6 +7229,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ensureStandardSettingsSections();
   ensureResourcesSettingsSection();
   ensureSettingsModalScrollBody();
+  resetOrphanedSharedModalOverlay();
   setupAccountManagement();
   setupSettingsAccordions();
   wrapResponsiveTables();

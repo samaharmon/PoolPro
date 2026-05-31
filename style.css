@@ -14,7 +14,7 @@ body {
   min-height: 100dvh;
   background-clip: content-box;
   font-family: 'Franklin Gothic Medium', 'Franklin Gothic Medium Cond', Arial, sans-serif;
-  opacity: 0;
+  opacity: 1;
   transition: opacity 0.4s ease;
   display: flex;
   flex-direction: column;
