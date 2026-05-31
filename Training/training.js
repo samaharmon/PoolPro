@@ -918,7 +918,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
 
     const thead = document.createElement('thead');
     thead.innerHTML = isAdmin
-      ? `<tr><th>Training Type</th><th>Date &amp; Time</th><th>Location</th><th>Notes</th><th>Spots Filled</th></tr>`
+      ? `<tr><th>Training Type</th><th>Date &amp; Time</th><th>Location</th><th>Notes</th><th>Spots Filled</th><th>Actions</th></tr>`
       : `<tr><th>Training Type</th><th>Date &amp; Time</th><th>Location</th><th>Notes</th><th>Spots Filled</th></tr>`;
     table.appendChild(thead);
 
@@ -968,6 +968,21 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
       row.appendChild(capCell);
 
       if (capacity && taken >= capacity) row.classList.add('session-row-full');
+
+      if (isAdmin) {
+        const actionsCell = document.createElement('td');
+        actionsCell.className = 'training-actions-cell actions-cell';
+        const rosterBtn = document.createElement('button');
+        rosterBtn.type = 'button';
+        rosterBtn.className = 'editAndSave training-roster-btn';
+        rosterBtn.textContent = 'Roster';
+        rosterBtn.addEventListener('click', (event) => {
+          event.stopPropagation();
+          openRosterModal(session.id);
+        });
+        actionsCell.appendChild(rosterBtn);
+        row.appendChild(actionsCell);
+      }
 
       tbody.appendChild(row);
     }

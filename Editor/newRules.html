@@ -59,10 +59,10 @@
             </div>
         </div>
     <div class="container">
-        <h2 class="page-content-title">Site Editor</h2>
+        <h2 class="page-content-title">Facility Metadata</h2>
         <div class="form-container" id="ruleEditorContent">
             <div class="section" id="poolRuleEditorSection">
-                <h2>Pool Editor</h2>
+                <h2>General Information</h2>
                 <div class="form-row" id="editorModeRow" style="gap: 10px;">
                     <button type="button" id="editorModeAdd" class="editAndSave mode-toggle">
                         Add new pool
@@ -158,8 +158,21 @@
                         <button type="button" id="deletePoolBtn" class="editAndSave">Delete Pool</button>
                     </div>
                 </div>
+                <div class="section hidden" id="supplyInfoSection">
+                    <div class="supply-info-content">
+                        <h3>Supply Information</h3>
+                        <p class="section-subtitle">Choose which supplies this facility uses and enter the specific type when needed.</p>
+                        <div id="supplyInfoRows" class="supply-info-rows"></div>
+                    </div>
+                    <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px; justify-content: flex-start; align-items: center;">
+                        <div class="rule-buttons metadata-rule-buttons">
+                            <button type="button" class="pool-edit-btn editAndSave" id="editSupplyInfoBtn" style="display:none;">Edit</button>
+                            <button type="button" class="pool-save-btn editAndSave" id="saveSupplyInfoBtn" style="display:none;" disabled>Save</button>
+                        </div>
+                    </div>
+                </div>
                 <div id="ruleEditorSection" class="hidden">
-                    <h3>ChemLog Feedback Editor</h3>
+                    <h3>Pool Chemistry Log Feedback Editor</h3>
                     <div id="poolRuleBlocks">
                         <div class="pool-rule-block" data-pool-index="1">
                             <div class="pool-rule-header">

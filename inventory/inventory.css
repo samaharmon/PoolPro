@@ -1,0 +1,81 @@
+.inventory-form-select-section h2,
+.inventory-form-body h2 {
+  margin-top: 0;
+}
+
+.inventory-form-choice {
+  max-width: 420px;
+}
+
+.inventory-intro-row {
+  align-items: flex-end;
+}
+
+.inventory-directions {
+  color: #e5e5e5;
+  margin: 0 0 18px;
+}
+
+.inventory-supply-sections,
+.inventory-urgent-list {
+  display: grid;
+  gap: 18px;
+}
+
+.inventory-section-card {
+  border: 1px solid #444;
+  background: #262626;
+}
+
+.inventory-section-card h3 {
+  margin: 0;
+  padding: 12px 16px;
+  background: #69140e;
+  color: #fff;
+}
+
+.inventory-supply-row,
+.inventory-urgent-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 260px);
+  gap: 14px;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid #444;
+}
+
+.inventory-supply-name {
+  color: #fff;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.inventory-supply-type {
+  color: #d6d6d6;
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.inventory-urgent-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.inventory-remove-item {
+  min-height: 38px;
+  padding: 8px 12px;
+}
+
+.inventory-submit-row {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .inventory-supply-row,
+  .inventory-urgent-row {
+    grid-template-columns: 1fr;
+  }
+}

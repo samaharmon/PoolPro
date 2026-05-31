@@ -78,6 +78,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Weekly inventory and urgent supply needs submissions
+    match /inventorySubmissions/{submissionId} {
+      allow read, write: if true;
+    }
+
     // Lifeguard employees who can log in via home screen
     match /employees/{employeeId} {
       allow read, write: if true;

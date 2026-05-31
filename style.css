@@ -4208,6 +4208,75 @@ td.concern-major {
   cursor: pointer;
 }
 
+.supply-dashboard-section {
+  margin-bottom: 28px;
+}
+
+.supply-dashboard-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 10px 0 14px;
+}
+
+.supply-needed-table-wrap {
+  position: relative;
+}
+
+.supply-needed-table-wrap.overlay-disabled {
+  opacity: 0.72;
+}
+
+.supply-needed-table-wrap.overlay-disabled::after {
+  content: "";
+  position: absolute;
+  inset: 42px 0 0;
+  background: rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+  cursor: not-allowed;
+}
+
+.dashboard-supplies-table th,
+.dashboard-supplies-table td {
+  width: auto !important;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+.dashboard-link-button,
+.supply-expand-btn {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.supply-expand-btn {
+  width: 26px;
+  min-width: 26px;
+  text-decoration: none;
+  color: #fff;
+  font-weight: 700;
+}
+
+.supply-row-fading {
+  opacity: 0.35;
+  transition: opacity 3s ease;
+}
+
+.supply-facility-detail.hidden {
+  display: none;
+}
+
+.supply-detail-grid {
+  display: grid;
+  gap: 8px;
+  white-space: normal;
+}
+
 .chem-controller-modal-card {
   padding: 0;
 }

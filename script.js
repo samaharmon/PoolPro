@@ -42,6 +42,7 @@ let paginatedData = [];
 let allDutyReports = [];
 let allManagerialReports = [];
 let allDesPreInspections = [];
+let allInventoryReports = [];
 let currentPage = 1;
 const itemsPerPage = 20;
 let isLoggedIn = false;
@@ -136,7 +137,7 @@ document.addEventListener('click', (e) => {
 function getPagePrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   parts.pop();
-  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES'];
+  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES', 'inventory', 'Inventory'];
   const last = parts[parts.length - 1] || '';
   return subDirs.includes(last) ? '../' : '';
 }
@@ -191,6 +192,24 @@ function injectResourcesMenuLinks() {
     link.className = `dropdown-item${isResourcesPage ? ' active-page' : ''}`;
     link.dataset.nav = 'resources';
     link.textContent = 'Resources';
+    anchorLink.insertAdjacentElement('afterend', link);
+  });
+}
+
+function injectInventoryMenuLinks() {
+  const prefix = getPagePrefix();
+  const isInventoryPage = /\/inventory\/inventory\.html$/i.test(window.location.pathname);
+
+  document.querySelectorAll('.dropdown-menu').forEach((menu) => {
+    if (menu.querySelector('[data-nav="inventory"]')) return;
+    const anchorLink = menu.querySelector('[data-nav="resources"]') || menu.querySelector('[data-nav="operational-status"]') || menu.querySelector('[data-nav="duties"]');
+    if (!anchorLink) return;
+
+    const link = document.createElement('a');
+    link.href = isInventoryPage ? 'inventory.html' : `${prefix}inventory/inventory.html`;
+    link.className = `dropdown-item${isInventoryPage ? ' active-page' : ''}`;
+    link.dataset.nav = 'inventory';
+    link.textContent = 'Inventory';
     anchorLink.insertAdjacentElement('afterend', link);
   });
 }
@@ -795,6 +814,7 @@ function applyDashboardAccessMode() {
   const jobPanel = document.getElementById('jobFormsContent');
   const managerialPanel = document.getElementById('managerialFormsContent');
   const operationalPanel = document.getElementById('operationalDashboardContent');
+  const suppliesPanel = document.getElementById('dashboardSuppliesContent');
   const metricsPanel = document.getElementById('dashboardMetricsContent');
   if (!canViewChemDashboard) return;
   if (tabs) tabs.style.display = fullAccess ? '' : 'none';
@@ -805,6 +825,7 @@ function applyDashboardAccessMode() {
     if (jobPanel) jobPanel.style.display = 'none';
     if (managerialPanel) managerialPanel.style.display = 'none';
     if (operationalPanel) operationalPanel.style.display = 'none';
+    if (suppliesPanel) suppliesPanel.style.display = 'none';
     if (metricsPanel) metricsPanel.style.display = 'none';
   }
 }
@@ -849,6 +870,11 @@ async function renderActiveDashboardTab() {
 
   if (activeTab === 'operational') {
     renderOperationalDashboard();
+    return;
+  }
+
+  if (activeTab === 'supplies') {
+    renderSuppliesDashboard();
     return;
   }
 
@@ -1548,6 +1574,7 @@ const PERMISSION_DEFINITIONS = [
   { key: 'cleanlinessReport', label: 'Cleanliness Report' },
   { key: 'managerialReport', label: 'Managerial Report' },
   { key: 'operationalStatusLog', label: 'Operational Status Log' },
+  { key: 'inventory', label: 'Inventory' },
   { key: 'resources', label: 'Resources' },
   { key: 'desPreInspection', label: 'DES Pre-Inspection' },
   { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
@@ -1564,6 +1591,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     cleanlinessReport: true,
     managerialReport: false,
     operationalStatusLog: true,
+    inventory: true,
     resources: true,
     desPreInspection: false,
     poolChemistryDashboard: false,
@@ -1579,6 +1607,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     cleanlinessReport: false,
     managerialReport: false,
     operationalStatusLog: true,
+    inventory: true,
     resources: true,
     desPreInspection: false,
     poolChemistryDashboard: false,
@@ -1594,6 +1623,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     cleanlinessReport: true,
     managerialReport: true,
     operationalStatusLog: true,
+    inventory: true,
     resources: true,
     desPreInspection: true,
     poolChemistryDashboard: false,
@@ -1857,6 +1887,7 @@ const NAV_PERMISSION_MAP = {
   duties: 'cleanlinessReport',
   'managerial-report': 'managerialReport',
   'operational-status': 'operationalStatusLog',
+  inventory: 'inventory',
   resources: 'resources',
   'des-pre-inspection': 'desPreInspection',
   dashboard: 'poolChemistryDashboard',
@@ -1876,6 +1907,7 @@ function getCurrentPagePermissionKey() {
   if (/\/duties\/duties\.html$/i.test(path)) return 'cleanlinessReport';
   if (/\/managerial\/managerial\.html$/i.test(path)) return 'managerialReport';
   if (/\/operational\/operational\.html$/i.test(path)) return 'operationalStatusLog';
+  if (/\/inventory\/inventory\.html$/i.test(path)) return 'inventory';
   if (/\/resources\/resources\.html$/i.test(path)) return 'resources';
   if (/\/des\/des\.html$/i.test(path)) return 'desPreInspection';
   if (/\/employees\/employees\.html$/i.test(path)) return 'performanceTracking';
@@ -2891,8 +2923,51 @@ const DASHBOARD_PANEL_IDS = {
   jobforms: 'jobFormsContent',
   managerial: 'managerialFormsContent',
   operational: 'operationalDashboardContent',
+  supplies: 'dashboardSuppliesContent',
   metrics: 'dashboardMetricsContent',
 };
+const SUPPLY_STATUS_PRIORITY = { Out: 0, 'Critically Low': 1, Low: 2, Moderate: 3, High: 4 };
+const SUPPLY_NEED_STATUSES = new Set(['Low', 'Critically Low', 'Out']);
+const SUPPLY_SECTIONS = [
+  {
+    label: 'Pool Chemistry Supplies',
+    items: [
+      { id: 'r001_reagent', label: 'R-001 reagent (DPD reagent 1)' },
+      { id: 'r002_reagent', label: 'R-002 reagent (DPD reagent 2)' },
+      { id: 'r004_reagent', label: 'R-004 reagent (pH indicator)' },
+    ],
+  },
+  {
+    label: 'First Aid Supplies',
+    items: [
+      { id: 'bandaids', label: 'Bandaids' },
+      { id: 'gauze', label: 'Gauze' },
+      { id: 'roller_bandages', label: 'Roller bandages' },
+      { id: 'sanitation_wipes', label: 'Sanitation wipes' },
+      { id: 'sting_relief', label: 'Sting relief' },
+      { id: 'antibiotic_gel', label: 'Antibiotic gel' },
+      { id: 'disposable_gloves', label: 'Disposable gloves' },
+    ],
+  },
+  {
+    label: 'Cleaning Supplies',
+    items: [
+      { id: 'toilet_paper', label: 'Toilet paper' },
+      { id: 'paper_towels', label: 'Paper towels' },
+      { id: 'black_trash_bags', label: 'Black trash bags' },
+      { id: 'clear_trash_bags', label: 'Clear trash bags' },
+      { id: 'disinfectant_spray', label: 'Disinfectant spray' },
+      { id: 'glass_cleaner', label: 'Glass cleaner' },
+      { id: 'scrub_pads', label: 'Scrub pads' },
+      { id: 'hand_soap', label: 'Hand soap' },
+      { id: 'toilet_bowl_cleaner', label: 'Toilet bowl cleaner' },
+    ],
+  },
+];
+let supplyNeededEditMode = false;
+let supplyResolvedItems = {};
+let supplyUndoItem = null;
+let dashboardSupplyFilters = { market: 'all', pool: 'all' };
 const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a trickle'];
 const BLEACH_FEEDER_STATUS_OPTIONS = ['Not applicable', 'Off', '0 or L', '1', '1.5', '1.75', '2', '2.25', '2.5', '3', '4', '5', '6', '7', '8', '9', '10'];
 const POOL_CLOSURE_OPTIONS = ['Open', 'Weather', 'Contamination', 'Chemical Imbalance', 'System Malfunction', 'Other'];
@@ -3704,18 +3779,22 @@ async function loadDashboardData() {
 
   try {
     const fullAccess = isSupervisor();
-    const [sanSnap, chemSnap, dutySnap, managerialSnap, desSnap] = await Promise.all([
+    const [sanSnap, chemSnap, dutySnap, managerialSnap, desSnap, inventorySnap, resolvedSupplySnap] = await Promise.all([
       getDoc(doc(db, 'settings', 'sanitation')),
       getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'))),
       fullAccess ? getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
       fullAccess ? getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
       fullAccess ? getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
+      fullAccess ? getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
+      fullAccess ? getDoc(doc(db, 'settings', 'resolvedSupplyNeeds')) : Promise.resolve(null),
     ]);
     sanitationSelections = sanSnap.exists() ? (sanSnap.data().pools || {}) : {};
     allLogs = chemSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
     allDutyReports = dutySnap ? dutySnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     allManagerialReports = managerialSnap ? managerialSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     allDesPreInspections = desSnap ? desSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
+    allInventoryReports = inventorySnap ? inventorySnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
+    supplyResolvedItems = resolvedSupplySnap?.exists?.() ? (resolvedSupplySnap.data().items || {}) : {};
     await loadOperationalStatusLogs();
     dashboardDataLoaded = true;
     await renderActiveDashboardTab();
@@ -7127,6 +7206,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   injectOperationalStatusMenuLinks();
   injectManagerialReportMenuLinks();
   injectResourcesMenuLinks();
+  injectInventoryMenuLinks();
   injectDesPreInspectionMenuLinks();
   injectLifeguardSettingsMenuLinks();
   ensureStandardSettingsSections();
@@ -7602,6 +7682,284 @@ function loadManagerialFormSubmissions() {
     return;
   }
   renderInspectionReports();
+}
+
+function getAllSupplyItems() {
+  return SUPPLY_SECTIONS.flatMap((section) =>
+    section.items.map((item) => ({ ...item, section: section.label }))
+  );
+}
+
+function getSupplySettingForPool(poolDoc, itemId) {
+  const setting = poolDoc?.supplyInfo?.[itemId] || {};
+  return {
+    enabled: setting.enabled !== false,
+    type: (setting.type || '').toString().trim(),
+  };
+}
+
+function getSupplyNeedKey(row) {
+  return [row.facilityId || row.facilityName, row.itemId].map((value) => String(value || '').trim()).join('::');
+}
+
+function getLatestInventoryRows() {
+  const latest = new Map();
+  allInventoryReports.forEach((report) => {
+    const timestamp = toDateObject(report.timestamp) || toDateObject(report.submittedAtIso) || new Date(0);
+    (Array.isArray(report.items) ? report.items : []).forEach((item) => {
+      const key = `${report.facilityId || report.facilityName || report.pool || ''}::${item.id || item.item || ''}`;
+      if (!key.includes('::') || latest.has(key)) return;
+      latest.set(key, {
+        report,
+        facilityId: report.facilityId || report.facilityName || report.pool || '',
+        facilityName: report.facilityName || report.pool || '—',
+        market: report.market || getPrimaryMarketName(getDashboardPoolDocByName(report.facilityName || report.pool)),
+        itemId: item.id || item.item || '',
+        item: item.item || item.label || item.id || '—',
+        section: item.section || '',
+        type: item.type || '',
+        status: item.status || '',
+        timestamp,
+      });
+    });
+  });
+  return Array.from(latest.values());
+}
+
+function renderSupplyNeedActions(container) {
+  const row = document.createElement('div');
+  row.className = 'supply-dashboard-actions';
+  const edit = document.createElement('button');
+  edit.type = 'button';
+  edit.className = `editAndSave${supplyNeededEditMode ? ' active' : ''}`;
+  edit.textContent = 'Edit';
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = `editAndSave${!supplyNeededEditMode ? ' active' : ''}`;
+  save.textContent = 'Save';
+  const undo = document.createElement('button');
+  undo.type = 'button';
+  undo.className = 'editAndSave';
+  undo.textContent = 'Undo';
+  undo.disabled = !supplyUndoItem;
+  edit.addEventListener('click', () => {
+    supplyNeededEditMode = true;
+    renderSuppliesDashboard();
+  });
+  save.addEventListener('click', () => {
+    supplyNeededEditMode = false;
+    renderSuppliesDashboard();
+  });
+  undo.addEventListener('click', async () => {
+    if (!supplyUndoItem) return;
+    delete supplyResolvedItems[supplyUndoItem];
+    supplyUndoItem = null;
+    await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true }).catch(() => {});
+    renderSuppliesDashboard();
+  });
+  row.append(edit, save, undo);
+  container.appendChild(row);
+}
+
+function renderNeededSuppliesSection(container, rows) {
+  const section = document.createElement('div');
+  section.className = 'dashboard-market-section supply-dashboard-section';
+  section.innerHTML = '<h2 class="dashboard-market-heading">Needed Supplies</h2>';
+  renderSupplyNeedActions(section);
+
+  const tableWrap = document.createElement('div');
+  tableWrap.className = `supply-needed-table-wrap${supplyNeededEditMode ? '' : ' overlay-disabled'}`;
+  const table = document.createElement('table');
+  table.className = 'data-table dashboard-pool-table dashboard-supplies-table';
+  table.innerHTML = '<thead><tr><th></th><th>Item</th><th>Type</th><th>Facility</th><th>Status</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  const neededRows = rows
+    .filter((row) => SUPPLY_NEED_STATUSES.has(row.status) && !supplyResolvedItems[getSupplyNeedKey(row)])
+    .sort((a, b) =>
+      (SUPPLY_STATUS_PRIORITY[a.status] ?? 99) - (SUPPLY_STATUS_PRIORITY[b.status] ?? 99)
+      || a.item.localeCompare(b.item)
+      || a.facilityName.localeCompare(b.facilityName)
+    );
+
+  if (!neededRows.length) {
+    tbody.innerHTML = '<tr><td colspan="5">No needed supplies are currently listed.</td></tr>';
+  } else {
+    neededRows.forEach((row) => {
+      const tr = document.createElement('tr');
+      const key = getSupplyNeedKey(row);
+      const checkCell = document.createElement('td');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.className = 'market-filter-checkbox';
+      checkbox.disabled = !supplyNeededEditMode;
+      checkbox.addEventListener('change', () => {
+        if (!checkbox.checked) return;
+        tr.classList.add('supply-row-fading');
+        window.setTimeout(async () => {
+          supplyResolvedItems[key] = true;
+          supplyUndoItem = key;
+          await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true }).catch(() => {});
+          renderSuppliesDashboard();
+        }, 3000);
+      });
+      checkCell.appendChild(checkbox);
+      const facilityCell = document.createElement('td');
+      const facilityBtn = document.createElement('button');
+      facilityBtn.type = 'button';
+      facilityBtn.className = 'dashboard-link-button';
+      facilityBtn.textContent = row.facilityName || '—';
+      facilityBtn.addEventListener('click', () => openInspectionMetaPopup({
+        pool: row.facilityName,
+        respondentName: row.report?.respondentName || row.report?.respondentEmail || '—',
+        submitterEmail: row.report?.respondentEmail || '—',
+        timestamp: row.report?.timestamp || row.report?.submittedAtIso,
+      }, 'Inventory Details'));
+      facilityCell.appendChild(facilityBtn);
+      tr.appendChild(checkCell);
+      tr.insertAdjacentHTML('beforeend', `
+        <td>${escapeHtml(row.item)}</td>
+        <td>${escapeHtml(row.type || '—')}</td>
+      `);
+      tr.appendChild(facilityCell);
+      tr.insertAdjacentHTML('beforeend', `<td>${escapeHtml(row.status)}</td>`);
+      tbody.appendChild(tr);
+    });
+  }
+
+  table.appendChild(tbody);
+  tableWrap.appendChild(table);
+  section.appendChild(tableWrap);
+  container.appendChild(section);
+}
+
+function renderSupplyFilterBar(container, onChange) {
+  const filterBar = document.createElement('div');
+  filterBar.className = 'training-filter-bar dashboard-filter-bar supply-filter-bar';
+  filterBar.innerHTML = '<span class="filter-by-label">Filter By:</span>';
+  const marketSelect = document.createElement('select');
+  marketSelect.className = 'training-filter-select';
+  marketSelect.innerHTML = '<option value="all">All Markets</option>';
+  const poolSelect = document.createElement('select');
+  poolSelect.className = 'training-filter-select';
+  poolSelect.innerHTML = '<option value="all">All Pools</option>';
+
+  const groups = getDashboardPoolOptions();
+  groups.forEach(({ market }) => {
+    const option = document.createElement('option');
+    option.value = market;
+    option.textContent = market;
+    marketSelect.appendChild(option);
+  });
+
+  const poolsForFilter = dashboardSupplyFilters.market === 'all'
+    ? groups
+    : groups.filter(({ market }) => market === dashboardSupplyFilters.market);
+  poolsForFilter.forEach(({ market, pools }) => {
+    const group = document.createElement('optgroup');
+    group.label = market;
+    pools.forEach((poolName) => {
+      const option = document.createElement('option');
+      option.value = poolName;
+      option.textContent = poolName;
+      group.appendChild(option);
+    });
+    poolSelect.appendChild(group);
+  });
+
+  marketSelect.value = dashboardSupplyFilters.market;
+  poolSelect.value = dashboardSupplyFilters.pool;
+  if (poolSelect.value !== dashboardSupplyFilters.pool) {
+    dashboardSupplyFilters.pool = 'all';
+    poolSelect.value = 'all';
+  }
+  marketSelect.addEventListener('change', () => {
+    dashboardSupplyFilters.market = marketSelect.value || 'all';
+    dashboardSupplyFilters.pool = 'all';
+    onChange();
+  });
+  poolSelect.addEventListener('change', () => {
+    dashboardSupplyFilters.pool = poolSelect.value || 'all';
+    onChange();
+  });
+  filterBar.append(marketSelect, poolSelect);
+  container.appendChild(filterBar);
+}
+
+function getLatestReportForFacility(rows, facilityName) {
+  return rows
+    .filter((row) => row.facilityName === facilityName)
+    .sort((a, b) => (b.timestamp?.getTime?.() || 0) - (a.timestamp?.getTime?.() || 0))[0]?.report || null;
+}
+
+function renderFullInventorySection(container, rows) {
+  const section = document.createElement('div');
+  section.className = 'dashboard-market-section supply-dashboard-section';
+  section.innerHTML = '<h2 class="dashboard-market-heading">Full Inventory</h2>';
+  renderSupplyFilterBar(section, renderSuppliesDashboard);
+
+  const filteredRows = rows.filter((row) => {
+    if (dashboardSupplyFilters.market !== 'all' && row.market !== dashboardSupplyFilters.market) return false;
+    if (dashboardSupplyFilters.pool !== 'all' && row.facilityName !== dashboardSupplyFilters.pool) return false;
+    return true;
+  });
+  const byFacility = new Map();
+  filteredRows.forEach((row) => {
+    if (!byFacility.has(row.facilityName)) byFacility.set(row.facilityName, []);
+    byFacility.get(row.facilityName).push(row);
+  });
+
+  const table = document.createElement('table');
+  table.className = 'data-table dashboard-pool-table dashboard-supplies-table dashboard-full-inventory-table';
+  table.innerHTML = '<thead><tr><th>Facility</th><th>Items</th></tr></thead>';
+  const tbody = document.createElement('tbody');
+  if (!byFacility.size) {
+    tbody.innerHTML = '<tr><td colspan="2">No inventory reports match the selected filters.</td></tr>';
+  } else {
+    Array.from(byFacility.entries()).sort(([a], [b]) => a.localeCompare(b)).forEach(([facilityName, facilityRows]) => {
+      const tr = document.createElement('tr');
+      tr.className = 'supply-facility-row';
+      const detailId = `supply-detail-${facilityName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+      tr.innerHTML = `
+        <td><button type="button" class="supply-expand-btn" aria-expanded="false" aria-controls="${escapeHtml(detailId)}">▸</button>${escapeHtml(facilityName)}</td>
+        <td>${facilityRows.length} item${facilityRows.length === 1 ? '' : 's'}</td>
+      `;
+      const detail = document.createElement('tr');
+      detail.className = 'supply-facility-detail hidden';
+      detail.id = detailId;
+      detail.innerHTML = `<td colspan="2"><div class="supply-detail-grid">${
+        facilityRows
+          .sort((a, b) => (SUPPLY_STATUS_PRIORITY[a.status] ?? 99) - (SUPPLY_STATUS_PRIORITY[b.status] ?? 99) || a.item.localeCompare(b.item))
+          .map((row) => `<div><strong>${escapeHtml(row.item)}</strong>${row.type ? ` (${escapeHtml(row.type)})` : ''}: ${escapeHtml(row.status || '—')}</div>`)
+          .join('')
+      }</div></td>`;
+      tr.querySelector('.supply-expand-btn')?.addEventListener('click', (event) => {
+        const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
+        event.currentTarget.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        event.currentTarget.textContent = expanded ? '▸' : '▾';
+        detail.classList.toggle('hidden', expanded);
+      });
+      tbody.append(tr, detail);
+    });
+  }
+
+  table.appendChild(tbody);
+  section.appendChild(table);
+  container.appendChild(section);
+}
+
+function renderSuppliesDashboard() {
+  const container = document.getElementById('dashboardSuppliesContent');
+  if (!container) return;
+  if (!isSupervisor()) {
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view supply reports.</p>';
+    return;
+  }
+
+  container.innerHTML = '';
+  const latestRows = getLatestInventoryRows();
+  renderNeededSuppliesSection(container, latestRows);
+  renderFullInventorySection(container, latestRows);
+  wrapResponsiveTables(container);
 }
 
 function getOperationalLogsForPoolOnDate(facilityName, poolIdx) {

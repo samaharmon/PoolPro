@@ -307,6 +307,7 @@
                 <button class="emp-page-tab" data-dash-tab="jobforms">Cleanliness Reports</button>
                 <button class="emp-page-tab" data-dash-tab="managerial">Inspection Reports</button>
                 <button class="emp-page-tab" data-dash-tab="operational">Operational Status</button>
+                <button class="emp-page-tab" data-dash-tab="supplies">Supplies</button>
                 <button class="emp-page-tab" data-dash-tab="metrics">Metrics</button>
             </div>
             <div id="dashboardContent" class="dash-tab-panel">
@@ -320,6 +321,9 @@
             </div>
             <div id="operationalDashboardContent" class="dash-tab-panel" style="display:none;">
                 <!-- Operational status dashboard injected by script.js -->
+            </div>
+            <div id="dashboardSuppliesContent" class="dash-tab-panel" style="display:none;">
+                <!-- Inventory and supply needs injected by script.js -->
             </div>
             <div id="dashboardMetricsContent" class="dash-tab-panel" style="display:none;">
                 <!-- Dashboard metrics injected by script.js -->
@@ -543,11 +547,4 @@
     </div>
 
 <!-- ✅ Required for Excel import/export -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<!-- Confetti animation for clean submission -->
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
-<script type="module" src="../script.js"></script>
-
-
-</body>
-</html>
+<script src="https://cdn.jsdelivr.n

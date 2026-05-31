@@ -67,12 +67,21 @@
   background: #464646;
 }
 
+#supplyInfoSection {
+  background: #464646;
+}
+
 #poolMetadataSection h3 {
   margin-top: 0;
 }
 
+#supplyInfoSection h3 {
+  margin-top: 0;
+}
+
 #poolMetadataSection input[type="text"],
-#poolMetadataSection input[type="number"] {
+#poolMetadataSection input[type="number"],
+#supplyInfoSection input[type="text"] {
   padding: 10px;
   font-size: 14px;
    background-color: #eee;
@@ -82,7 +91,8 @@
 
 #poolMetadataSection input[type="text"]:enabled,
 #poolMetadataSection input[type="number"]:enabled,
-#poolMetadataSection select:enabled {
+#poolMetadataSection select:enabled,
+#supplyInfoSection input[type="text"]:enabled {
     background-color: #fff;
 }
  
@@ -172,6 +182,47 @@
 #ruleEditorSection h3 {
   margin-bottom: 12px;
  }
+
+.supply-info-rows {
+  display: grid;
+  gap: 16px;
+}
+
+.supply-info-card {
+  border: 1px solid #555;
+  background: #303030;
+}
+
+.supply-info-card h4 {
+  margin: 0;
+  padding: 10px 12px;
+  background: #69140e;
+  color: #fff;
+}
+
+.supply-info-row {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) minmax(160px, 280px);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid #484848;
+}
+
+.supply-info-name {
+  color: #fff;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .supply-info-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .supply-info-type {
+    grid-column: 2;
+  }
+}
  
 /* Container that holds all pool rule blocks */
 #poolRuleBlocks {
@@ -403,6 +454,7 @@ body.dark-mode #mainForm .header {
 
 /* --- Darken hidden/inner sections so they match the main content --- */
 body.dark-mode #poolMetadataSection,
+body.dark-mode #supplyInfoSection,
 body.dark-mode #ruleEditorSection,
 body.dark-mode .pool-rule-block {
   background-color: #2e2e2e;
@@ -667,17 +719,20 @@ body.dark-mode .pool-rule-block {
   transition: opacity 0.15s;
 }
 
-/* Full grey-out overlay for the Pool Metadata section when locked */
-#poolMetadataSection {
+/* Full grey-out overlay for editable metadata sections when locked */
+#poolMetadataSection,
+#supplyInfoSection {
   position: relative;
 }
 
-#poolMetadataSection.overlay-disabled .metadata-content {
+#poolMetadataSection.overlay-disabled .metadata-content,
+#supplyInfoSection.overlay-disabled .supply-info-content {
   position: relative;
   opacity: 0.6;
 }
 
-#poolMetadataSection.overlay-disabled .metadata-content::after {
+#poolMetadataSection.overlay-disabled .metadata-content::after,
+#supplyInfoSection.overlay-disabled .supply-info-content::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -688,29 +743,34 @@ body.dark-mode .pool-rule-block {
 }
 
 /* Keep metadata content under the blocking layer when saved */
-#poolMetadataSection.overlay-disabled .metadata-content > * {
+#poolMetadataSection.overlay-disabled .metadata-content > *,
+#supplyInfoSection.overlay-disabled .supply-info-content > * {
   position: relative;
   z-index: 1;
 }
 
 /* But leave the Edit / Save / Delete buttons clickable */
-#poolMetadataSection .form-row {
+#poolMetadataSection .form-row,
+#supplyInfoSection .form-row {
   position: relative;
   z-index: 3;
 }
 
 /* Pool metadata overlay – grey out the entire metadata area except buttons */
-#poolMetadataSection {
+#poolMetadataSection,
+#supplyInfoSection {
     position: relative;
 }
 
-#poolMetadataSection.overlay-disabled .metadata-content {
+#poolMetadataSection.overlay-disabled .metadata-content,
+#supplyInfoSection.overlay-disabled .supply-info-content {
     position: relative;
     opacity: 0.6;          /* visual grey-out */
 }
 
 /* Optional: more explicit overlay */
-#poolMetadataSection.overlay-disabled .metadata-content::after {
+#poolMetadataSection.overlay-disabled .metadata-content::after,
+#supplyInfoSection.overlay-disabled .supply-info-content::after {
     content: "";
     position: absolute;
     inset: 0;
@@ -805,6 +865,7 @@ body.dark-mode .pool-rule-block {
 
 /* Section spacing inside the pool editor */
 #poolMetadataSection,
+#supplyInfoSection,
 #ruleEditorSection {
   margin-top: 24px;
 }
@@ -833,67 +894,4 @@ body.dark-mode .pool-rule-block {
   font-size: 14px;
 }
 
-.rule-buttons .theme-switch-thumb,
-.metadata-rule-buttons .theme-switch-thumb {
-  height: 34px;
-}
-
-.pool-rule-block.is-saved-mode .copy-rules-row,
-.pool-rule-block.is-saved-mode .table-wrapper,
-.pool-rule-block.is-saved-mode .rules-table,
-.pool-rule-block.is-saved-mode .rules-table * {
-  cursor: not-allowed !important;
-}
-
-body.dark-mode .pool-rule-block .ruleResponse,
-body.dark-mode .pool-rule-block .concernLevel {
-  background-color: #3a3a3a;
-  color: #f0f0f0;
-  border-color: #666;
-}
-
-/* ---- Mobile responsive ---- */
-@media (max-width: 768px) {
-  #mainForm .container {
-    padding: 0 12px;
-    margin: 16px auto;
-  }
-
-  #ruleEditorContent {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  /* Rules table: allow horizontal scroll */
-  .rules-table {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .rules-table table {
-    min-width: 480px;
-  }
-
-  /* Pool rule header: stack vertically */
-  .pool-rule-header {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  /* Mode toggle buttons: full width */
-  .mode-toggle-row {
-    flex-wrap: wrap;
-  }
-
-  .mode-toggle {
-    flex: 1;
-    min-width: 120px;
-  }
-
-  /* Metadata grid: single column */
-  .pool-metadata-grid,
-  .metadata-row {
-    grid-template-columns: 1fr !important;
-    flex-direction: column;
-  }
-}
+.rule-buttons .theme-switch-th

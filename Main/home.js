@@ -49,6 +49,7 @@ const PERMISSION_DEFINITIONS = [
   { key: 'cleanlinessReport', label: 'Cleanliness Report' },
   { key: 'managerialReport', label: 'Managerial Report' },
   { key: 'operationalStatusLog', label: 'Operational Status Log' },
+  { key: 'inventory', label: 'Inventory' },
   { key: 'resources', label: 'Resources' },
   { key: 'desPreInspection', label: 'DES Pre-Inspection' },
   { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
@@ -65,6 +66,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     cleanlinessReport: true,
     managerialReport: false,
     operationalStatusLog: true,
+    inventory: true,
     resources: true,
     desPreInspection: false,
     poolChemistryDashboard: false,
@@ -80,6 +82,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     cleanlinessReport: false,
     managerialReport: false,
     operationalStatusLog: true,
+    inventory: true,
     resources: true,
     desPreInspection: false,
     poolChemistryDashboard: false,
@@ -95,6 +98,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     cleanlinessReport: true,
     managerialReport: true,
     operationalStatusLog: true,
+    inventory: true,
     resources: true,
     desPreInspection: true,
     poolChemistryDashboard: false,
@@ -242,7 +246,7 @@ function getAccessModeLabel(mode = currentRole) {
   if (normalized === 'supervisor') return 'Supervisor';
   if (normalized === 'manager') return 'Manager';
   if (normalized === 'attendant') return 'Gate Attendant';
-  return 'Lifeguard/Attendant';
+  return 'Lifeguard';
 }
 
 function normalizePermissionMap(source = {}, roleKey = '') {
@@ -327,6 +331,10 @@ function hasRoleMembership(keys, roleKey) {
   return (homeRolesPermissionsData.roles?.[roleKey] || []).some((memberKey) => normalizedKeys.has(memberKey));
 }
 
+function hasAnyExplicitRole(keys) {
+  return ROLE_DEFINITIONS.some(({ key }) => hasRoleMembership(keys, key));
+}
+
 function isDeveloperKey(keys) {
   return (keys || []).map(normalizeIdentityKey).includes(SITE_DEVELOPER_EMAIL);
 }
@@ -381,11 +389,12 @@ async function assertAccessModeAllowed(mode, keys) {
   const managerMember = hasRoleMembership(normalizedKeys, 'poolManager');
   const attendantMember = hasRoleMembership(normalizedKeys, 'attendant');
   const lifeguardMember = hasRoleMembership(normalizedKeys, 'lifeguard');
+  const explicitRole = hasAnyExplicitRole(normalizedKeys);
   const permissions = getEffectivePermissionsForKeys(normalizedKeys);
   const hasManagerPermission = !!(permissions.managerialReport || permissions.desPreInspection);
 
   if (requestedMode === 'lifeguard') {
-    if (developer || supervisorMember || managerMember || lifeguardMember || !attendantMember) {
+    if (developer || supervisorMember || managerMember || lifeguardMember || !explicitRole) {
       cacheHomeAccessProfile(normalizedKeys);
       return;
     }
@@ -393,7 +402,7 @@ async function assertAccessModeAllowed(mode, keys) {
   }
 
   if (requestedMode === 'attendant') {
-    if (developer || supervisorMember || managerMember || lifeguardMember || attendantMember || normalizedKeys.length) {
+    if (developer || supervisorMember || managerMember || attendantMember) {
       cacheHomeAccessProfile(normalizedKeys);
       return;
     }
@@ -951,7 +960,7 @@ function setRole(role) {
     passwordInput.autocomplete = 'current-password';
     showCreateAccountBtn?.classList.add('hidden');
     if (currentView !== 'login') setModalView('login');
-  } else if (currentRole === 'manager' || currentRole === 'attendant') {
+  } else if (currentRole === 'manager') {
     usernameLabel.textContent = 'Username or Email';
     usernameInput.type = 'text';
     usernameInput.autocomplete = 'username';
@@ -976,7 +985,7 @@ function setRole(role) {
 
 function updateFirstTimeCallout() {
   if (!firstTimeCallout) return;
-  const show = currentView === 'login' && currentRole === 'lifeguard';
+  const show = currentView === 'login' && (currentRole === 'lifeguard' || currentRole === 'attendant');
   firstTimeCallout.classList.toggle('hidden', !show);
   firstTimeCallout.setAttribute('aria-hidden', show ? 'false' : 'true');
 }
@@ -1112,7 +1121,12 @@ async function upsertEmployeeRecord(employee) {
   await setDoc(doc(db, 'settings', 'employees'), { employees }, { merge: true });
 }
 
-function buildSignupRecords({ username, firstName, lastName, email, phone, homePool }) {
+function getSignupRoleForCurrentAccessMode() {
+  return currentRole === 'attendant' ? 'attendant' : 'lifeguard';
+}
+
+function buildSignupRecords({ username, firstName, lastName, email, phone, homePool, role = 'lifeguard' }) {
+  const normalizedRole = role === 'attendant' ? 'attendant' : 'lifeguard';
   const employeeRecord = {
     email,
     id: email,
@@ -1121,7 +1135,7 @@ function buildSignupRecords({ username, firstName, lastName, email, phone, homeP
     lastName,
     phone,
     homePool,
-    role: 'lifeguard',
+    role: normalizedRole,
   };
 
   const accountData = {
@@ -1132,7 +1146,7 @@ function buildSignupRecords({ username, firstName, lastName, email, phone, homeP
     lastName,
     phone,
     homePool,
-    role: 'lifeguard',
+    role: normalizedRole,
     phoneLinked: false,
     createdAt: new Date().toISOString(),
   };
@@ -1159,23 +1173,44 @@ async function findLifeguardAccountByEmail(email) {
   return match;
 }
 
+async function assignSignupRolePermissions(employeeRecord, role = 'lifeguard') {
+  const memberKey = normalizeIdentityKey(employeeRecord?.email || employeeRecord?.id || employeeRecord?.username);
+  if (!memberKey) return;
+  const roleKey = role === 'attendant' ? 'attendant' : 'lifeguard';
+  try {
+    const ref = doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID);
+    const snap = await getDoc(ref);
+    const next = normalizeRolesPermissionsData(snap.exists() ? snap.data() : {});
+    ROLE_DEFINITIONS.forEach(({ key }) => {
+      next.roles[key] = (next.roles[key] || []).filter((existingKey) => existingKey !== memberKey);
+    });
+    if (!next.roles[roleKey].includes(memberKey)) next.roles[roleKey].push(memberKey);
+    await setDoc(ref, next, { merge: false });
+    homeRolesPermissionsData = next;
+  } catch (err) {
+    console.warn('Could not assign signup role permissions:', err);
+  }
+}
+
 async function saveSignupRecords(accountRef, accountData, employeeRecord) {
   await Promise.all([
     setDoc(accountRef, accountData, { merge: true }),
     upsertEmployeeRecord(employeeRecord),
   ]);
+  await assignSignupRolePermissions(employeeRecord, accountData?.role);
 }
 
-function showSignupVerification(username, accountData, message) {
-  persistAccessMode('lifeguard');
-  setRole('lifeguard');
+function showSignupVerification(username, accountData, message, accessMode = 'lifeguard') {
+  const normalizedAccessMode = normalizeAccessMode(accessMode);
+  persistAccessMode(normalizedAccessMode);
+  setRole(normalizedAccessMode);
   openVerificationView({
     username,
     account: accountData,
     target: getDestinationPath(),
     force: true,
     origin: 'create',
-    accessMode: 'lifeguard',
+    accessMode: normalizedAccessMode,
   });
   setMessage(verifyMessageEl, message);
 }
@@ -1207,7 +1242,8 @@ async function resumeInterruptedSignup({ username, email, password, accountRef, 
   showSignupVerification(
     username,
     accountData,
-    'Setup resumed. Check your email, verify it, then sign in.'
+    'Setup resumed. Check your email, verify it, then sign in.',
+    accountData?.role || 'lifeguard'
   );
 }
 
@@ -1579,6 +1615,7 @@ async function sendVerificationEmail({ isResend = false } = {}) {
     target: pendingVerification.target,
     sentAt: Date.now(),
     emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
+    accessMode: pendingVerification.accessMode,
   });
 
   startVerifyCooldown();
@@ -1694,6 +1731,7 @@ async function handleCreateAccountSubmit(event) {
     const homePool = createPoolInput?.value || '';
     const password = createPasswordInput?.value || '';
     const confirmPassword = createConfirmPasswordInput?.value || '';
+    const signupRole = getSignupRoleForCurrentAccessMode();
 
     if (!username) return setMessage(createMessageEl, 'Please choose a username.', true);
     if (username.length < 4) return setMessage(createMessageEl, 'Usernames must be at least 4 characters long.', true);
@@ -1718,6 +1756,7 @@ async function handleCreateAccountSubmit(event) {
       email,
       phone,
       homePool,
+      role: signupRole,
     });
 
     await createUserWithEmailAndPassword(auth, email, password);
@@ -1731,7 +1770,8 @@ async function handleCreateAccountSubmit(event) {
     showSignupVerification(
       username,
       accountData,
-      'Check your email, verify it, then sign in.'
+      'Check your email, verify it, then sign in.',
+      signupRole
     );
   } catch (err) {
     console.error('Create account failed:', err);
@@ -1747,6 +1787,7 @@ async function handleCreateAccountSubmit(event) {
         const homePool = createPoolInput?.value || '';
         const password = createPasswordInput?.value || '';
         const accountRef = doc(db, 'lifeguardAccounts', username);
+        const signupRole = getSignupRoleForCurrentAccessMode();
         const { employeeRecord, accountData } = buildSignupRecords({
           username,
           firstName,
@@ -1754,6 +1795,7 @@ async function handleCreateAccountSubmit(event) {
           email,
           phone,
           homePool,
+          role: signupRole,
         });
         await resumeInterruptedSignup({ username, email, password, accountRef, accountData, employeeRecord });
         return;

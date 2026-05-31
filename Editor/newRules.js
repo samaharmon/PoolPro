@@ -16,6 +16,42 @@ window.CurrentEditorMide = window.currentEditorMode;
 const SANITATION_METHODS = ['bleach', 'granular', 'tablet', 'off'];
 const PH_RULE_METHODS = ['muriaticAcid', 'noChanges'];
 const DEFAULT_PH_RULE_METHOD = 'muriaticAcid';
+const SUPPLY_SECTIONS = [
+  {
+    label: 'Pool Chemistry Supplies',
+    items: [
+      { id: 'r001_reagent', label: 'R-001 reagent (DPD reagent 1)' },
+      { id: 'r002_reagent', label: 'R-002 reagent (DPD reagent 2)' },
+      { id: 'r004_reagent', label: 'R-004 reagent (pH indicator)' },
+    ],
+  },
+  {
+    label: 'First Aid Supplies',
+    items: [
+      { id: 'bandaids', label: 'Bandaids' },
+      { id: 'gauze', label: 'Gauze' },
+      { id: 'roller_bandages', label: 'Roller bandages' },
+      { id: 'sanitation_wipes', label: 'Sanitation wipes' },
+      { id: 'sting_relief', label: 'Sting relief' },
+      { id: 'antibiotic_gel', label: 'Antibiotic gel' },
+      { id: 'disposable_gloves', label: 'Disposable gloves' },
+    ],
+  },
+  {
+    label: 'Cleaning Supplies',
+    items: [
+      { id: 'toilet_paper', label: 'Toilet paper' },
+      { id: 'paper_towels', label: 'Paper towels' },
+      { id: 'black_trash_bags', label: 'Black trash bags' },
+      { id: 'clear_trash_bags', label: 'Clear trash bags' },
+      { id: 'disinfectant_spray', label: 'Disinfectant spray' },
+      { id: 'glass_cleaner', label: 'Glass cleaner' },
+      { id: 'scrub_pads', label: 'Scrub pads' },
+      { id: 'hand_soap', label: 'Hand soap' },
+      { id: 'toilet_bowl_cleaner', label: 'Toilet bowl cleaner' },
+    ],
+  },
+];
 
 // ruleStateByPool[poolIndex] = { bleach: { ph:{}, cl:{} }, granular: { ph:{}, cl:{} }, tablet: { ph:{}, cl:{} }, off: { ph:{}, cl:{} } }
 const ruleStateByPool = {};
@@ -565,6 +601,77 @@ function setMetadataEnabled(enabled) {
   metadataSection.classList.toggle('overlay-disabled', !enabled);
 }
 
+function getDefaultSupplyInfo() {
+  return Object.fromEntries(
+    SUPPLY_SECTIONS.flatMap((section) => section.items).map((item) => [
+      item.id,
+      { enabled: true, type: '' },
+    ])
+  );
+}
+
+function normalizeSupplyInfo(source = {}) {
+  const defaults = getDefaultSupplyInfo();
+  Object.keys(defaults).forEach((itemId) => {
+    const existing = source?.[itemId] || {};
+    defaults[itemId] = {
+      enabled: existing.enabled !== false,
+      type: (existing.type || '').toString(),
+    };
+  });
+  return defaults;
+}
+
+function setSupplyInfoEnabled(enabled) {
+  const section = document.getElementById('supplyInfoSection');
+  if (!section) return;
+  section.querySelectorAll('input, select, textarea').forEach((field) => {
+    field.disabled = !enabled;
+  });
+  section.classList.toggle('overlay-disabled', !enabled);
+}
+
+function renderSupplyInfo(poolDoc = {}) {
+  const container = document.getElementById('supplyInfoRows');
+  if (!container) return;
+  const supplyInfo = normalizeSupplyInfo(poolDoc.supplyInfo || {});
+  container.innerHTML = '';
+
+  SUPPLY_SECTIONS.forEach((section) => {
+    const card = document.createElement('div');
+    card.className = 'supply-info-card';
+    card.innerHTML = `<h4>${escapeHtmlUnsafe(section.label)}</h4>`;
+    section.items.forEach((item) => {
+      const setting = supplyInfo[item.id] || { enabled: true, type: '' };
+      const row = document.createElement('label');
+      row.className = 'supply-info-row';
+      row.innerHTML = `
+        <input type="checkbox" class="market-filter-checkbox supply-info-enabled" data-supply-id="${escapeHtmlUnsafe(item.id)}" ${setting.enabled ? 'checked' : ''}>
+        <span class="supply-info-name">${escapeHtmlUnsafe(item.label)}</span>
+        <input type="text" class="supply-info-type adjustment-feedback" data-supply-type="${escapeHtmlUnsafe(item.id)}" value="${escapeHtmlUnsafe(setting.type)}" placeholder="Type">
+      `;
+      card.appendChild(row);
+    });
+    container.appendChild(card);
+  });
+  setSupplyInfoEnabled(false);
+}
+
+function collectSupplyInfo() {
+  const info = getDefaultSupplyInfo();
+  document.querySelectorAll('.supply-info-enabled').forEach((checkbox) => {
+    const itemId = checkbox.dataset.supplyId;
+    if (!itemId || !info[itemId]) return;
+    info[itemId].enabled = !!checkbox.checked;
+  });
+  document.querySelectorAll('.supply-info-type').forEach((input) => {
+    const itemId = input.dataset.supplyType;
+    if (!itemId || !info[itemId]) return;
+    info[itemId].type = input.value.trim();
+  });
+  return info;
+}
+
  
 function updatePoolBlockVisibility(count) {
   const blocks = document.querySelectorAll('#poolRuleBlocks .pool-rule-block');
@@ -702,8 +809,10 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
 
   // Reveal the metadata + rule sections when editing
   const metadataSection = document.getElementById('poolMetadataSection');
+  const supplyInfoSection = document.getElementById('supplyInfoSection');
   const ruleSection = document.getElementById('ruleEditorSection');
   metadataSection?.classList.remove('hidden');
+  supplyInfoSection?.classList.remove('hidden');
   ruleSection?.classList.remove('hidden');
 
   const poolNameInput   = document.getElementById('editorPoolName');
@@ -729,6 +838,8 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
       cb.checked = markets.includes(cb.value);
     });
   }
+
+  renderSupplyInfo(normalizedDoc);
 
   // Load rules for each pool into editor state.
   const rulesForPools = normalizedDoc.rules?.pools || [];
@@ -864,6 +975,7 @@ function readEditorToObject() {
     name,
     markets,
     numPools,
+    supplyInfo: collectSupplyInfo(),
     rules: { pools },
   };
 }
@@ -925,13 +1037,21 @@ function disableAllEditors() {
   // Match the IDs in NewRules.html
   const metadataEditBtn = document.getElementById('editMetadataBtn');
   const metadataSaveBtn = document.getElementById('saveMetadataBtn');
+  const supplyEditBtn = document.getElementById('editSupplyInfoBtn');
+  const supplySaveBtn = document.getElementById('saveSupplyInfoBtn');
   if (metadataEditBtn && metadataSaveBtn) {
     metadataEditBtn.disabled = false;
     metadataSaveBtn.disabled = true;
   }
+  if (supplyEditBtn && supplySaveBtn) {
+    supplyEditBtn.disabled = false;
+    supplySaveBtn.disabled = true;
+  }
   syncMetadataToggleFromButtons();
+  syncSupplyToggleFromButtons();
 
   setMetadataEnabled(false);
+  setSupplyInfoEnabled(false);
   captureRockbridgePresetIfNeeded();
 }
 
@@ -1072,6 +1192,87 @@ function syncMetadataToggleFromButtons() {
   const saveBtn = document.getElementById('saveMetadataBtn');
   const toggle = document.querySelector('.metadata-rule-buttons .edit-save-toggle-input');
   if (saveBtn && toggle) toggle.checked = saveBtn.disabled;
+}
+
+function syncSupplyToggleFromButtons() {
+  const saveBtn = document.getElementById('saveSupplyInfoBtn');
+  const toggle = document.querySelector('#supplyInfoSection .edit-save-toggle-input');
+  if (saveBtn && toggle) toggle.checked = saveBtn.disabled;
+}
+
+function wireSupplyInfoButtons() {
+  const editBtn = document.getElementById('editSupplyInfoBtn');
+  const saveBtn = document.getElementById('saveSupplyInfoBtn');
+  const ruleButtons = document.querySelector('#supplyInfoSection .metadata-rule-buttons');
+  if (!editBtn || !saveBtn || !ruleButtons) return;
+
+  const setEditing = (isEditing) => {
+    setSupplyInfoEnabled(isEditing);
+    editBtn.disabled = isEditing;
+    saveBtn.disabled = !isEditing;
+    syncSupplyToggleFromButtons();
+  };
+
+  const saveSupplyInfo = async () => {
+    setSupplyInfoEnabled(false);
+    editBtn.disabled = true;
+    saveBtn.disabled = true;
+    syncSupplyToggleFromButtons();
+    const success = await attemptSave();
+    if (success) setEditing(false);
+    else setEditing(true);
+    return success;
+  };
+
+  if (editBtn.dataset.supplyBound !== 'true') {
+    editBtn.dataset.supplyBound = 'true';
+    editBtn.addEventListener('click', () => setEditing(true));
+  }
+  if (saveBtn.dataset.supplyBound !== 'true') {
+    saveBtn.dataset.supplyBound = 'true';
+    saveBtn.addEventListener('click', saveSupplyInfo);
+  }
+  if (ruleButtons.querySelector('.theme-switch')) {
+    syncSupplyToggleFromButtons();
+    return;
+  }
+
+  const label = document.createElement('label');
+  label.className = 'theme-toggle rule-edit-save-toggle';
+  label.setAttribute('aria-label', 'Supply information edit and save mode');
+  const switchDiv = document.createElement('div');
+  switchDiv.className = 'theme-switch';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'edit-save-toggle-input';
+  cb.setAttribute('aria-label', 'Toggle supply information edit and save mode');
+  cb.checked = !!saveBtn.disabled;
+  const track = document.createElement('div');
+  track.className = 'theme-switch-track';
+  const editSpan = document.createElement('span');
+  editSpan.className = 'theme-switch-text theme-light-text';
+  editSpan.textContent = 'Edit';
+  const saveSpan = document.createElement('span');
+  saveSpan.className = 'theme-switch-text theme-dark-text';
+  saveSpan.textContent = 'Save';
+  const thumb = document.createElement('div');
+  thumb.className = 'theme-switch-thumb';
+  track.append(editSpan, saveSpan, thumb);
+  switchDiv.append(cb, track);
+  label.append(switchDiv);
+  ruleButtons.appendChild(label);
+  cb.addEventListener('change', async () => {
+    if (!cb.checked) {
+      setEditing(true);
+    } else {
+      cb.disabled = true;
+      const success = await saveSupplyInfo();
+      cb.disabled = false;
+      if (!success) cb.checked = false;
+    }
+  });
+  new MutationObserver(syncSupplyToggleFromButtons).observe(saveBtn, { attributes: true, attributeFilter: ['disabled'] });
+  syncSupplyToggleFromButtons();
 }
  
 function wireMetadataButtons() {
@@ -1303,6 +1504,7 @@ function toggleMode(mode) {
   const poolSelectWrapper   = document.getElementById('editorPoolSelectWrapper');
   const rockbridgeWrapper   = document.getElementById('rockbridgePresetWrapper');
   const poolMetadataSection = document.getElementById('poolMetadataSection');
+  const supplyInfoSection   = document.getElementById('supplyInfoSection');
   const ruleEditorSection   = document.getElementById('ruleEditorSection');
 
   const addBtn  = document.getElementById('editorModeAdd');
@@ -1318,7 +1520,9 @@ function toggleMode(mode) {
     poolSelectWrapper?.classList.add('hidden');
     rockbridgeWrapper?.classList.remove('hidden');
     poolMetadataSection?.classList.remove('hidden');
+    supplyInfoSection?.classList.remove('hidden');
     ruleEditorSection?.classList.remove('hidden');
+    renderSupplyInfo({ supplyInfo: getDefaultSupplyInfo() });
   } else {
     // "Edit existing pool" mode
     poolSelectWrapper?.classList.remove('hidden');
@@ -1328,10 +1532,12 @@ function toggleMode(mode) {
 
     if (poolSelect && poolSelect.value) {
       poolMetadataSection?.classList.remove('hidden');
+      supplyInfoSection?.classList.remove('hidden');
       ruleEditorSection?.classList.remove('hidden');
     } else {
       // Force selection before exposing the editor
       poolMetadataSection?.classList.add('hidden');
+      supplyInfoSection?.classList.add('hidden');
       ruleEditorSection?.classList.add('hidden');
     }
   }
@@ -1449,6 +1655,7 @@ function resetPoolEditorState() {
     cb.checked = false;
   });
 
+  renderSupplyInfo({ supplyInfo: getDefaultSupplyInfo() });
   currentPoolId = '';
 }
 
@@ -2145,6 +2352,7 @@ async function initEditor() {
   ensureEditorAccessibility();
 
   wireMetadataButtons();
+  wireSupplyInfoButtons();
   wireBlockButtons();
   injectFormattingToolbars();
   wireAutoResizeRuleTextareas();
