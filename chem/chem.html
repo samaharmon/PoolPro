@@ -23,7 +23,7 @@
   <link rel="stylesheet" href="../style.css" />
 </head>
 
-<body class="dark-mode">
+<body>
 
     <div id="mainForm">
         <div class="header">
@@ -539,7 +539,7 @@
         </div>
         <div id="supervisorNotifySection" class="supervisor-notify-section" style="display: none;">
             <div class="supervisor-notify-inner">
-                <label for="supervisorSelect" style="font-weight: bold; display: block; margin-bottom: 6px;">Select supervisors to notify:</label>
+                <label style="font-weight: bold; display: block; margin-bottom: 6px;">Select supervisors to notify:</label>
                 <select id="supervisorSelect" multiple size="4"></select>
                 <button type="button" class="notify-action-btn" onclick="sendSupervisorNotification()">Notify</button>
             </div>
@@ -547,4 +547,11 @@
     </div>
 
 <!-- ✅ Required for Excel import/export -->
-<script src="https://cdn.jsdelivr.n
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Confetti animation for clean submission -->
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+<script type="module" src="../script.js"></script>
+
+
+</body>
+</html>

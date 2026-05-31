@@ -894,4 +894,67 @@ body.dark-mode .pool-rule-block {
   font-size: 14px;
 }
 
-.rule-buttons .theme-switch-th
+.rule-buttons .theme-switch-thumb,
+.metadata-rule-buttons .theme-switch-thumb {
+  height: 34px;
+}
+
+.pool-rule-block.is-saved-mode .copy-rules-row,
+.pool-rule-block.is-saved-mode .table-wrapper,
+.pool-rule-block.is-saved-mode .rules-table,
+.pool-rule-block.is-saved-mode .rules-table * {
+  cursor: not-allowed !important;
+}
+
+body.dark-mode .pool-rule-block .ruleResponse,
+body.dark-mode .pool-rule-block .concernLevel {
+  background-color: #3a3a3a;
+  color: #f0f0f0;
+  border-color: #666;
+}
+
+/* ---- Mobile responsive ---- */
+@media (max-width: 768px) {
+  #mainForm .container {
+    padding: 0 12px;
+    margin: 16px auto;
+  }
+
+  #ruleEditorContent {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Rules table: allow horizontal scroll */
+  .rules-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .rules-table table {
+    min-width: 480px;
+  }
+
+  /* Pool rule header: stack vertically */
+  .pool-rule-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Mode toggle buttons: full width */
+  .mode-toggle-row {
+    flex-wrap: wrap;
+  }
+
+  .mode-toggle {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  /* Metadata grid: single column */
+  .pool-metadata-grid,
+  .metadata-row {
+    grid-template-columns: 1fr !important;
+    flex-direction: column;
+  }
+}

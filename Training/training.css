@@ -3878,4 +3878,6 @@ body {
   }
 
   .training-signup-confirm-actions {
-    f
+    flex-direction: column;
+  }
+}
