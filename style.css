@@ -5741,8 +5741,30 @@ body.dark-mode .dash-value-popover {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 20px;
   padding-bottom: 48px;
+}
+
+#settingsModal .settings-section,
+#settingsModal .settings-section-body,
+#settingsModal .settings-section-body-inner,
+#settingsModal .roles-tables-grid,
+#settingsModal .permissions-table-wrap,
+#settingsModal .table-scroll-shell,
+#settingsModal .table-scroll-wrap {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#settingsModal .table-scroll-wrap {
+  overflow-x: auto !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#settingsModal .roles-permissions-section .table-scroll-wrap {
+  overflow-y: hidden;
 }
 
 #settingsModal .settings-field-label {

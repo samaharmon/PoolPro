@@ -3796,14 +3796,23 @@ async function loadDashboardData() {
 
   try {
     const fullAccess = isSupervisor();
+    const optionalDocs = async (label, promise) => {
+      try {
+        return await promise;
+      } catch (err) {
+        console.warn(`[ChemLog] Unable to load optional dashboard data: ${label}`, err);
+        return null;
+      }
+    };
+    const optionalDoc = optionalDocs;
     const [sanSnap, chemSnap, dutySnap, managerialSnap, desSnap, inventorySnap, resolvedSupplySnap] = await Promise.all([
       getDoc(doc(db, 'settings', 'sanitation')),
       getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'))),
-      fullAccess ? getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
-      fullAccess ? getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
-      fullAccess ? getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
-      fullAccess ? getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc'))) : Promise.resolve(null),
-      fullAccess ? getDoc(doc(db, 'settings', 'resolvedSupplyNeeds')) : Promise.resolve(null),
+      fullAccess ? optionalDocs('cleanliness reports', getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
+      fullAccess ? optionalDocs('managerial reports', getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
+      fullAccess ? optionalDocs('DES pre-inspections', getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
+      fullAccess ? optionalDocs('inventory reports', getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
+      fullAccess ? optionalDoc('resolved supply needs', getDoc(doc(db, 'settings', 'resolvedSupplyNeeds'))) : Promise.resolve(null),
     ]);
     sanitationSelections = sanSnap.exists() ? (sanSnap.data().pools || {}) : {};
     allLogs = chemSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
@@ -4540,6 +4549,8 @@ function ensureEmployeeSettingsUi() {
     tableSection.insertBefore(shell, table);
     shell.appendChild(wrap);
     wrap.appendChild(table);
+    bindTableScrollShadow(wrap);
+    updateTableScrollShadow(wrap);
   }
 
   const headerRow = tableSection.querySelector('.employee-table thead tr');
@@ -5673,6 +5684,8 @@ function renderRolesPermissionsSettings() {
   renderRoleMembers('poolManager', 'poolManagerRoleBody');
   renderRoleMembers('supervisor', 'supervisorRoleBody');
   renderRolePermissionsTable();
+  wrapResponsiveTables(section);
+  section.querySelectorAll('.table-scroll-wrap').forEach(updateTableScrollShadow);
 }
 
 // ============================================================

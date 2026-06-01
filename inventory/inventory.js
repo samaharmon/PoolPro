@@ -49,6 +49,7 @@ const SUPPLY_SECTIONS = [
 
 let poolsCache = [];
 let urgentRowCounter = 0;
+let weeklyCustomRowCounter = 0;
 
 const els = {
   formType: document.getElementById('inventoryFormType'),
@@ -143,6 +144,7 @@ function renderWeeklyFields() {
   const pool = getSelectedPool();
   if (!els.weekly) return;
   els.weekly.innerHTML = '';
+  weeklyCustomRowCounter = 0;
   SUPPLY_SECTIONS.forEach((section) => {
     const enabledItems = section.items.filter((item) => !pool || getSupplySetting(pool, item.id).enabled);
     if (!enabledItems.length) return;
@@ -169,6 +171,10 @@ function renderWeeklyFields() {
     });
     els.weekly.appendChild(card);
   });
+  const customCard = document.createElement('section');
+  customCard.className = 'inventory-section-card inventory-custom-section';
+  customCard.innerHTML = '<h3>Additional Items</h3><div class="inventory-custom-list" id="weeklyCustomItems"></div>';
+  els.weekly.appendChild(customCard);
 }
 
 function createSupplyOptions(pool = getSelectedPool()) {
@@ -198,7 +204,6 @@ function addUrgentRow(value = '') {
   if (value) select.value = value;
   row.querySelector('.inventory-remove-item')?.addEventListener('click', () => {
     row.remove();
-    if (!els.urgent.querySelector('.inventory-urgent-row')) addUrgentRow();
   });
   els.urgent.appendChild(row);
 }
@@ -207,7 +212,32 @@ function renderUrgentFields() {
   if (!els.urgent) return;
   els.urgent.innerHTML = '';
   urgentRowCounter = 0;
-  addUrgentRow();
+}
+
+function addWeeklyCustomRow() {
+  const list = document.getElementById('weeklyCustomItems');
+  if (!list) return;
+  weeklyCustomRowCounter += 1;
+  const row = document.createElement('div');
+  row.className = 'inventory-supply-row inventory-custom-row';
+  row.dataset.customRow = String(weeklyCustomRowCounter);
+  row.innerHTML = `
+    <input type="text" class="inventory-custom-name" placeholder="Item name" aria-label="Additional item name" required>
+    <select class="training-filter-select inventory-status-select" required>
+      <option value="">Select level</option>
+      ${INVENTORY_STATUSES.map((status) => `<option value="${status}">${status}</option>`).join('')}
+    </select>
+    <button type="button" class="editAndSave inventory-remove-item">Remove</button>
+  `;
+  row.querySelector('.inventory-remove-item')?.addEventListener('click', () => row.remove());
+  list.appendChild(row);
+  row.querySelector('.inventory-custom-name')?.focus();
+}
+
+function handleAddItem() {
+  const type = els.formType?.value || '';
+  if (type === 'weekly') addWeeklyCustomRow();
+  if (type === 'urgent') addUrgentRow();
 }
 
 function syncFormType() {
@@ -215,7 +245,7 @@ function syncFormType() {
   els.form?.classList.toggle('hidden', !type);
   els.weekly?.classList.toggle('hidden', type !== 'weekly');
   els.urgent?.classList.toggle('hidden', type !== 'urgent');
-  els.addItem?.classList.toggle('hidden', type !== 'urgent');
+  els.addItem?.classList.toggle('hidden', type !== 'weekly' && type !== 'urgent');
   if (els.directions) {
     els.directions.textContent = type === 'urgent'
       ? 'Use this form to indicate any items that are critically low in stock and will run out before the next inventory form is completed (Thursdays).'
@@ -244,7 +274,7 @@ function findSupplyItem(itemId) {
 }
 
 function collectWeeklyItems(pool) {
-  return Array.from(document.querySelectorAll('.inventory-supply-row')).map((row) => {
+  const standardItems = Array.from(document.querySelectorAll('.inventory-supply-row:not(.inventory-custom-row)')).map((row) => {
     const item = findSupplyItem(row.dataset.itemId);
     const status = row.querySelector('.inventory-status-select')?.value || '';
     const setting = pool ? getSupplySetting(pool, item?.id) : {};
@@ -257,6 +287,20 @@ function collectWeeklyItems(pool) {
       status,
     };
   });
+  const customItems = Array.from(document.querySelectorAll('.inventory-custom-row')).map((row, index) => {
+    const name = row.querySelector('.inventory-custom-name')?.value?.trim() || '';
+    const status = row.querySelector('.inventory-status-select')?.value || '';
+    return name ? {
+      id: `custom_${index + 1}_${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`,
+      item: name,
+      sectionId: 'custom',
+      section: 'Additional Items',
+      type: '',
+      status,
+      custom: true,
+    } : null;
+  }).filter(Boolean);
+  return standardItems.concat(customItems);
 }
 
 function collectUrgentItems(pool) {
@@ -325,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (els.formType?.value === 'weekly') renderWeeklyFields();
     if (els.formType?.value === 'urgent') renderUrgentFields();
   });
-  els.addItem?.addEventListener('click', () => addUrgentRow());
+  els.addItem?.addEventListener('click', handleAddItem);
   els.form?.addEventListener('submit', handleInventorySubmit);
   syncFormType();
 });

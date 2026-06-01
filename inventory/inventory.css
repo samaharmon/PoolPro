@@ -60,6 +60,18 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.inventory-custom-section {
+  margin-top: 4px;
+}
+
+.inventory-custom-row {
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 240px) auto;
+}
+
+.inventory-custom-name {
+  width: 100%;
+}
+
 .inventory-remove-item {
   min-height: 38px;
   padding: 8px 12px;
