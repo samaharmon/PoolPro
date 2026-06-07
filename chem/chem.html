@@ -21,6 +21,22 @@
 
 
   <link rel="stylesheet" href="../style.css" />
+  <script>
+    (function () {
+      try {
+        var token = JSON.parse(localStorage.getItem('loginToken') || 'null');
+        var freshSupervisorToken = !!(token && token.expires && Date.now() < Number(token.expires));
+        var requestedMode = sessionStorage.getItem('poolproAccessMode') || localStorage.getItem('poolproAccessMode') || '';
+        if (window.location.hash === '#supervisorDashboard' && (freshSupervisorToken || requestedMode === 'supervisor')) {
+          document.documentElement.classList.add('dashboard-hash-pending');
+        }
+      } catch (_) {
+        if (window.location.hash === '#supervisorDashboard') {
+          document.documentElement.classList.add('dashboard-hash-pending');
+        }
+      }
+    })();
+  </script>
 </head>
 
 <body>

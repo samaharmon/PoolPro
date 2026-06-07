@@ -450,3 +450,78 @@ body.dark-mode .duties-add-photo-btn {
 body.dark-mode .duties-add-photo-btn:hover {
   background-color: #2a1010;
 }
+
+.duties-upload-progress-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.72);
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+.duties-upload-progress-modal.visible {
+  opacity: 1;
+}
+
+.duties-upload-progress-card {
+  width: min(560px, 92vw);
+  background: #2b2b2b;
+  color: #fff;
+  border: 2px solid #777;
+  padding: 24px;
+  box-shadow: 0 22px 50px rgba(0, 0, 0, 0.48);
+}
+
+.duties-upload-progress-card h2 {
+  margin: 0 0 10px;
+  color: #fff;
+  font-size: 28px;
+}
+
+.duties-upload-progress-warning {
+  margin: 0 0 18px;
+  color: #ffd966;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.duties-upload-progress-track {
+  width: 100%;
+  height: 16px;
+  background: #1b1b1b;
+  border: 1px solid #777;
+  overflow: hidden;
+}
+
+.duties-upload-progress-bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(135deg, #69140e, #202834);
+  transition: width 0.2s ease;
+}
+
+.duties-upload-progress-count,
+.duties-upload-progress-detail {
+  margin: 12px 0 0;
+  color: #fff;
+  font-size: 15px;
+}
+
+.duties-upload-progress-detail {
+  color: #d7d7d7;
+}
+
+.duties-upload-progress-error .duties-upload-progress-bar {
+  width: 100% !important;
+  background: #c0392b;
+}
+
+.duties-upload-progress-error .duties-upload-progress-warning,
+.duties-upload-progress-error .duties-upload-progress-detail {
+  color: #ff8a8a;
+}

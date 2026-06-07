@@ -1071,6 +1071,14 @@ button:active,
     display: none !important;
 }
 
+html.dashboard-hash-pending #mainForm {
+    display: none !important;
+}
+
+html.dashboard-hash-pending #supervisorDashboard {
+    display: block !important;
+}
+
 #supervisorDashboard.show {
     display: block !important;
 }
@@ -2531,6 +2539,26 @@ body.dark-mode .emp-page-tab.active {
 
 body.dark-mode .emp-page-tabs {
   border-color: #ff8080;
+}
+
+@media (max-width: 720px) {
+  #supervisorDashTabs {
+    width: min(100%, 360px);
+    align-items: stretch;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 6px;
+    border-bottom: 0;
+    border-left: 2px solid #ff8080;
+    padding-left: 8px;
+  }
+
+  #supervisorDashTabs .emp-page-tab {
+    width: 100%;
+    margin: 0;
+    border: 1px solid #666;
+    text-align: center;
+  }
 }
 
 /* ================================
@@ -4224,16 +4252,27 @@ td.concern-major {
 }
 
 .supply-needed-table-wrap.overlay-disabled {
-  opacity: 0.72;
+  opacity: 0.9;
 }
 
 .supply-needed-table-wrap.overlay-disabled::after {
   content: "";
   position: absolute;
-  inset: 42px 0 0;
-  background: rgba(0, 0, 0, 0.28);
+  inset: 52px 0 0;
+  background: rgba(255, 255, 255, 0.08);
   pointer-events: auto;
   cursor: not-allowed;
+}
+
+.supply-needed-facility-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.supply-needed-facility-list .dashboard-link-button {
+  white-space: nowrap;
 }
 
 .dashboard-supplies-table th,
@@ -4764,10 +4803,31 @@ body.dark-mode .dash-respondent-tooltip {
   display: block;
 }
 
+.dash-value-popover-floating {
+  display: block;
+  position: fixed;
+  z-index: 10050;
+  max-width: calc(100vw - 16px);
+  pointer-events: auto;
+}
+
 body.dark-mode .dash-value-popover {
   background: #333;
   color: #fff;
   border-color: #69140e;
+}
+
+.dashboard-stale-report-row td {
+  border-top: 2px solid #e30000 !important;
+  border-bottom: 2px solid #e30000 !important;
+}
+
+.dashboard-stale-report-row td:first-child {
+  border-left: 2px solid #e30000 !important;
+}
+
+.dashboard-stale-report-row td:last-child {
+  border-right: 2px solid #e30000 !important;
 }
 
 .operational-status-page-wrap,

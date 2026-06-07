@@ -127,15 +127,57 @@ document.addEventListener('click', async (e) => {
   }
 });
 
+function closeDashboardValuePopover() {
+  document.getElementById('dashboardValuePopover')?.remove();
+  document.querySelectorAll('.dash-value-cell[data-popover-open="true"]').forEach((cell) => {
+    delete cell.dataset.popoverOpen;
+  });
+}
+
+function openDashboardValuePopover(trigger) {
+  const cell = trigger.closest('.dash-value-cell');
+  const source = cell?.querySelector('.dash-value-popover');
+  if (!cell || !source) return;
+  if (cell.dataset.popoverOpen === 'true') {
+    closeDashboardValuePopover();
+    return;
+  }
+  closeDashboardValuePopover();
+  cell.dataset.popoverOpen = 'true';
+
+  const floating = document.createElement('div');
+  floating.id = 'dashboardValuePopover';
+  floating.className = 'dash-value-popover dash-value-popover-floating';
+  floating.innerHTML = source.innerHTML;
+  document.body.appendChild(floating);
+
+  const rect = trigger.getBoundingClientRect();
+  const gap = 8;
+  const width = floating.offsetWidth;
+  const height = floating.offsetHeight;
+  let left = rect.left;
+  let top = rect.bottom + gap;
+  left = Math.max(gap, Math.min(left, window.innerWidth - width - gap));
+  if (top + height > window.innerHeight - gap) {
+    top = rect.top - height - gap;
+  }
+  top = Math.max(gap, Math.min(top, window.innerHeight - height - gap));
+  floating.style.left = `${left}px`;
+  floating.style.top = `${top}px`;
+}
+
 document.addEventListener('click', (e) => {
   const trigger = e.target.closest('.dash-value-trigger');
-  document.querySelectorAll('.dash-value-cell.open').forEach((cell) => {
-    if (!trigger || !cell.contains(trigger)) cell.classList.remove('open');
-  });
-  if (!trigger) return;
+  if (!trigger) {
+    if (!e.target.closest('#dashboardValuePopover')) closeDashboardValuePopover();
+    return;
+  }
   e.preventDefault();
-  trigger.closest('.dash-value-cell')?.classList.toggle('open');
+  openDashboardValuePopover(trigger);
 });
+
+window.addEventListener('scroll', closeDashboardValuePopover, true);
+window.addEventListener('resize', closeDashboardValuePopover);
 
 function getPagePrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
@@ -454,6 +496,11 @@ window.addEventListener('load', resetOrphanedSharedModalOverlay);
 
 window.openSettings = function () {
   ensureAccountManagementSection();
+  ensureResourcesSettingsSection();
+  setupResourcesSettingsUI();
+  refreshResourceControls();
+  renderResourcesSettingsTable();
+  loadResourcesDocuments().catch((err) => console.error('[PoolPro] Error refreshing resources for settings:', err));
   updateSettingsModalForRole();
   const modal = document.getElementById('settingsModal');
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
@@ -3667,7 +3714,7 @@ function getDashboardPoolOptions() {
   }));
 }
 
-function renderDashboardFilterBar(container, onChange) {
+function renderDashboardFilterBar(container, onChange, { includeDate = true } = {}) {
   const filterBar = document.createElement('div');
   filterBar.className = 'training-filter-bar dashboard-filter-bar';
 
@@ -3720,12 +3767,12 @@ function renderDashboardFilterBar(container, onChange) {
   dateField.appendChild(dateInput);
   filterBar.appendChild(label);
   filterBar.appendChild(poolField);
-  filterBar.appendChild(dateField);
+  if (includeDate) filterBar.appendChild(dateField);
   container.appendChild(filterBar);
 
   const handleChange = () => {
     dashboardPoolFilter = poolSelect.value || 'all';
-    dashboardDateFilter = dateInput.value || getTodayDateValue();
+    if (includeDate) dashboardDateFilter = dateInput.value || getTodayDateValue();
     dashboardChemPage = 1;
     dashboardChemPageByTable = {};
     dashboardJobPage = 1;
@@ -3735,7 +3782,7 @@ function renderDashboardFilterBar(container, onChange) {
   };
 
   poolSelect.addEventListener('change', handleChange);
-  dateInput.addEventListener('change', handleChange);
+  if (includeDate) dateInput.addEventListener('change', handleChange);
 }
 
 function renderDashboardPagination(container, { page, totalRows, totalPages: suppliedTotalPages, onPageChange, alwaysRender = false }) {
@@ -6403,7 +6450,7 @@ async function deleteResourceBackingFile(item) {
 
 async function loadResourcesDocuments() {
   try {
-    const snap = await getDocs(query(collection(db, 'resourcesDocuments'), orderBy('sortDate', 'desc')));
+    const snap = await getDocs(collection(db, 'resourcesDocuments'));
     resourcesData = snap.docs.map((docSnap) => normalizeResourceRecord(docSnap.data(), docSnap.id));
   } catch (err) {
     console.error('[PoolPro] Error loading resources:', err);
@@ -7210,16 +7257,20 @@ document.addEventListener('click', (event) => {
 // in the URL when redirecting from training.html
 // ============================================================
 
-function checkDashboardAnchor() {
+function checkDashboardAnchor(options = {}) {
   if (window.location.hash === '#supervisorDashboard') {
     const dashboard = document.getElementById('supervisorDashboard');
     if (dashboard) {
-      if (!canAccessPoolChemistryDashboard()) return;
+      if (!canAccessPoolChemistryDashboard()) {
+        document.documentElement.classList.remove('dashboard-hash-pending');
+        return;
+      }
       const mainForm = document.getElementById('mainForm');
       if (mainForm) mainForm.style.display = 'none';
       dashboard.classList.add('show');
+      document.documentElement.classList.remove('dashboard-hash-pending');
       applyDashboardAccessMode();
-      loadDashboardData();
+      if (options.loadData !== false) loadDashboardData();
     }
   }
 }
@@ -7230,6 +7281,7 @@ function checkDashboardAnchor() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   restoreLifeguardSessionFromLocalStorage();
+  checkDashboardAnchor({ loadData: false });
   await loadRolesPermissions();
   mountUnifiedFooter();
   normalizeSharedHeaderCopy();
@@ -7624,8 +7676,19 @@ function createInspectionReportCell(sub, type) {
   return cell;
 }
 
-function findLatestReportForPoolOnDate(submissions, poolName) {
-  return submissions.find((sub) => sub.pool === poolName && isDashboardDate(sub.timestamp, dashboardDateFilter)) || null;
+function findLatestReportForPool(submissions, poolName) {
+  return submissions
+    .filter((sub) => sub.pool === poolName)
+    .sort((a, b) => (toDateObject(b.timestamp)?.getTime?.() || 0) - (toDateObject(a.timestamp)?.getTime?.() || 0))[0] || null;
+}
+
+function isInspectionReportRowStale(...reports) {
+  const latestTime = reports
+    .map((report) => toDateObject(report?.timestamp)?.getTime?.() || 0)
+    .filter(Boolean)
+    .sort((a, b) => b - a)[0] || 0;
+  if (!latestTime) return true;
+  return Date.now() - latestTime > 7 * 24 * 60 * 60 * 1000;
 }
 
 function renderInspectionReports() {
@@ -7633,7 +7696,7 @@ function renderInspectionReports() {
   if (!container) return;
   container.innerHTML = '';
 
-  renderDashboardFilterBar(container, renderInspectionReports);
+  renderDashboardFilterBar(container, renderInspectionReports, { includeDate: false });
 
   const marketMap = getDashboardMarketMap({ docs: false });
   const marketsToShow = getVisibleDashboardMarkets(marketMap);
@@ -7644,9 +7707,10 @@ function renderInspectionReports() {
 
   const renderRowsForPools = (poolNames, tbody) => {
     poolNames.forEach((poolName) => {
-      const managerial = findLatestReportForPoolOnDate(allManagerialReports, poolName);
-      const des = findLatestReportForPoolOnDate(allDesPreInspections, poolName);
+      const managerial = findLatestReportForPool(allManagerialReports, poolName);
+      const des = findLatestReportForPool(allDesPreInspections, poolName);
       const tr = document.createElement('tr');
+      tr.classList.toggle('dashboard-stale-report-row', isInspectionReportRowStale(managerial, des));
       const facilityCell = document.createElement('td');
       facilityCell.textContent = poolName;
       tr.appendChild(facilityCell);
@@ -7733,6 +7797,55 @@ function getSupplyNeedKey(row) {
   return [row.facilityId || row.facilityName, row.itemId].map((value) => String(value || '').trim()).join('::');
 }
 
+function getSupplyNeedGroupKey(row) {
+  return [
+    row.itemId || row.item,
+    row.item,
+    row.type || '',
+  ].map((value) => String(value || '').trim().toLowerCase()).join('::');
+}
+
+function getSupplyNeedGroupStatus(rows) {
+  const statuses = [...new Set(rows.map((row) => row.status).filter(Boolean))]
+    .sort((a, b) => (SUPPLY_STATUS_PRIORITY[a] ?? 99) - (SUPPLY_STATUS_PRIORITY[b] ?? 99));
+  return statuses.join(', ');
+}
+
+function getSupplyNeedGroupPriority(rows) {
+  return Math.min(...rows.map((row) => SUPPLY_STATUS_PRIORITY[row.status] ?? 99));
+}
+
+function getGroupedNeededSupplyRows(rows) {
+  const groups = new Map();
+  rows
+    .filter((row) => SUPPLY_NEED_STATUSES.has(row.status) && !supplyResolvedItems[getSupplyNeedKey(row)])
+    .forEach((row) => {
+      const key = getSupplyNeedGroupKey(row);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          item: row.item,
+          type: row.type || '',
+          rows: [],
+        });
+      }
+      groups.get(key).rows.push(row);
+    });
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      keys: group.rows.map(getSupplyNeedKey),
+      status: getSupplyNeedGroupStatus(group.rows),
+      priority: getSupplyNeedGroupPriority(group.rows),
+    }))
+    .sort((a, b) =>
+      a.priority - b.priority
+      || a.item.localeCompare(b.item)
+      || a.rows[0].facilityName.localeCompare(b.rows[0].facilityName)
+    );
+}
+
 function getLatestInventoryRows() {
   const latest = new Map();
   allInventoryReports.forEach((report) => {
@@ -7783,7 +7896,8 @@ function renderSupplyNeedActions(container) {
   });
   undo.addEventListener('click', async () => {
     if (!supplyUndoItem) return;
-    delete supplyResolvedItems[supplyUndoItem];
+    const undoKeys = Array.isArray(supplyUndoItem) ? supplyUndoItem : [supplyUndoItem];
+    undoKeys.forEach((key) => { delete supplyResolvedItems[key]; });
     supplyUndoItem = null;
     await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true }).catch(() => {});
     renderSuppliesDashboard();
@@ -7804,20 +7918,13 @@ function renderNeededSuppliesSection(container, rows) {
   table.className = 'data-table dashboard-pool-table dashboard-supplies-table';
   table.innerHTML = '<thead><tr><th></th><th>Item</th><th>Type</th><th>Facility</th><th>Status</th></tr></thead>';
   const tbody = document.createElement('tbody');
-  const neededRows = rows
-    .filter((row) => SUPPLY_NEED_STATUSES.has(row.status) && !supplyResolvedItems[getSupplyNeedKey(row)])
-    .sort((a, b) =>
-      (SUPPLY_STATUS_PRIORITY[a.status] ?? 99) - (SUPPLY_STATUS_PRIORITY[b.status] ?? 99)
-      || a.item.localeCompare(b.item)
-      || a.facilityName.localeCompare(b.facilityName)
-    );
+  const neededGroups = getGroupedNeededSupplyRows(rows);
 
-  if (!neededRows.length) {
+  if (!neededGroups.length) {
     tbody.innerHTML = '<tr><td colspan="5">No needed supplies are currently listed.</td></tr>';
   } else {
-    neededRows.forEach((row) => {
+    neededGroups.forEach((group) => {
       const tr = document.createElement('tr');
-      const key = getSupplyNeedKey(row);
       const checkCell = document.createElement('td');
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -7827,32 +7934,43 @@ function renderNeededSuppliesSection(container, rows) {
         if (!checkbox.checked) return;
         tr.classList.add('supply-row-fading');
         window.setTimeout(async () => {
-          supplyResolvedItems[key] = true;
-          supplyUndoItem = key;
+          group.keys.forEach((key) => { supplyResolvedItems[key] = true; });
+          supplyUndoItem = [...group.keys];
           await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true }).catch(() => {});
           renderSuppliesDashboard();
         }, 3000);
       });
       checkCell.appendChild(checkbox);
       const facilityCell = document.createElement('td');
-      const facilityBtn = document.createElement('button');
-      facilityBtn.type = 'button';
-      facilityBtn.className = 'dashboard-link-button';
-      facilityBtn.textContent = row.facilityName || '—';
-      facilityBtn.addEventListener('click', () => openInspectionMetaPopup({
-        pool: row.facilityName,
-        respondentName: row.report?.respondentName || row.report?.respondentEmail || '—',
-        submitterEmail: row.report?.respondentEmail || '—',
-        timestamp: row.report?.timestamp || row.report?.submittedAtIso,
-      }, 'Inventory Details'));
-      facilityCell.appendChild(facilityBtn);
+      const facilityList = document.createElement('div');
+      facilityList.className = 'supply-needed-facility-list';
+      const showFacilityStatuses = new Set(group.rows.map((row) => row.status)).size > 1;
+      group.rows
+        .sort((a, b) => a.facilityName.localeCompare(b.facilityName))
+        .forEach((row) => {
+          const facilityBtn = document.createElement('button');
+          facilityBtn.type = 'button';
+          facilityBtn.className = 'dashboard-link-button';
+          facilityBtn.textContent = showFacilityStatuses
+            ? `${row.facilityName || '—'} (${row.status})`
+            : (row.facilityName || '—');
+          facilityBtn.addEventListener('click', () => openInspectionMetaPopup({
+            pool: row.facilityName,
+            respondentName: row.report?.respondentName || row.report?.respondentEmail || '—',
+            submitterEmail: row.report?.respondentEmail || '—',
+            timestamp: row.report?.timestamp || row.report?.submittedAtIso,
+          }, 'Inventory Details'));
+          facilityList.appendChild(facilityBtn);
+        });
+      facilityCell.appendChild(facilityList);
+      const itemLabel = group.rows.length > 1 ? `${group.rows.length}x ${group.item}` : group.item;
       tr.appendChild(checkCell);
       tr.insertAdjacentHTML('beforeend', `
-        <td>${escapeHtml(row.item)}</td>
-        <td>${escapeHtml(row.type || '—')}</td>
+        <td>${escapeHtml(itemLabel)}</td>
+        <td>${escapeHtml(group.type || '—')}</td>
       `);
       tr.appendChild(facilityCell);
-      tr.insertAdjacentHTML('beforeend', `<td>${escapeHtml(row.status)}</td>`);
+      tr.insertAdjacentHTML('beforeend', `<td>${escapeHtml(group.status)}</td>`);
       tbody.appendChild(tr);
     });
   }

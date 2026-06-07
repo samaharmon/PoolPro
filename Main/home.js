@@ -128,6 +128,7 @@ let verifyCooldownUntil = 0;
 let verifyCooldownTimer = null;
 let verifyStatusPoller = null;
 let createAccountSubmitting = false;
+let lastHomeMenuActivationAt = 0;
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
@@ -1852,43 +1853,51 @@ async function handleResetPasswordSubmit(event) {
   }
 }
 
+async function activateHomeMenuButton(btn, event) {
+  event?.preventDefault?.();
+  const now = Date.now();
+  if (now - lastHomeMenuActivationAt < 500) return;
+  lastHomeMenuActivationAt = now;
+
+  const requestedMode = normalizeAccessMode(btn.dataset.accessRole || btn.dataset.target);
+  pendingTarget = 'chem';
+
+  if (hasFreshSupervisorSession()) {
+    try {
+      await assertAccessModeAllowed(requestedMode, getIdentityKeysForSupervisor(getStoredSupervisorEmail()));
+      persistAccessMode(requestedMode);
+      window.location.href = getDestinationPath();
+    } catch (err) {
+      openModal(requestedMode);
+      setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
+    }
+    return;
+  }
+
+  const storedLifeguardSession = getStoredLifeguardSession();
+  if (storedLifeguardSession && requestedMode !== 'supervisor') {
+    try {
+      await assertAccessModeAllowed(requestedMode, [
+        storedLifeguardSession.email,
+        storedLifeguardSession.employeeId,
+        storedLifeguardSession.username,
+      ]);
+      persistAccessMode(requestedMode);
+      window.location.href = getDestinationPath();
+    } catch (err) {
+      openModal(requestedMode);
+      setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
+    }
+    return;
+  }
+
+  openModal(requestedMode);
+}
+
 function wireMenu() {
   document.querySelectorAll('.home-menu-item').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const requestedMode = normalizeAccessMode(btn.dataset.accessRole || btn.dataset.target);
-      pendingTarget = 'chem';
-
-      if (hasFreshSupervisorSession()) {
-        try {
-          await assertAccessModeAllowed(requestedMode, getIdentityKeysForSupervisor(getStoredSupervisorEmail()));
-          persistAccessMode(requestedMode);
-          window.location.href = getDestinationPath();
-        } catch (err) {
-          openModal(requestedMode);
-          setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
-        }
-        return;
-      }
-
-      const storedLifeguardSession = getStoredLifeguardSession();
-      if (storedLifeguardSession && requestedMode !== 'supervisor') {
-        try {
-          await assertAccessModeAllowed(requestedMode, [
-            storedLifeguardSession.email,
-            storedLifeguardSession.employeeId,
-            storedLifeguardSession.username,
-          ]);
-          persistAccessMode(requestedMode);
-          window.location.href = getDestinationPath();
-        } catch (err) {
-          openModal(requestedMode);
-          setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
-        }
-        return;
-      }
-
-      openModal(requestedMode);
-    });
+    btn.addEventListener('pointerup', (event) => activateHomeMenuButton(btn, event));
+    btn.addEventListener('click', (event) => activateHomeMenuButton(btn, event));
   });
 }
 

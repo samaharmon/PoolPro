@@ -5,9 +5,10 @@ const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
 const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
 const DUTY_FIRESTORE_STORAGE = 'firestoreDutyPhoto';
 const DUTY_FIRESTORE_CHUNK_SIZE = 350000;
-const DUTY_UPLOAD_IMAGE_MAX_SIDE = 1280;
-const DUTY_UPLOAD_IMAGE_QUALITY = 0.72;
-const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
+const DUTY_UPLOAD_IMAGE_MAX_SIDE = 1024;
+const DUTY_UPLOAD_IMAGE_QUALITY = 0.66;
+const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 750 * 1024;
+const DUTY_UPLOAD_CONCURRENCY = 3;
 
 // ============================================================
 // INIT
@@ -614,10 +615,67 @@ async function prepareDutyPhotoForUpload(file) {
   }
 }
 
+function ensureDutiesUploadModal() {
+  let modal = document.getElementById('dutiesUploadProgressModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'dutiesUploadProgressModal';
+  modal.className = 'duties-upload-progress-modal';
+  modal.innerHTML = `
+    <div class="duties-upload-progress-card">
+      <h2>Uploading Cleanliness Report</h2>
+      <p class="duties-upload-progress-warning">Keep this page open until every photo finishes uploading.</p>
+      <div class="duties-upload-progress-track" aria-hidden="true">
+        <div class="duties-upload-progress-bar" id="dutiesUploadProgressBar"></div>
+      </div>
+      <p class="duties-upload-progress-count" id="dutiesUploadProgressCount">Starting upload...</p>
+      <p class="duties-upload-progress-detail" id="dutiesUploadProgressDetail"></p>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function showDutiesUploadProgress(totalPhotos) {
+  const modal = ensureDutiesUploadModal();
+  modal.style.display = 'flex';
+  modal.classList.remove('duties-upload-progress-error');
+  requestAnimationFrame(() => modal.classList.add('visible'));
+  updateDutiesUploadProgress({
+    completed: 0,
+    total: totalPhotos,
+    message: totalPhotos ? 'Preparing photos for upload...' : 'Saving report...',
+  });
+}
+
+function updateDutiesUploadProgress({ completed = 0, total = 0, message = '', error = false } = {}) {
+  const modal = ensureDutiesUploadModal();
+  modal.classList.toggle('duties-upload-progress-error', !!error);
+  const bar = modal.querySelector('#dutiesUploadProgressBar');
+  const count = modal.querySelector('#dutiesUploadProgressCount');
+  const detail = modal.querySelector('#dutiesUploadProgressDetail');
+  const percent = total ? Math.min(100, Math.round((completed / total) * 100)) : (error ? 100 : 15);
+  if (bar) bar.style.width = `${percent}%`;
+  if (count) count.textContent = total ? `${completed} of ${total} photos uploaded` : 'Saving report';
+  if (detail) detail.textContent = message;
+}
+
+function hideDutiesUploadProgress(delay = 0) {
+  const modal = document.getElementById('dutiesUploadProgressModal');
+  if (!modal) return;
+  window.setTimeout(() => {
+    modal.classList.remove('visible');
+    window.setTimeout(() => {
+      if (!modal.classList.contains('visible')) modal.style.display = 'none';
+    }, 220);
+  }, delay);
+}
+
 async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
   const safeName = String(file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
   const uploadPayload = await prepareDutyPhotoForUpload(file);
-  const photoId = `${Date.now()}_${index}_${safeName}`;
+  const uniqueId = window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const photoId = `${Date.now()}_${category}_${index}_${uniqueId}_${safeName}`;
   const photoDoc = doc(db, 'dutySubmissionMedia', submissionId, 'photos', photoId);
   const dataUrl = await readFileAsDataURL(uploadPayload.body);
   const [prefix, encoded = ''] = String(dataUrl || '').split(',');
@@ -668,33 +726,49 @@ async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
 }
 
 async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgress }) {
-  const totalPhotos = uploadGroups.reduce((sum, group) => sum + group.files.length, 0);
+  const uploadTasks = uploadGroups.flatMap((group) =>
+    group.files.map((file, index) => ({ group, file, index }))
+  );
+  const totalPhotos = uploadTasks.length;
   let uploadedCount = 0;
-  const results = {};
+  let nextTaskIndex = 0;
+  const results = Object.fromEntries(uploadGroups.map((group) => [group.resultKey, []]));
 
-  for (const group of uploadGroups) {
-    const groupResults = [];
-    for (let i = 0; i < group.files.length; i += 1) {
-      const file = group.files[i];
+  async function runNextUpload() {
+    while (nextTaskIndex < uploadTasks.length) {
+      const task = uploadTasks[nextTaskIndex];
+      nextTaskIndex += 1;
       if (typeof onProgress === 'function') {
         onProgress({
           completed: uploadedCount,
           total: totalPhotos,
-          label: group.label,
-          fileName: file.name || `Photo ${i + 1}`,
+          label: task.group.label,
+          fileName: task.file.name || `Photo ${task.index + 1}`,
         });
       }
       const uploadedPhoto = await uploadDutyPhoto({
         submissionId,
         pool,
-        category: group.category,
-        file,
-        index: i,
+        category: task.group.category,
+        file: task.file,
+        index: task.index,
       });
-      groupResults.push(uploadedPhoto);
+      results[task.group.resultKey].push(uploadedPhoto);
       uploadedCount += 1;
+      if (typeof onProgress === 'function') {
+        onProgress({
+          completed: uploadedCount,
+          total: totalPhotos,
+          label: task.group.label,
+          fileName: task.file.name || `Photo ${task.index + 1}`,
+        });
+      }
     }
-    results[group.resultKey] = groupResults;
+  }
+
+  const workerCount = Math.min(DUTY_UPLOAD_CONCURRENCY, totalPhotos);
+  if (workerCount > 0) {
+    await Promise.all(Array.from({ length: workerCount }, runNextUpload));
   }
 
   if (typeof onProgress === 'function' && totalPhotos > 0) {
@@ -705,6 +779,7 @@ async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgr
     });
   }
 
+  Object.values(results).forEach((items) => items.sort((a, b) => Number(a.index || 0) - Number(b.index || 0)));
   return results;
 }
 
@@ -790,6 +865,7 @@ window.submitDutiesForm = async function () {
     }));
 
     const totalPhotos = uploadGroups.reduce((sum, group) => sum + group.files.length, 0);
+    showDutiesUploadProgress(totalPhotos);
     if (msgEl) {
       msgEl.style.color = '#333';
       msgEl.textContent = totalPhotos
@@ -802,11 +878,19 @@ window.submitDutiesForm = async function () {
       pool,
       uploadGroups,
       onProgress: ({ completed, total, label, fileName, done }) => {
+        const message = done || completed >= total
+          ? `Uploads complete. Saving report...`
+          : completed > 0
+            ? `Uploaded ${completed} of ${total} photos. Uploading ${label}: ${fileName}`
+            : `Uploading photo 1 of ${total} for ${label}: ${fileName}`;
+        updateDutiesUploadProgress({
+          completed: done ? total : completed,
+          total,
+          message,
+        });
         if (!msgEl || !total) return;
         msgEl.style.color = '#333';
-        msgEl.textContent = done
-          ? `Uploads complete. Saving report...`
-          : `Uploading photo ${completed + 1} of ${total} for ${label}: ${fileName}`;
+        msgEl.textContent = message;
       },
     });
 
@@ -845,9 +929,22 @@ window.submitDutiesForm = async function () {
       msgEl.style.color = '#1a8a1a';
       msgEl.textContent = managerialPage ? 'Managerial report submitted successfully!' : 'Form submitted successfully!';
     }
+    updateDutiesUploadProgress({
+      completed: totalPhotos,
+      total: totalPhotos,
+      message: 'Report saved. You may leave this page now.',
+    });
+    hideDutiesUploadProgress(1000);
     resetForm();
   } catch (err) {
     console.error('[Duties] Submit error:', err);
+    updateDutiesUploadProgress({
+      completed: 0,
+      total: 0,
+      message: 'Upload failed. Check your connection and try submitting again.',
+      error: true,
+    });
+    hideDutiesUploadProgress(2500);
     if (msgEl) {
       msgEl.style.color = '#c0392b';
       msgEl.textContent = 'Error submitting form. Please try again.';
