@@ -177,10 +177,168 @@ function formatDateNice(dateStr) {
   if (!dateStr) return '';
   const d = parseTrainingDateOnly(dateStr);
   if (!d) return dateStr;
+  const weekday = d.toLocaleString(undefined, { weekday: 'long' });
   const month = d.toLocaleString(undefined, { month: 'short' });
   const day = d.getDate();
   const year = d.getFullYear();
-  return `${month} ${day}, ${year}`;
+  return `${weekday}, ${month} ${day}, ${year}`;
+}
+
+function escapeTrainingHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeTrainingNotesHtml(value) {
+  if (!value) return '';
+  const template = document.createElement('template');
+  template.innerHTML = String(value);
+  const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'BR', 'DIV', 'P']);
+
+  function cleanNode(parent) {
+    Array.from(parent.childNodes).forEach((node) => {
+      if (node.nodeType === Node.ELEMENT_NODE) {
+        const element = node;
+        if (['SCRIPT', 'STYLE', 'IFRAME', 'OBJECT', 'EMBED'].includes(element.tagName)) {
+          element.remove();
+          return;
+        }
+        cleanNode(element);
+        Array.from(element.attributes).forEach((attr) => element.removeAttribute(attr.name));
+        if (!allowedTags.has(element.tagName)) {
+          element.replaceWith(...Array.from(element.childNodes));
+        }
+      }
+    });
+  }
+
+  cleanNode(template.content);
+  return template.innerHTML.trim();
+}
+
+function trainingNotesToHtml(value) {
+  const raw = String(value || '');
+  if (!raw.trim()) return '';
+  if (/<\/?[a-z][\s\S]*>/i.test(raw)) {
+    return sanitizeTrainingNotesHtml(raw);
+  }
+  return escapeTrainingHtml(raw).replace(/\n/g, '<br>');
+}
+
+function getTrainingNotesHtml(editor) {
+  if (!editor) return '';
+  if (editor.getAttribute('contenteditable') !== null) {
+    return sanitizeTrainingNotesHtml(editor.innerHTML || '');
+  }
+  return trainingNotesToHtml(editor.value || '');
+}
+
+function setTrainingNotesHtml(editor, value) {
+  if (!editor) return;
+  const html = trainingNotesToHtml(value);
+  if (editor.getAttribute('contenteditable') !== null) {
+    editor.innerHTML = html;
+  } else {
+    editor.value = html.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+  }
+}
+
+function inferMarketFromSelectedPool(selectEl) {
+  const selected = selectEl?.selectedOptions?.[0] || null;
+  const group = selected?.parentElement;
+  if (group?.tagName === 'OPTGROUP' && group.label) return group.label;
+  return inferMarketFromPoolName(selectEl?.value || '');
+}
+
+function inferMarketFromPoolName(poolName) {
+  const normalizedPool = String(poolName || '').trim().toLowerCase();
+  if (!normalizedPool) return '';
+  const pools = window._poolsForDuties || [];
+  const pool = pools.find((candidate) => {
+    const name = String(candidate.name || candidate.id || '').trim().toLowerCase();
+    return name === normalizedPool;
+  });
+  const markets = Array.isArray(pool?.markets) ? pool.markets : [];
+  return markets[0] || pool?.market || '';
+}
+
+function getSessionMarket(session) {
+  return session?.market || inferMarketFromPoolName(session?.pool || '');
+}
+
+let activeTrainingNotesEditor = null;
+let savedTrainingNotesSelection = null;
+
+function trainingNotesSelectionInside(editor) {
+  const selection = window.getSelection();
+  if (!editor || !selection || selection.rangeCount === 0) return false;
+  const range = selection.getRangeAt(0);
+  return editor.contains(range.startContainer) && editor.contains(range.endContainer);
+}
+
+function saveTrainingNotesSelection(editor) {
+  const selection = window.getSelection();
+  if (!editor || !selection || selection.rangeCount === 0) return;
+  if (!trainingNotesSelectionInside(editor)) return;
+  savedTrainingNotesSelection = selection.getRangeAt(0).cloneRange();
+  activeTrainingNotesEditor = editor;
+}
+
+function restoreTrainingNotesSelection(editor) {
+  if (!editor || !savedTrainingNotesSelection) return;
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(savedTrainingNotesSelection);
+  activeTrainingNotesEditor = editor;
+}
+
+function updateTrainingNotesToolbarState(editor) {
+  const toolbar = editor?.previousElementSibling;
+  if (!toolbar?.classList?.contains('training-notes-toolbar')) return;
+  toolbar.querySelectorAll('[data-training-format]').forEach((btn) => {
+    const cmd = btn.dataset.trainingFormat;
+    try {
+      btn.classList.toggle('active', !!cmd && document.queryCommandState(cmd));
+    } catch (_) {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+function initTrainingNotesEditor(editor) {
+  if (!editor || editor.dataset.trainingNotesReady === 'true') return;
+  editor.dataset.trainingNotesReady = 'true';
+  const toolbar = editor.previousElementSibling;
+  toolbar?.querySelectorAll('[data-training-format]').forEach((btn) => {
+    btn.addEventListener('mousedown', (event) => event.preventDefault());
+    btn.addEventListener('click', () => {
+      const cmd = btn.dataset.trainingFormat;
+      if (!cmd) return;
+      editor.focus();
+      restoreTrainingNotesSelection(editor);
+      document.execCommand(cmd, false);
+      saveTrainingNotesSelection(editor);
+      updateTrainingNotesToolbarState(editor);
+    });
+  });
+
+  ['focus', 'mouseup', 'keyup', 'input'].forEach((eventName) => {
+    editor.addEventListener(eventName, () => {
+      activeTrainingNotesEditor = editor;
+      saveTrainingNotesSelection(editor);
+      updateTrainingNotesToolbarState(editor);
+    });
+  });
+
+  document.addEventListener('selectionchange', () => {
+    if (!activeTrainingNotesEditor || !trainingNotesSelectionInside(activeTrainingNotesEditor)) return;
+    saveTrainingNotesSelection(activeTrainingNotesEditor);
+    updateTrainingNotesToolbarState(activeTrainingNotesEditor);
+  });
 }
 
 const TIME_OPTIONS = [
@@ -469,7 +627,7 @@ function clearTrainingSessionForm(el) {
   if (el.poolSelect) el.poolSelect.value = '';
   if (el.addressInput) el.addressInput.value = '';
   if (el.capacityInput) el.capacityInput.value = '';
-  if (el.notesInput) el.notesInput.value = '';
+  setTrainingNotesHtml(el.notesInput, '');
   if (el.sessionIdInput) el.sessionIdInput.value = '';
   if (el.multiDayCheckbox) el.multiDayCheckbox.checked = false;
   if (el.startDateInput) el.startDateInput.value = '';
@@ -573,12 +731,12 @@ async function undoLastTrainingAction(el) {
 
 function handleSaveSession(el) {
   const trainingType = el.trainingTypeInput?.value || '';
-  const market = el.marketSelect?.value || '';
   const isMultiDay = el.multiDayCheckbox?.checked || false;
   const pool = el.poolSelect?.value?.trim() || '';
+  const market = inferMarketFromSelectedPool(el.poolSelect) || inferMarketFromPoolName(pool);
   const address = el.addressInput?.value?.trim() || '';
   const capacityRaw = el.capacityInput?.value?.trim() || '';
-  const notes = el.notesInput?.value?.trim() || '';
+  const notes = getTrainingNotesHtml(el.notesInput);
   const messageEl = el.adminMessage;
 
   if (!messageEl) return;
@@ -775,7 +933,7 @@ function handleEditSessionClick(sessionId, el) {
 
   if (el.addressInput) el.addressInput.value = session.address || '';
   if (el.capacityInput) el.capacityInput.value = session.capacity != null ? String(session.capacity) : '';
-  if (el.notesInput) el.notesInput.value = session.notes || '';
+  setTrainingNotesHtml(el.notesInput, session.notes || '');
 
   updateCapacityInfo(session, el);
   if (el.dateInput && !isMultiDay) el.dateInput.focus();
@@ -963,7 +1121,8 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
 
       // Col 4: Notes
       const notesCell = document.createElement('td');
-      notesCell.textContent = session.notes || '';
+      notesCell.className = 'notes-cell';
+      notesCell.innerHTML = trainingNotesToHtml(session.notes || '');
       row.appendChild(notesCell);
 
       // Col 5: Spots Filled
@@ -1023,7 +1182,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
 function applyFiltersAndSort(typeFilter, cityFilter) {
   let filtered = trainingSessions;
   if (typeFilter !== 'all') filtered = filtered.filter(s => s.trainingType === typeFilter);
-  if (cityFilter !== 'all') filtered = filtered.filter(s => s.market === cityFilter);
+  if (cityFilter !== 'all') filtered = filtered.filter(s => getSessionMarket(s) === cityFilter);
   return [...filtered].sort((a, b) => {
     if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');
     return (a.startTime || '').localeCompare(b.startTime || '');
@@ -1801,136 +1960,4 @@ function setupLogin(el) {
       if (window.supervisorSignIn) {
         await window.supervisorSignIn(email, password);
       } else {
-        throw new Error('Auth service not ready. Please refresh and try again.');
-      }
-      setLoggedIn(true);
-      closeModal();
-    } catch (err) {
-      const msg = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found'
-        ? 'Invalid email or password.'
-        : (err.message || 'Login failed.');
-      messageEl.textContent = msg;
-      messageEl.classList.add('error');
-    }
-  });
-}
-
-function setupPublicFilters(el) {
-  const typeFilter = document.getElementById('publicTrainingTypeFilter');
-  if (typeFilter) {
-    typeFilter.addEventListener('change', () => {
-      activePublicTypeFilter = typeFilter.value || 'all';
-      renderPublicTables(el);
-    });
-  }
-  const cityFilter = document.getElementById('publicTrainingCityFilter');
-  if (cityFilter) {
-    cityFilter.addEventListener('change', () => {
-      activePublicCityFilter = cityFilter.value || 'all';
-      renderPublicTables(el);
-    });
-  }
-}
-
-// ---------- Bootstrapping ----------
-
-document.addEventListener('DOMContentLoaded', async () => {
-  normalizeTrainingHeaderCopy();
-  wrapResponsiveTables();
-  observeResponsiveTables();
-  // Set up login + basic UI wiring
-  const el = {
-    trainingAdminPanel: document.getElementById('trainingAdminPanel'),
-    openLoginBtn: document.getElementById('openTrainingLoginBtn'),
-    loginModal: document.getElementById('trainingLoginModal'),
-    loginForm: document.getElementById('trainingLoginForm'),
-    loginMessage: document.getElementById('trainingLoginMessage'),
-    closeLoginBtn: document.getElementById('closeTrainingLoginModal'),
-
-    signupForm: document.getElementById('trainingSignupForm'),
-    signupMessage: document.getElementById('signupMessage'),
-    trainingMonthSelect: document.getElementById('trainingMonth'),
-    trainingSessionSelect: document.getElementById('trainingSession'),
-    guardEmployeeIdInput: document.getElementById('guardEmployeeId'),
-    guardNameInput: document.getElementById('guardName'),
-    guardPoolInput: document.getElementById('guardPool'),
-
-    marketSelect: document.getElementById('trainingMarketSelect'),
-    trainingTypeInput: document.getElementById('trainingTypeInput'),
-    dateInput: document.getElementById('trainingDateInput'),
-    multiDayCheckbox: document.getElementById('multiDayCheckbox'),
-    dateRangeGroup: document.getElementById('trainingDateRangeGroup'),
-    startDateInput: document.getElementById('trainingStartDateInput'),
-    endDateInput: document.getElementById('trainingEndDateInput'),
-    startDaySelect: document.getElementById('trainingStartDaySelect'),
-    endDaySelect: document.getElementById('trainingEndDaySelect'),
-    startTimeSelect: document.getElementById('trainingStartTimeSelect'),
-    endTimeSelect: document.getElementById('trainingEndTimeSelect'),
-    poolSelect: document.getElementById('trainingPoolSelect'),
-    addressInput: document.getElementById('trainingAddressInput'),
-    capacityInput: document.getElementById('trainingCapacityInput'),
-    capacityInfo: document.getElementById('trainingCapacityInfo'),
-    notesInput: document.getElementById('trainingNotesInput'),
-    sessionIdInput: document.getElementById('trainingSessionId'),
-    saveSessionBtn: document.getElementById('saveTrainingSessionBtn'),
-    scheduleSection: document.getElementById('scheduleTrainingsSection'),
-    adminMessage: document.getElementById('adminMessage'),
-
-    adminTablesContainer: document.getElementById('adminScheduledTablesContainer'),
-    publicTablesContainer: document.getElementById('publicScheduledTablesContainer')
-  };
-
-  // Numeric-only Capacity
-  const capacityInput = el.capacityInput;
-  if (capacityInput) {
-    capacityInput.addEventListener('input', () => {
-      capacityInput.value = capacityInput.value.replace(/\D/g, '');
-    });
-  }
-
-  // Load sessions — prefer Firestore (shared/persistent), fall back to localStorage
-  if (window.loadTrainingSessionsFromFirestore) {
-    const firestoreSessions = await window.loadTrainingSessionsFromFirestore();
-    if (firestoreSessions && firestoreSessions.length > 0) {
-      trainingSessions = firestoreSessions.map(normalizeSession);
-      // Keep localStorage in sync
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(trainingSessions)); } catch (_) {}
-    } else {
-      trainingSessions = loadSessions();
-      // If localStorage has sessions but Firestore doesn't, push them up
-      if (trainingSessions.length > 0 && window.syncTrainingSessionsToFirestore) {
-        window.syncTrainingSessionsToFirestore(trainingSessions);
-      }
-    }
-  } else {
-    trainingSessions = loadSessions();
-  }
-
-  setupLogin(el);
-  renderAdminTables(el);
-  renderPublicTables(el);
-  updateCapacityInfo(null, el);
-  setupAdmin(el);
-  setupPublicFilters(el);
-  setupSignup(el);
-
-  // Initialize the session dropdown based on any pre-selected month
-  if (el.trainingMonthSelect && el.trainingMonthSelect.value) {
-    updateSessionSelectForType(el.trainingMonthSelect.value, el);
-  } else {
-    updateSessionSelectForType('', el);
-  }
-
-  // Check if we arrived via "Training Setup" from another page
-  const adminIntent = sessionStorage.getItem('trainingIntentAdmin');
-  if (adminIntent === '1') {
-    sessionStorage.removeItem('trainingIntentAdmin');
-    // Check all auth sources before showing login modal
-    const alreadyAuth = hasFreshSupervisorSession();
-    if (alreadyAuth) {
-      localStorage.setItem(LOGIN_KEY, 'true');
-      showSupervisorView();
-    } else {
-      const loginModal = document.getElementById('trainingLoginModal');
-      if (loginModal) {
-        loginModal.style.display = 'f
+        throw new Error('Auth service not 

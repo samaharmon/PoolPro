@@ -99,7 +99,7 @@
 
         <!-- 2-column layout -->
         <div class="form-row admin-form-cols">
-          <!-- Left column: Training Type, Market, Pool, Address -->
+          <!-- Left column: Training Type, Pool, Address -->
           <div class="admin-form-col">
             <div class="form-group">
               <label for="trainingTypeInput">Training Type</label>
@@ -110,16 +110,6 @@
                 <option value="ARC Certification">ARC Certification</option>
                 <option value="ARC Recertification">ARC Recertification</option>
                 <option value="In-Service">In-Service</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="trainingMarketSelect">Market</label>
-              <select id="trainingMarketSelect">
-                <option value="">Select market</option>
-                <option value="Charleston">Charleston</option>
-                <option value="Charlotte">Charlotte</option>
-                <option value="Columbia">Columbia</option>
-                <option value="Greenville">Greenville</option>
               </select>
             </div>
             <div class="form-group">
@@ -188,10 +178,18 @@
         <!-- Notes (full width) -->
         <div class="form-group full-width">
           <label for="trainingNotesInput">Notes</label>
-          <textarea
+          <div class="formatting-toolbar training-notes-toolbar" aria-label="Training notes formatting">
+            <button type="button" class="format-btn" data-training-format="bold" title="Bold">B</button>
+            <button type="button" class="format-btn" data-training-format="italic" title="Italic">I</button>
+            <button type="button" class="format-btn" data-training-format="underline" title="Underline">U</button>
+          </div>
+          <div
             id="trainingNotesInput"
-            rows="3"
-          ></textarea>
+            class="training-notes-editor"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+          ></div>
         </div>
 
         <input type="hidden" id="trainingSessionId" />

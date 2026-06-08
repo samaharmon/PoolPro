@@ -372,11 +372,36 @@ select {
   -webkit-appearance: none;
 }
 
-/* Notes textarea just like main app */
+/* Notes editor just like the pool rule blocks */
+.formatting-toolbar.training-notes-toolbar {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 3px;
+}
+
+.formatting-toolbar.training-notes-toolbar .format-btn {
+  background-color: #555;
+  color: white;
+  border: 1px solid #777;
+  border-radius: 0;
+  padding: 2px 8px;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1.4;
+  font-family: Georgia, serif;
+  margin-right: 3px;
+}
+
+.formatting-toolbar.training-notes-toolbar .format-btn:hover,
+.formatting-toolbar.training-notes-toolbar .format-btn.active {
+  background-color: #69140e;
+  border-color: #69140e;
+}
+
 #trainingNotesInput {
   width: 100%;
-  min-height: 60px;
-  padding: none;
+  min-height: 84px;
+  padding: 8px;
   border-bottom: 2px solid #69140e;
   border-left: none;
   border-right: none;
@@ -386,8 +411,15 @@ select {
   color: #333;
   font-family: "Franklin Gothic Medium", Arial, sans-serif;
   font-size: 14px;
-  resize: vertical;
   box-sizing: border-box;
+  white-space: pre-wrap;
+  overflow-y: auto;
+  outline: none;
+}
+
+#trainingNotesInput:empty::before {
+  content: "Add notes...";
+  color: #777;
 }
 
 #trainingCapacityInfo {
@@ -1412,6 +1444,55 @@ body.dark-mode #trainingNotesInput {
 
 .training-schedule-table--public th:nth-child(5),
 .training-schedule-table--public td:nth-child(5) { width: 7%; }
+
+/* Final scheduled table sizing: Training Type | Date & Time | Location | Notes | Spots | Actions */
+.training-schedule-table {
+  table-layout: fixed;
+}
+
+.training-schedule-table--admin th:nth-child(1),
+.training-schedule-table--admin td:nth-child(1) { width: 14%; }
+
+.training-schedule-table--admin th:nth-child(2),
+.training-schedule-table--admin td:nth-child(2) { width: 17%; }
+
+.training-schedule-table--admin th:nth-child(3),
+.training-schedule-table--admin td:nth-child(3) { width: 17%; }
+
+.training-schedule-table--admin th:nth-child(4),
+.training-schedule-table--admin td:nth-child(4) {
+  width: 33%;
+  white-space: normal;
+}
+
+.training-schedule-table--admin th:nth-child(5),
+.training-schedule-table--admin td:nth-child(5) {
+  width: 10%;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.training-schedule-table--admin th:nth-child(6),
+.training-schedule-table--admin td:nth-child(6) {
+  width: 9%;
+  min-width: 108px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.training-schedule-table .training-actions-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 0;
+}
+
+.training-schedule-table .training-roster-btn {
+  min-width: 78px;
+  margin: 0;
+  white-space: nowrap;
+}
 
 /* Admin form 2-column layout */
 .admin-form-cols {
@@ -3772,114 +3853,4 @@ body {
   background-color: rgba(0, 0, 0, 0.72);
 }
 
-.training-signup-confirm-modal .training-signup-confirm-card {
-  width: min(560px, calc(100vw - 28px));
-  max-width: calc(100vw - 28px);
-  margin: 0 auto;
-  background-color: #2e2e2e;
-  color: #fff;
-  border: 2px solid #69140e;
-  padding: 0;
-}
-
-.training-signup-confirm-card .modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 22px 24px 14px;
-  background: linear-gradient(135deg, #69140e, #202834);
-  border-bottom: 2px solid #ff8080;
-}
-
-.training-signup-confirm-card .modal-header h2 {
-  margin: 0;
-  color: #fff;
-  font-size: 1.4rem;
-}
-
-.training-signup-confirm-body {
-  padding: 24px;
-}
-
-.training-signup-modal-copy {
-  margin: 0 0 18px;
-  color: #ddd;
-}
-
-.training-signup-summary-list {
-  display: grid;
-  gap: 14px;
-  margin: 0;
-}
-
-.training-signup-summary-list div {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #555;
-}
-
-.training-signup-summary-list dt {
-  color: #ffb3b3;
-  font-weight: 700;
-}
-
-.training-signup-summary-list dd {
-  margin: 0;
-  color: #fff;
-  line-height: 1.35;
-}
-
-.training-signup-confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 0 24px 24px;
-}
-
-.training-signup-success-banner,
-.training-signup-modal-error {
-  padding: 12px 14px;
-  border: 1px solid #4f8d5a;
-  background: #243b2b;
-  color: #fff;
-  font-weight: 700;
-  margin-bottom: 18px;
-}
-
-.training-signup-modal-error {
-  border-color: #8f1a12;
-  background: #4a1714;
-}
-
-.training-signup-reminder-box {
-  border: 2px solid #d6a800;
-  background: #3d330f;
-  color: #ffeaa3;
-  padding: 16px;
-  margin-bottom: 18px;
-}
-
-.training-signup-reminder-box strong {
-  display: block;
-  color: #ffd84d;
-  margin-bottom: 8px;
-}
-
-.training-signup-reminder-box p {
-  margin: 0;
-  color: #ffeaa3;
-}
-
-@media (max-width: 560px) {
-  .training-signup-summary-list div {
-    grid-template-columns: 1fr;
-    gap: 5px;
-  }
-
-  .training-signup-confirm-actions {
-    flex-direction: column;
-  }
-}
+.training-signup-confirm-modal .training-signup
