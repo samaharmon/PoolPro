@@ -496,11 +496,15 @@ window.addEventListener('load', resetOrphanedSharedModalOverlay);
 
 window.openSettings = function () {
   ensureAccountManagementSection();
+  ensureDataStorageSettingsSection();
   ensureResourcesSettingsSection();
   setupResourcesSettingsUI();
   refreshResourceControls();
   renderResourcesSettingsTable();
   loadResourcesDocuments().catch((err) => console.error('[PoolPro] Error refreshing resources for settings:', err));
+  setupSettingsAccordions();
+  setupDataExport();
+  setupClearData();
   updateSettingsModalForRole();
   const modal = document.getElementById('settingsModal');
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
@@ -2042,8 +2046,7 @@ function isSupervisor() {
     const supervisorHint = localStorage.getItem('ChemLogSupervisor') === 'true' ||
       localStorage.getItem('trainingSupervisorLoggedIn') === 'true' ||
       localStorage.getItem('chemlogTrainingSupervisorLoggedIn') === 'true';
-    const activeRole = sessionStorage.getItem('chemlogRole') || localStorage.getItem('chemlogRole');
-    return supervisorHint && hasFreshSupervisorToken() && activeRole !== 'lifeguard';
+    return supervisorHint && hasFreshSupervisorToken();
   } catch (_) {
     return false;
   }
@@ -2347,6 +2350,63 @@ function ensureStandardSettingsSections() {
       modalContent.appendChild(section);
     }
   });
+}
+
+function getSettingsSectionTitle(section) {
+  return (section?.querySelector(':scope > h3, :scope > .settings-section-toggle .settings-section-title, :scope > #sanitationMethodsSection > h3')?.textContent || '')
+    .trim()
+    .toLowerCase();
+}
+
+function findSettingsSectionByTitle(title) {
+  const normalized = (title || '').trim().toLowerCase();
+  return Array.from(document.querySelectorAll('#settingsModal .settings-section'))
+    .find((section) => getSettingsSectionTitle(section) === normalized) || null;
+}
+
+function ensureDataStorageSettingsSection() {
+  const modalContent = document.querySelector('#settingsModal .settings-modal-content');
+  if (!modalContent) return;
+
+  let section = document.getElementById('dataStorageSettings') || findSettingsSectionByTitle('Data Storage');
+  const wasNew = !section;
+  if (!section) {
+    section = document.createElement('section');
+    section.className = 'settings-section settings-group data-storage-section';
+    section.id = 'dataStorageSettings';
+    const securitySection = findSettingsSectionByTitle('Security');
+    const scrollBody = modalContent.querySelector(':scope > .settings-modal-scroll');
+    if (securitySection) securitySection.insertAdjacentElement('beforebegin', section);
+    else if (scrollBody) scrollBody.appendChild(section);
+    else modalContent.appendChild(section);
+  }
+
+  section.id = 'dataStorageSettings';
+  section.classList.add('data-storage-section');
+  if (section.dataset.dataStorageReady === 'true') return;
+
+  section.innerHTML = `
+    <h3>Data Storage</h3>
+    <p class="section-subtitle">Export or delete stored PoolPro table data by category.</p>
+    <div class="settings-row data-storage-row">
+      <div class="settings-field">
+        <label for="dataExportCategorySelect">Export Data</label>
+        <select id="dataExportCategorySelect" class="training-filter-select"></select>
+      </div>
+      <button type="button" id="exportCsvBtn" class="submit-btn">Export Selected Data</button>
+    </div>
+    <div class="settings-row data-storage-row">
+      <div class="settings-field">
+        <label for="dataDeleteCategorySelect">Delete Data</label>
+        <select id="dataDeleteCategorySelect" class="training-filter-select"></select>
+      </div>
+      <button type="button" id="clearAllData" class="submit-btn danger-button">Delete Selected Data</button>
+    </div>
+  `;
+  section.dataset.dataStorageReady = 'true';
+  populateDataStorageSelectors();
+  if (!wasNew) return;
+  section.dataset.accordionReady = '';
 }
 
 // ============================================================
@@ -6985,53 +7045,334 @@ function setupMarketEditSave() {
 }
 
 // ============================================================
-// DATA EXPORT — CSV
+// DATA STORAGE — category export/delete
 // ============================================================
 
-function setupDataExport() {
-  const exportBtn = document.getElementById('exportCsvBtn');
-  if (!exportBtn) return;
-  exportBtn.addEventListener('click', () => {
-    if (!allLogs.length) { alert('No data to export.'); return; }
-    const headers = ['Timestamp', 'Pool', 'MainPH', 'MainCl', 'SecondaryPH', 'SecondaryCl'];
-    const rows = allLogs.map(log => {
-      const ts = log.timestamp?.toDate?.()?.toISOString() || '';
-      return [ts, log.poolLocation || '', log.mainPoolPH || '', log.mainPoolCl || '',
-        log.secondaryPoolPH || '', log.secondaryPoolCl || ''].map(v => `"${v}"`).join(',');
-    });
-    const csv = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `chemlog_${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
+const DATA_STORAGE_CATEGORIES = [
+  { key: 'all', label: 'All' },
+  { key: 'poolChemistry', label: 'Pool Chemistry Dashboard' },
+  { key: 'operationalStatus', label: 'Operational Status' },
+  { key: 'inventory', label: 'Inventory' },
+  { key: 'cleanlinessReports', label: 'Cleanliness Reports' },
+  { key: 'inspectionReports', label: 'Inspection Reports' },
+  { key: 'setPerformance', label: 'SET Performance' },
+  { key: 'auditingForms', label: 'Auditing Forms' },
+  { key: 'trainingSchedule', label: 'Training Schedule' },
+  { key: 'trainingCompletion', label: 'Training Completion' },
+  { key: 'employees', label: 'Employees' },
+  { key: 'resources', label: 'Resources' },
+];
+
+function populateDataStorageSelectors() {
+  const options = DATA_STORAGE_CATEGORIES
+    .map((category) => `<option value="${category.key}">${escapeHtml(category.label)}</option>`)
+    .join('');
+  ['dataExportCategorySelect', 'dataDeleteCategorySelect'].forEach((id) => {
+    const select = document.getElementById(id);
+    if (select && select.dataset.populated !== 'true') {
+      select.innerHTML = options;
+      select.dataset.populated = 'true';
+    }
   });
 }
 
-// ============================================================
-// CLEAR ALL DATA
-// ============================================================
+function getDataStorageCategory(key) {
+  return DATA_STORAGE_CATEGORIES.find((category) => category.key === key) || DATA_STORAGE_CATEGORIES[0];
+}
+
+function exportDateString(value) {
+  const date = toDateObject(value);
+  return date ? date.toISOString() : '';
+}
+
+function sanitizeExportValue(value) {
+  if (value === undefined || value === null) return '';
+  const date = toDateObject(value);
+  if (date && (value instanceof Date || typeof value?.toDate === 'function')) return date.toISOString();
+  if (Array.isArray(value)) return value.map(sanitizeNestedExportValue);
+  if (typeof value === 'object') return Object.fromEntries(
+    Object.entries(value).map(([key, nested]) => [key, sanitizeNestedExportValue(nested)])
+  );
+  return value;
+}
+
+function sanitizeNestedExportValue(value) {
+  if (value === undefined || value === null) return '';
+  const date = toDateObject(value);
+  if (date && (value instanceof Date || typeof value?.toDate === 'function')) return date.toISOString();
+  if (Array.isArray(value)) return value.map(sanitizeNestedExportValue);
+  if (typeof value === 'object') return Object.fromEntries(
+    Object.entries(value).map(([key, nested]) => [key, sanitizeNestedExportValue(nested)])
+  );
+  return value;
+}
+
+function normalizeExportRecord(data = {}, id = '') {
+  const record = id ? { id } : {};
+  Object.entries(data || {}).forEach(([key, value]) => {
+    if (key === 'id' && record.id) return;
+    const safeValue = sanitizeExportValue(value);
+    record[key] = (Array.isArray(safeValue) || (safeValue && typeof safeValue === 'object'))
+      ? JSON.stringify(safeValue)
+      : safeValue;
+  });
+  return record;
+}
+
+function summarizeReportRecord(data = {}, id = '') {
+  return {
+    id,
+    timestamp: exportDateString(data.timestamp || data.submittedAtIso || data.createdAt),
+    facility: data.pool || data.facilityName || data.poolName || data.poolLocation || '',
+    respondent: data.respondentName || data.submitterName || [data.firstName, data.lastName].filter(Boolean).join(' ') || '',
+    email: data.respondentEmail || data.submitterEmail || data.email || data.employeeId || '',
+    type: data.type || data.formType || '',
+  };
+}
+
+async function getCollectionExportRows(collectionName, projector = normalizeExportRecord) {
+  const snap = await getDocs(collection(db, collectionName));
+  return snap.docs
+    .map((docSnap) => projector(docSnap.data() || {}, docSnap.id))
+    .sort((a, b) => String(b.timestamp || b.signedUpAt || '').localeCompare(String(a.timestamp || a.signedUpAt || '')));
+}
+
+async function getSettingsArrayExportRows(docId, fieldName) {
+  const snap = await getDoc(doc(db, 'settings', docId));
+  if (!snap.exists()) return [];
+  const rows = snap.data()?.[fieldName];
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row, index) => normalizeExportRecord({ rowNumber: index + 1, ...(row || {}) }));
+}
+
+async function getSettingsDocExportRows(docId) {
+  const snap = await getDoc(doc(db, 'settings', docId));
+  return snap.exists() ? [normalizeExportRecord(snap.data() || {}, docId)] : [];
+}
+
+async function getDataStorageExportSheets(categoryKey) {
+  const selectedKeys = categoryKey === 'all'
+    ? DATA_STORAGE_CATEGORIES.filter((category) => category.key !== 'all').map((category) => category.key)
+    : [categoryKey];
+  const sheets = [];
+
+  for (const key of selectedKeys) {
+    if (key === 'poolChemistry') {
+      sheets.push({ name: 'Pool Chemistry', rows: await getCollectionExportRows('poolSubmissions') });
+    } else if (key === 'operationalStatus') {
+      sheets.push({ name: 'Operational Status', rows: await getCollectionExportRows('operationalStatusLogs') });
+    } else if (key === 'inventory') {
+      sheets.push({ name: 'Inventory', rows: await getCollectionExportRows('inventorySubmissions') });
+    } else if (key === 'cleanlinessReports') {
+      sheets.push({ name: 'Cleanliness Reports', rows: await getCollectionExportRows('dutySubmissions', summarizeReportRecord) });
+    } else if (key === 'inspectionReports') {
+      sheets.push({ name: 'Managerial Reports', rows: await getCollectionExportRows('managerialReports', summarizeReportRecord) });
+      sheets.push({ name: 'DES Pre-Inspections', rows: await getCollectionExportRows('desPreInspections', summarizeReportRecord) });
+    } else if (key === 'setPerformance') {
+      sheets.push({ name: 'SET Performance', rows: await getSettingsDocExportRows('employeePerformance') });
+    } else if (key === 'auditingForms') {
+      sheets.push({ name: 'Auditing Forms', rows: await getCollectionExportRows('testingResults') });
+    } else if (key === 'trainingSchedule') {
+      sheets.push({ name: 'Training Schedule', rows: await getSettingsArrayExportRows('trainingSchedule', 'sessions') });
+    } else if (key === 'trainingCompletion') {
+      sheets.push({ name: 'Training Completion', rows: await getCollectionExportRows('trainingSignups') });
+    } else if (key === 'employees') {
+      sheets.push({ name: 'Employees', rows: await getSettingsArrayExportRows('employees', 'employees') });
+    } else if (key === 'resources') {
+      sheets.push({ name: 'Resources', rows: await getCollectionExportRows('resourcesDocuments', (data, id) => normalizeExportRecord({
+        documentName: data.documentName,
+        uploadDate: data.uploadDate,
+        description: data.description,
+        market: data.market,
+        pool: data.pool,
+        resourceType: data.resourceType,
+        fileName: data.fileName,
+        fileUrl: data.resourceType === 'link' ? data.fileUrl : '',
+      }, id)) });
+    }
+  }
+
+  return sheets;
+}
+
+function getSheetColumns(rows) {
+  const columns = [];
+  rows.forEach((row) => {
+    Object.keys(row || {}).forEach((key) => {
+      if (!columns.includes(key)) columns.push(key);
+    });
+  });
+  return columns.length ? columns : ['No Data'];
+}
+
+function safeExcelSheetName(name, used = new Set()) {
+  let base = (name || 'Sheet').replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 31) || 'Sheet';
+  let candidate = base;
+  let index = 2;
+  while (used.has(candidate)) {
+    const suffix = ` ${index}`;
+    candidate = `${base.slice(0, 31 - suffix.length)}${suffix}`;
+    index += 1;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+function buildExcelWorkbook(sheets) {
+  const usedNames = new Set();
+  const prepared = sheets.map((sheet) => ({
+    name: safeExcelSheetName(sheet.name, usedNames),
+    rows: Array.isArray(sheet.rows) ? sheet.rows : [],
+  }));
+  const worksheets = prepared.map((sheet) => {
+    const columns = getSheetColumns(sheet.rows);
+    const bodyRows = sheet.rows.length ? sheet.rows : [{ 'No Data': 'No records found' }];
+    const header = columns.map((column) => `<Cell><Data ss:Type="String">${escapeHtml(column)}</Data></Cell>`).join('');
+    const body = bodyRows.map((row) => {
+      const cells = columns.map((column) => `<Cell><Data ss:Type="String">${escapeHtml(row[column] ?? '')}</Data></Cell>`).join('');
+      return `<Row>${cells}</Row>`;
+    }).join('');
+    return `
+      <Worksheet ss:Name="${escapeHtml(sheet.name)}">
+        <Table>
+          <Row>${header}</Row>
+          ${body}
+        </Table>
+      </Worksheet>
+    `;
+  }).join('');
+
+  return `<?xml version="1.0"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:x="urn:schemas-microsoft-com:office:excel"
+  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+  ${worksheets}
+</Workbook>`;
+}
+
+function downloadDataWorkbook(sheets, categoryKey) {
+  const workbook = buildExcelWorkbook(sheets);
+  const blob = new Blob([workbook], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `poolpro_${categoryKey}_${new Date().toISOString().slice(0, 10)}.xls`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function deleteCollectionDocs(collectionName, beforeDeleteDoc) {
+  const snap = await getDocs(collection(db, collectionName));
+  for (const docSnap of snap.docs) {
+    if (typeof beforeDeleteDoc === 'function') {
+      await beforeDeleteDoc(docSnap).catch((err) => console.warn(`[PoolPro] Could not clean related data for ${collectionName}/${docSnap.id}`, err));
+    }
+  }
+  for (let i = 0; i < snap.docs.length; i += 400) {
+    const batch = writeBatch(db);
+    snap.docs.slice(i, i + 400).forEach((docSnap) => batch.delete(docSnap.ref));
+    await batch.commit();
+  }
+}
+
+async function deleteDataStorageCategory(categoryKey) {
+  if (categoryKey === 'all') {
+    for (const category of DATA_STORAGE_CATEGORIES.filter((item) => item.key !== 'all')) {
+      await deleteDataStorageCategory(category.key);
+    }
+    return;
+  }
+  if (categoryKey === 'poolChemistry') await deleteCollectionDocs('poolSubmissions');
+  else if (categoryKey === 'operationalStatus') await deleteCollectionDocs('operationalStatusLogs');
+  else if (categoryKey === 'inventory') await deleteCollectionDocs('inventorySubmissions');
+  else if (categoryKey === 'cleanlinessReports') await deleteCollectionDocs('dutySubmissions');
+  else if (categoryKey === 'inspectionReports') {
+    await deleteCollectionDocs('managerialReports');
+    await deleteCollectionDocs('desPreInspections');
+  } else if (categoryKey === 'setPerformance') await deleteDoc(doc(db, 'settings', 'employeePerformance'));
+  else if (categoryKey === 'auditingForms') await deleteCollectionDocs('testingResults');
+  else if (categoryKey === 'trainingSchedule') await setDoc(doc(db, 'settings', 'trainingSchedule'), { sessions: [] }, { merge: false });
+  else if (categoryKey === 'trainingCompletion') await deleteCollectionDocs('trainingSignups');
+  else if (categoryKey === 'employees') await setDoc(doc(db, 'settings', 'employees'), { employees: [] }, { merge: false });
+  else if (categoryKey === 'resources') {
+    await deleteCollectionDocs('resourcesDocuments', async (docSnap) => {
+      await deleteResourceBackingFile({ id: docSnap.id, ...(docSnap.data() || {}) });
+    });
+  }
+}
+
+async function refreshAfterDataStorageDelete(categoryKey) {
+  const affected = new Set(categoryKey === 'all'
+    ? DATA_STORAGE_CATEGORIES.map((item) => item.key)
+    : [categoryKey]);
+  if (affected.has('employees') || affected.has('all')) await loadEmployees();
+  if (affected.has('resources') || affected.has('all')) await loadResourcesDocuments();
+  if (affected.has('operationalStatus') || affected.has('all')) operationalStatusLogs = [];
+  if (affected.has('poolChemistry') || affected.has('all')) allLogs = [];
+  if (affected.has('cleanlinessReports') || affected.has('all')) allDutyReports = [];
+  if (affected.has('inspectionReports') || affected.has('all')) {
+    allManagerialReports = [];
+    allDesPreInspections = [];
+  }
+  if (affected.has('inventory') || affected.has('all')) allInventoryReports = [];
+  if (document.getElementById('supervisorDashboard')?.classList.contains('show')) {
+    dashboardDataLoaded = false;
+    await loadDashboardData();
+  }
+  loadPublicTrainingSessions();
+}
+
+function setupDataExport() {
+  populateDataStorageSelectors();
+  const exportBtn = document.getElementById('exportCsvBtn');
+  if (!exportBtn || exportBtn.dataset.bound === 'true') return;
+  exportBtn.dataset.bound = 'true';
+  exportBtn.addEventListener('click', async () => {
+    const categoryKey = document.getElementById('dataExportCategorySelect')?.value || 'all';
+    const category = getDataStorageCategory(categoryKey);
+    try {
+      exportBtn.disabled = true;
+      exportBtn.textContent = 'Exporting...';
+      const sheets = await getDataStorageExportSheets(categoryKey);
+      const hasRows = sheets.some((sheet) => Array.isArray(sheet.rows) && sheet.rows.length);
+      if (!hasRows) {
+        alert(`No ${category.label} data to export.`);
+        return;
+      }
+      downloadDataWorkbook(sheets, categoryKey);
+    } catch (err) {
+      console.error('[PoolPro] Error exporting data:', err);
+      alert('Error exporting data. Please try again.');
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = 'Export Selected Data';
+    }
+  });
+}
 
 function setupClearData() {
+  populateDataStorageSelectors();
   const clearBtn = document.getElementById('clearAllData');
-  if (!clearBtn) return;
+  if (!clearBtn || clearBtn.dataset.bound === 'true') return;
+  clearBtn.dataset.bound = 'true';
   clearBtn.addEventListener('click', async () => {
-    if (!confirm('Delete ALL chemistry log data? This cannot be undone.')) return;
+    const categoryKey = document.getElementById('dataDeleteCategorySelect')?.value || 'all';
+    const category = getDataStorageCategory(categoryKey);
+    const label = categoryKey === 'all' ? 'ALL exported PoolPro table data' : `${category.label} data`;
+    if (!confirm(`Delete ${label}? This cannot be undone.`)) return;
     try {
       clearBtn.disabled = true;
-      const snap = await getDocs(collection(db, 'poolSubmissions'));
-      const batch = writeBatch(db);
-      snap.docs.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-      allLogs = [];
-      filteredLogs = [];
-      renderDashboard();
-      alert('All chemistry log data has been cleared.');
+      clearBtn.textContent = 'Deleting...';
+      await deleteDataStorageCategory(categoryKey);
+      await refreshAfterDataStorageDelete(categoryKey);
+      alert(`${category.label} data has been deleted.`);
     } catch (err) {
-      console.error('[ChemLog] Error clearing data:', err);
-      alert('Error clearing data. Please try again.');
+      console.error('[PoolPro] Error deleting data:', err);
+      alert('Error deleting data. Please try again.');
     } finally {
       clearBtn.disabled = false;
+      clearBtn.textContent = 'Delete Selected Data';
     }
   });
 }
@@ -7292,6 +7633,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   injectDesPreInspectionMenuLinks();
   injectLifeguardSettingsMenuLinks();
   ensureStandardSettingsSections();
+  ensureDataStorageSettingsSection();
   ensureResourcesSettingsSection();
   ensureSettingsModalScrollBody();
   resetOrphanedSharedModalOverlay();
@@ -8068,8 +8410,12 @@ function renderFullInventorySection(container, rows) {
       const tr = document.createElement('tr');
       tr.className = 'supply-facility-row';
       const detailId = `supply-detail-${facilityName.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`;
+      const latestReport = getLatestReportForFacility(facilityRows, facilityName) || {};
       tr.innerHTML = `
-        <td><button type="button" class="supply-expand-btn" aria-expanded="false" aria-controls="${escapeHtml(detailId)}">▸</button>${escapeHtml(facilityName)}</td>
+        <td>
+          <button type="button" class="supply-expand-btn" aria-expanded="false" aria-controls="${escapeHtml(detailId)}">▸</button>
+          <button type="button" class="dashboard-link-button supply-facility-meta-btn">${escapeHtml(facilityName)}</button>
+        </td>
         <td>${facilityRows.length} item${facilityRows.length === 1 ? '' : 's'}</td>
       `;
       const detail = document.createElement('tr');
@@ -8081,6 +8427,12 @@ function renderFullInventorySection(container, rows) {
           .map((row) => `<div><strong>${escapeHtml(row.item)}</strong>${row.type ? ` (${escapeHtml(row.type)})` : ''}: ${escapeHtml(row.status || '—')}</div>`)
           .join('')
       }</div></td>`;
+      tr.querySelector('.supply-facility-meta-btn')?.addEventListener('click', () => openInspectionMetaPopup({
+        pool: facilityName,
+        respondentName: latestReport.respondentName || latestReport.respondentEmail || latestReport.submitterEmail || '—',
+        submitterEmail: latestReport.respondentEmail || latestReport.submitterEmail || '—',
+        timestamp: latestReport.timestamp || latestReport.submittedAtIso,
+      }, 'Inventory Submission Details'));
       tr.querySelector('.supply-expand-btn')?.addEventListener('click', (event) => {
         const expanded = event.currentTarget.getAttribute('aria-expanded') === 'true';
         event.currentTarget.setAttribute('aria-expanded', expanded ? 'false' : 'true');

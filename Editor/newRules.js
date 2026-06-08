@@ -625,7 +625,7 @@ function normalizeSupplyInfo(source = {}) {
 function setSupplyInfoEnabled(enabled) {
   const section = document.getElementById('supplyInfoSection');
   if (!section) return;
-  section.querySelectorAll('input, select, textarea').forEach((field) => {
+  section.querySelectorAll('.supply-info-content input, .supply-info-content select, .supply-info-content textarea').forEach((field) => {
     field.disabled = !enabled;
   });
   section.classList.toggle('overlay-disabled', !enabled);
