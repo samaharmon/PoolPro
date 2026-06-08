@@ -182,7 +182,7 @@ window.addEventListener('resize', closeDashboardValuePopover);
 function getPagePrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   parts.pop();
-  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES', 'inventory', 'Inventory'];
+  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'des-logbooks', 'DES-Logbooks', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES', 'inventory', 'Inventory'];
   const last = parts[parts.length - 1] || '';
   return subDirs.includes(last) ? '../' : '';
 }
@@ -220,6 +220,24 @@ function injectManagerialReportMenuLinks() {
     link.dataset.nav = 'managerial-report';
     link.textContent = 'Managerial Report';
     dutiesLink.insertAdjacentElement('afterend', link);
+  });
+}
+
+function injectDesLogbooksMenuLinks() {
+  const prefix = getPagePrefix();
+  const isDesLogbooksPage = /\/des-logbooks\/des-logbooks\.html$/i.test(window.location.pathname);
+
+  document.querySelectorAll('.dropdown-menu').forEach((menu) => {
+    if (menu.querySelector('[data-nav="des-logbooks"]')) return;
+    const anchorLink = menu.querySelector('[data-nav="duties"]') || menu.querySelector('[data-nav="training-signup"]') || menu.querySelector('[data-nav="chem"]');
+    if (!anchorLink) return;
+
+    const link = document.createElement('a');
+    link.href = isDesLogbooksPage ? 'des-logbooks.html' : `${prefix}des-logbooks/des-logbooks.html`;
+    link.className = `dropdown-item attendant-only${isDesLogbooksPage ? ' active-page' : ''}`;
+    link.dataset.nav = 'des-logbooks';
+    link.textContent = 'DES Logbooks';
+    anchorLink.insertAdjacentElement('afterend', link);
   });
 }
 
@@ -1640,6 +1658,7 @@ const PERMISSION_DEFINITIONS = [
   { key: 'poolChemistryLog', label: 'Pool Chemistry Log' },
   { key: 'trainingSignup', label: 'Training Signup' },
   { key: 'cleanlinessReport', label: 'Cleanliness Report' },
+  { key: 'desLogbooks', label: 'DES Logbooks' },
   { key: 'managerialReport', label: 'Managerial Report' },
   { key: 'operationalStatusLog', label: 'Operational Status Log' },
   { key: 'inventory', label: 'Inventory' },
@@ -1657,6 +1676,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     poolChemistryLog: true,
     trainingSignup: true,
     cleanlinessReport: true,
+    desLogbooks: false,
     managerialReport: false,
     operationalStatusLog: true,
     inventory: true,
@@ -1673,6 +1693,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     poolChemistryLog: true,
     trainingSignup: false,
     cleanlinessReport: false,
+    desLogbooks: true,
     managerialReport: false,
     operationalStatusLog: true,
     inventory: true,
@@ -1689,6 +1710,7 @@ const ROLE_DEFAULT_PERMISSIONS = {
     poolChemistryLog: true,
     trainingSignup: true,
     cleanlinessReport: true,
+    desLogbooks: false,
     managerialReport: true,
     operationalStatusLog: true,
     inventory: true,
@@ -1953,6 +1975,7 @@ const NAV_PERMISSION_MAP = {
   chem: 'poolChemistryLog',
   'training-signup': 'trainingSignup',
   duties: 'cleanlinessReport',
+  'des-logbooks': 'desLogbooks',
   'managerial-report': 'managerialReport',
   'operational-status': 'operationalStatusLog',
   inventory: 'inventory',
@@ -1973,6 +1996,7 @@ function getCurrentPagePermissionKey() {
   }
   if (/\/Training\/training\.html$/i.test(path) || /\/training\/training\.html$/i.test(path)) return 'trainingSignup';
   if (/\/duties\/duties\.html$/i.test(path)) return 'cleanlinessReport';
+  if (/\/des-logbooks\/des-logbooks\.html$/i.test(path)) return 'desLogbooks';
   if (/\/managerial\/managerial\.html$/i.test(path)) return 'managerialReport';
   if (/\/operational\/operational\.html$/i.test(path)) return 'operationalStatusLog';
   if (/\/inventory\/inventory\.html$/i.test(path)) return 'inventory';
@@ -2117,6 +2141,7 @@ window.setupDropdownVisibility = function () {
   const sup = isSupervisor();
   const accessMode = getRequestedAccessMode();
   const lifeguard = accessMode === 'lifeguard' && isLifeguardSession() && !sup;
+  const attendant = accessMode === 'attendant' && isLifeguardSession() && !sup;
   const limitedSettings = !sup && hasActivePoolProSession() && hasPermission('settings');
   Object.entries(NAV_PERMISSION_MAP).forEach(([nav, permissionKey]) => {
     document.querySelectorAll(`[data-nav="${nav}"]`).forEach((el) => {
@@ -2143,8 +2168,12 @@ window.setupDropdownVisibility = function () {
     if (item.dataset.nav === 'lifeguard-settings') return;
     item.style.display = lifeguard ? '' : 'none';
   });
+  document.querySelectorAll('.attendant-only').forEach((item) => {
+    item.style.display = attendant && hasPermission(item.dataset.nav === 'des-logbooks' ? 'desLogbooks' : 'settings') ? '' : 'none';
+  });
   document.querySelectorAll('.dropdown-menu').forEach((m) => {
     m.classList.toggle('lifeguard-active', lifeguard);
+    m.classList.toggle('attendant-active', attendant);
     m.querySelectorAll('.supervisor-only').forEach((item) => {
       item.classList.remove('supervisor-group-start', 'supervisor-group-end');
     });
@@ -2162,7 +2191,7 @@ window.setupDropdownVisibility = function () {
 function footerLogoPrefix() {
   const parts = window.location.pathname.split('/').filter(Boolean);
   const lastDir = parts.length > 1 ? parts[parts.length - 2] : '';
-  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'managerial', 'resources', 'operational', 'des', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'Managerial', 'Employees', 'Testing', 'Resources', 'Operational', 'DES'];
+  const subDirs = ['chem', 'training', 'editor', 'employees', 'testing', 'main', 'duties', 'des-logbooks', 'managerial', 'resources', 'operational', 'des', 'inventory', 'Chem', 'Training', 'Editor', 'Main', 'Duties', 'DES-Logbooks', 'Managerial', 'Employees', 'Testing', 'Resources', 'Operational', 'DES', 'Inventory'];
   return subDirs.includes(lastDir) ? '../' : '';
 }
 
@@ -7628,10 +7657,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   normalizeSharedHeaderCopy();
   injectOperationalStatusMenuLinks();
   injectManagerialReportMenuLinks();
+  injectDesLogbooksMenuLinks();
   injectResourcesMenuLinks();
   injectInventoryMenuLinks();
   injectDesPreInspectionMenuLinks();
   injectLifeguardSettingsMenuLinks();
+  window.setupDropdownVisibility();
   ensureStandardSettingsSections();
   ensureDataStorageSettingsSection();
   ensureResourcesSettingsSection();
@@ -9157,495 +9188,4 @@ function renderDashboardMetrics() {
     includeZero: true,
     minSpan: 5,
   });
-  renderMetricsScatterChart(grid, {
-    title: 'Daily Cl Variance vs CYA Level',
-    emptyMessage: 'You need same-day Cl and CYA readings to draw this graph.',
-    points: clVariancePoints,
-    xLabel: 'Average CYA',
-    yLabel: 'Daily Cl Variance',
-    xFormatter: (value) => value.toFixed(1),
-    yFormatter: (value) => value.toFixed(2),
-  });
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function clampNumber(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function parseScaleNumber(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function mixColor(startHex, endHex, amount) {
-  const parse = (hex) => {
-    const clean = hex.replace('#', '');
-    return [
-      parseInt(clean.slice(0, 2), 16),
-      parseInt(clean.slice(2, 4), 16),
-      parseInt(clean.slice(4, 6), 16),
-    ];
-  };
-  const [sr, sg, sb] = parse(startHex);
-  const [er, eg, eb] = parse(endHex);
-  const t = clampNumber(amount, 0, 1);
-  const toHex = (n) => Math.round(n).toString(16).padStart(2, '0');
-  return `#${toHex(sr + (er - sr) * t)}${toHex(sg + (eg - sg) * t)}${toHex(sb + (eb - sb) * t)}`;
-}
-
-function colorFromStops(value, stops) {
-  const v = clampNumber(value, stops[0].value, stops[stops.length - 1].value);
-  for (let i = 0; i < stops.length - 1; i++) {
-    const current = stops[i];
-    const next = stops[i + 1];
-    if (v >= current.value && v <= next.value) {
-      const span = next.value - current.value || 1;
-      return mixColor(current.color, next.color, (v - current.value) / span);
-    }
-  }
-  return stops[stops.length - 1].color;
-}
-
-const DUTY_SCALE_RED = '#a40000';
-const DUTY_SCALE_YELLOW = '#d4a900';
-const DUTY_SCALE_GREEN = '#18873b';
-
-function getDutyScaleConfig(type, rawValue) {
-  const value = parseScaleNumber(rawValue);
-  if (value === null) return null;
-
-  if (type === 'cya') {
-    return {
-      percent: clampNumber(value, 0, 100),
-      color: colorFromStops(value, [
-        { value: 0, color: DUTY_SCALE_RED },
-        { value: 10, color: DUTY_SCALE_RED },
-        { value: 30, color: DUTY_SCALE_YELLOW },
-        { value: 50, color: DUTY_SCALE_GREEN },
-        { value: 60, color: DUTY_SCALE_YELLOW },
-        { value: 70, color: DUTY_SCALE_RED },
-        { value: 100, color: DUTY_SCALE_RED },
-      ]),
-      trackClass: 'duty-scale-track-cya',
-    };
-  }
-
-  if (type === 'acid') {
-    return {
-      percent: clampNumber((value / 30) * 100, 0, 100),
-      color: colorFromStops(value, [
-        { value: 0, color: DUTY_SCALE_RED },
-        { value: 15, color: DUTY_SCALE_YELLOW },
-        { value: 30, color: DUTY_SCALE_GREEN },
-      ]),
-      trackClass: 'duty-scale-track-acid',
-    };
-  }
-
-  return {
-    percent: clampNumber(value, 0, 100),
-    color: colorFromStops(value, [
-      { value: 0, color: DUTY_SCALE_RED },
-      { value: 50, color: DUTY_SCALE_YELLOW },
-      { value: 100, color: DUTY_SCALE_GREEN },
-    ]),
-    trackClass: 'duty-scale-track-linear',
-  };
-}
-
-function dutyScaleHtml(label, value, unit, type) {
-  const config = getDutyScaleConfig(type, value);
-  if (!config) return '';
-  const displayValue = `${escapeHtml(value)}${escapeHtml(unit || '')}`;
-  return `
-    <div class="duty-scale-row">
-      <div class="duty-scale-label-row">
-        <span>${escapeHtml(label)}</span>
-        <strong>${displayValue}</strong>
-      </div>
-      <div class="duty-scale-track ${config.trackClass}">
-        <span class="duty-scale-marker" style="left:${config.percent}%;background:${config.color};"></span>
-      </div>
-    </div>
-  `;
-}
-
-function isFirestoreDutyPhoto(photo) {
-  const url = String(photo?.url || '');
-  return photo?.source === FIRESTORE_DUTY_PHOTO_STORAGE || url.startsWith(`${FIRESTORE_DUTY_PHOTO_STORAGE}:`);
-}
-
-function getDutyPhotoCacheKey(photo) {
-  const url = String(photo?.url || '');
-  if (url.startsWith(`${FIRESTORE_DUTY_PHOTO_STORAGE}:`)) return url;
-  if (photo?.submissionId && photo?.photoId) {
-    return `${FIRESTORE_DUTY_PHOTO_STORAGE}:${photo.submissionId}:${photo.photoId}`;
-  }
-  return url || `${photo?.submissionId || ''}:${photo?.photoId || ''}`;
-}
-
-async function getFirestoreDutyPhotoDataUrl(photo) {
-  const cacheKey = getDutyPhotoCacheKey(photo);
-  if (dutyPhotoDataUrlMap.has(cacheKey)) return dutyPhotoDataUrlMap.get(cacheKey);
-
-  let submissionId = String(photo?.submissionId || '');
-  let photoId = String(photo?.photoId || '');
-  if ((!submissionId || !photoId) && cacheKey.startsWith(`${FIRESTORE_DUTY_PHOTO_STORAGE}:`)) {
-    const parts = cacheKey.split(':');
-    submissionId = submissionId || parts[1] || '';
-    photoId = photoId || parts[2] || '';
-  }
-  if (!submissionId || !photoId) throw new Error('Duty photo reference is incomplete.');
-
-  const chunksSnap = await getDocs(collection(db, 'dutySubmissionMedia', submissionId, 'photos', photoId, 'chunks'));
-  const chunks = chunksSnap.docs
-    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
-    .sort((a, b) => Number(a.index ?? a.id) - Number(b.index ?? b.id))
-    .map((chunk) => chunk.data || '');
-
-  if (!chunks.length) throw new Error('Duty photo chunks were not found.');
-
-  const prefix = photo.dataUrlPrefix || `data:${photo.contentType || 'image/jpeg'};base64`;
-  const dataUrl = `${prefix},${chunks.join('')}`;
-  dutyPhotoDataUrlMap.set(cacheKey, dataUrl);
-  return dataUrl;
-}
-
-function getDesInspectionPhotoCacheKey(photo) {
-  const url = String(photo?.url || '');
-  if (url.startsWith(`${FIRESTORE_DES_PRE_INSPECTION_PHOTO_STORAGE}:`)) return url;
-  if (photo?.submissionId && photo?.photoId) {
-    return `${FIRESTORE_DES_PRE_INSPECTION_PHOTO_STORAGE}:${photo.submissionId}:${photo.photoId}`;
-  }
-  return url || `${photo?.submissionId || ''}:${photo?.photoId || ''}`;
-}
-
-async function getFirestoreDesInspectionPhotoDataUrl(photo) {
-  const cacheKey = getDesInspectionPhotoCacheKey(photo);
-  if (desInspectionPhotoDataUrlMap.has(cacheKey)) return desInspectionPhotoDataUrlMap.get(cacheKey);
-
-  let submissionId = String(photo?.submissionId || '');
-  let photoId = String(photo?.photoId || '');
-  if ((!submissionId || !photoId) && cacheKey.startsWith(`${FIRESTORE_DES_PRE_INSPECTION_PHOTO_STORAGE}:`)) {
-    const parts = cacheKey.split(':');
-    submissionId = submissionId || parts[1] || '';
-    photoId = photoId || parts[2] || '';
-  }
-  if (!submissionId || !photoId) throw new Error('DES pre-inspection photo reference is incomplete.');
-
-  const chunksSnap = await getDocs(collection(db, 'desPreInspectionMedia', submissionId, 'photos', photoId, 'chunks'));
-  const chunks = chunksSnap.docs
-    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
-    .sort((a, b) => Number(a.index ?? a.id) - Number(b.index ?? b.id))
-    .map((chunk) => chunk.data || '');
-  if (!chunks.length) throw new Error('DES pre-inspection photo chunks were not found.');
-
-  const prefix = photo.dataUrlPrefix || `data:${photo.contentType || 'image/jpeg'};base64`;
-  const dataUrl = `${prefix},${chunks.join('')}`;
-  desInspectionPhotoDataUrlMap.set(cacheKey, dataUrl);
-  return dataUrl;
-}
-
-function getDesInspectionItems(sub) {
-  if (Array.isArray(sub?.inspectionItems)) return sub.inspectionItems;
-  if (sub?.answers && typeof sub.answers === 'object') {
-    return Object.entries(sub.answers).map(([id, item]) => ({
-      id,
-      label: item?.label || id,
-      answer: item?.answer || '',
-      notes: item?.notes || '',
-      photos: item?.photos || [],
-    }));
-  }
-  return [];
-}
-
-async function hydrateDesInspectionPhotos(root) {
-  const images = Array.from(root.querySelectorAll('[data-des-photo-meta]'));
-  await Promise.all(images.map(async (img) => {
-    try {
-      const meta = JSON.parse(decodeURIComponent(img.dataset.desPhotoMeta || ''));
-      const fullUrl = await getFirestoreDesInspectionPhotoDataUrl(meta);
-      img.src = fullUrl;
-      img.dataset.fullUrl = fullUrl;
-      img.classList.remove('duty-report-photo--loading');
-      img.addEventListener('click', () => window.openPhotoModal(fullUrl, images.map((node) => node.dataset.fullUrl).filter(Boolean)));
-    } catch (err) {
-      console.error('[DES] Could not load submitted photo:', err);
-      img.classList.remove('duty-report-photo--loading');
-      img.classList.add('duty-report-photo--error');
-    }
-  }));
-}
-
-function openDesPreInspectionModal(sub) {
-  let modal = document.getElementById('desInspectionModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'desInspectionModal';
-    modal.className = 'duty-report-modal des-inspection-modal';
-    modal.addEventListener('click', (event) => {
-      if (event.target === modal) window.closeDesPreInspectionModal();
-    });
-    document.body.appendChild(modal);
-  }
-
-  const esc = escapeHtml;
-  const ts = toDateObject(sub.timestamp);
-  const photoHtml = (photos) => {
-    if (!Array.isArray(photos) || !photos.length) return '';
-    return `<div class="duty-report-photo-grid des-inspection-photo-grid">
-      ${photos.map((photo) => {
-        const meta = encodeURIComponent(JSON.stringify(photo || {}));
-        return `<img src="${EMPTY_INLINE_IMAGE}" alt="${esc(photo?.name || 'DES photo')}" class="duty-report-photo duty-report-photo--loading" data-des-photo-meta="${meta}">`;
-      }).join('')}
-    </div>`;
-  };
-  const items = getDesInspectionItems(sub);
-  modal.innerHTML = `
-    <div class="duty-report-modal-card des-inspection-modal-card">
-      <div class="modal-header duty-report-modal-header">
-        <h2>DES Pre-Inspection</h2>
-        <button type="button" class="close" onclick="window.closeDesPreInspectionModal()">&times;</button>
-      </div>
-      <div class="duty-report-modal-scroll">
-        <div class="duty-report-meta">
-          <p><strong>Pool:</strong> ${esc(sub.pool || '—')}</p>
-          <p><strong>Respondent:</strong> ${esc(sub.respondentName || sub.submitterName || sub.submitterEmail || '—')}</p>
-          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
-        </div>
-        <section class="des-inspection-item-list">
-          ${items.length ? items.map((item) => `
-            <article class="des-inspection-review-item">
-              <h3>${esc(item.label || item.id || 'Inspection item')}</h3>
-              <p><strong>Answer:</strong> ${esc(item.answer || '—')}</p>
-              ${item.notes ? `<div class="duty-report-notes"><strong>Notes:</strong><span>${esc(item.notes)}</span></div>` : ''}
-              ${photoHtml(item.photos)}
-            </article>
-          `).join('') : '<p>No inspection item details were recorded.</p>'}
-        </section>
-      </div>
-    </div>`;
-
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
-  hydrateDesInspectionPhotos(modal).catch((err) => {
-    console.error('[DES] Could not hydrate submitted photos:', err);
-  });
-}
-
-window.closeDesPreInspectionModal = function closeDesPreInspectionModal() {
-  const modal = document.getElementById('desInspectionModal');
-  if (!modal) return;
-  modal.classList.remove('visible');
-  window.setTimeout(() => {
-    if (!modal.classList.contains('visible')) modal.style.display = 'none';
-  }, 250);
-};
-
-async function hydrateDutyReportPhotos(root) {
-  if (!root) return;
-  const images = Array.from(root.querySelectorAll('[data-duty-photo-meta]'));
-  await Promise.all(images.map(async (img) => {
-    try {
-      const meta = JSON.parse(decodeURIComponent(img.dataset.dutyPhotoMeta || ''));
-      const fullUrl = isFirestoreDutyPhoto(meta)
-        ? await getFirestoreDutyPhotoDataUrl(meta)
-        : (meta.url || img.getAttribute('src') || '');
-      if (!fullUrl) throw new Error('Duty photo URL is missing.');
-      img.src = fullUrl;
-      img.dataset.fullUrl = fullUrl;
-      img.title = meta.name || 'photo';
-      img.classList.remove('duty-report-photo--loading', 'duty-report-photo--error');
-      img.onclick = () => window.openPhotoModal(
-        fullUrl,
-        images.map((node) => node.dataset.fullUrl).filter(Boolean)
-      );
-    } catch (err) {
-      console.error('[Duties] Could not load submitted photo:', err);
-      img.classList.remove('duty-report-photo--loading');
-      img.classList.add('duty-report-photo--error');
-      img.removeAttribute('onclick');
-      img.title = 'Unable to load photo';
-    }
-  }));
-}
-
-function openDutyFormModal(sub) {
-  let modal = document.getElementById('dutyFormModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'dutyFormModal';
-    modal.addEventListener('click', (e) => { if (e.target === modal) window.closeDutyFormModal(); });
-    document.body.appendChild(modal);
-  }
-  modal.className = 'duty-report-modal';
-  modal.style.cssText = '';
-
-  const ts = toDateObject(sub.timestamp);
-  const esc = escapeHtml;
-  const reportTitle = getDutyReportTitle(sub);
-  const managerPanelTitle = sub?.reportType === 'managerial' ? 'Managerial Report Details' : 'Managers Only';
-
-  const photoSectionHtml = (label, photos) => {
-    if (!photos?.length) return '';
-    const imgs = photos.map((p) => {
-      const meta = encodeURIComponent(JSON.stringify({
-        url: p.url || '',
-        name: p.name || '',
-        source: p.source || '',
-        contentType: p.contentType || '',
-        dataUrlPrefix: p.dataUrlPrefix || '',
-        photoId: p.photoId || '',
-        submissionId: p.submissionId || sub.id || '',
-      }));
-      const initialSrc = isFirestoreDutyPhoto(p) ? EMPTY_INLINE_IMAGE : esc(p.url || EMPTY_INLINE_IMAGE);
-      const loadingClass = isFirestoreDutyPhoto(p) ? ' duty-report-photo--loading' : '';
-      return `<img src="${initialSrc}" alt="photo" class="duty-report-photo${loadingClass}"
-           data-duty-photo-meta="${meta}" />`;
-    }).join('');
-    return `<section class="duty-report-photo-section">
-      <h4>${esc(label)}</h4>
-      <div class="duty-report-photo-grid">${imgs}</div>
-    </section>`;
-  };
-
-  const photos = sub.photos || {};
-  const hasValue = (value) => value !== null && value !== undefined && value !== '';
-  const hasManagerData = hasValue(sub.bleachVolume) || hasValue(sub.muriaticAcid) ||
-    hasValue(sub.shockGranular) || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
-    photos.bleach?.length;
-
-  let cyaHtml = '';
-  if (sub.cyaReadings && Object.keys(sub.cyaReadings).length) {
-    const rows = Object.entries(sub.cyaReadings).map(([k, v]) => {
-      const label = k.replace('pool', 'Pool ');
-      return dutyScaleHtml(`${label} CYA`, v, '', 'cya');
-    }).join('');
-    cyaHtml = `<div class="duty-scale-group"><h4>CYA Levels</h4>${rows}</div>`;
-  }
-
-  modal.innerHTML = `
-    <div class="duty-report-modal-card">
-      <div class="modal-header duty-report-modal-header">
-        <h2>${esc(reportTitle)}</h2>
-        <button type="button" class="close" onclick="window.closeDutyFormModal()">&times;</button>
-      </div>
-      <div class="duty-report-modal-scroll">
-        <div class="duty-report-meta">
-          <p><strong>Pool:</strong> ${esc(sub.pool)}</p>
-          <p><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
-          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
-        </div>
-
-        ${photoSectionHtml('Deck', photos.deck)}
-        ${photoSectionHtml('Pool', photos.pool)}
-        ${photoSectionHtml('Skimmers', photos.skimmers)}
-        ${photoSectionHtml('Damaged Equipment', photos.damaged)}
-        ${photoSectionHtml('Bleach Feeders', photos.bleachFeeders)}
-        ${photoSectionHtml('DES Logbooks', photos.desLogbooks)}
-        ${photoSectionHtml('Fill Lines', photos.fillLines)}
-
-        ${sub.damagedNotes ? `<div class="duty-report-notes"><strong>Damaged Equipment Notes:</strong><span>${esc(sub.damagedNotes)}</span></div>` : ''}
-        ${sub.otherNotes ? `<div class="duty-report-notes"><strong>Other Notes:</strong><span>${esc(sub.otherNotes)}</span></div>` : ''}
-
-        ${hasManagerData ? `
-        <section class="duty-report-manager-panel">
-          <h3>${esc(managerPanelTitle)}</h3>
-          ${photoSectionHtml('Bleach Barrels', photos.bleach)}
-          ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
-          ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}
-          ${dutyScaleHtml('Shock / Granular', sub.shockGranular, '%', 'linear')}
-          ${cyaHtml}
-        </section>` : ''}
-      </div>
-    </div>`;
-
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
-  hydrateDutyReportPhotos(modal).catch((err) => {
-    console.error('[Duties] Could not hydrate submitted photos:', err);
-  });
-}
-
-window.closeDutyFormModal = function closeDutyFormModal() {
-  const modal = document.getElementById('dutyFormModal');
-  if (!modal) return;
-  modal.classList.remove('visible');
-  window.setTimeout(() => {
-    if (!modal.classList.contains('visible')) {
-      modal.style.display = 'none';
-    }
-  }, 250);
-};
-
-// Photo modal for submitted report images
-window.openPhotoModal = function(url, gallery = []) {
-  const urls = Array.isArray(gallery) && gallery.length ? gallery.filter(Boolean) : [url].filter(Boolean);
-  let currentIndex = Math.max(0, urls.indexOf(url));
-  let overlay = document.getElementById('photoViewOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'photoViewOverlay';
-    overlay.className = 'photo-view-overlay';
-    overlay.addEventListener('click', (event) => {
-      if (event.target === overlay) overlay.style.display = 'none';
-    });
-    const close = document.createElement('button');
-    close.type = 'button';
-    close.className = 'photo-view-close';
-    close.setAttribute('aria-label', 'Close photo');
-    close.textContent = '×';
-    close.addEventListener('click', (event) => {
-      event.stopPropagation();
-      overlay.style.display = 'none';
-    });
-    const prev = document.createElement('button');
-    prev.type = 'button';
-    prev.className = 'photo-view-nav photo-view-nav--prev';
-    prev.setAttribute('aria-label', 'Previous photo');
-    prev.textContent = '‹';
-    const next = document.createElement('button');
-    next.type = 'button';
-    next.className = 'photo-view-nav photo-view-nav--next';
-    next.setAttribute('aria-label', 'Next photo');
-    next.textContent = '›';
-    const img = document.createElement('img');
-    img.id = 'photoViewImg';
-    img.className = 'photo-view-img';
-    [prev, next].forEach((btn) => {
-      btn.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const activeUrls = overlay._poolProPhotoGallery || [];
-        if (activeUrls.length <= 1) return;
-        const delta = btn === prev ? -1 : 1;
-        const nextIndex = (Number(overlay.dataset.index || 0) + delta + activeUrls.length) % activeUrls.length;
-        overlay.dataset.index = String(nextIndex);
-        img.src = activeUrls[nextIndex];
-      });
-    });
-    overlay.appendChild(close);
-    overlay.appendChild(prev);
-    overlay.appendChild(img);
-    overlay.appendChild(next);
-    document.body.appendChild(overlay);
-  }
-  overlay._poolProPhotoGallery = urls;
-  overlay.dataset.index = String(currentIndex);
-  const img = document.getElementById('photoViewImg');
-  if (img) img.src = urls[currentIndex] || url;
-  overlay.querySelectorAll('.photo-view-nav').forEach((btn) => {
-    btn.hidden = urls.length <= 1;
-  });
-  overlay.style.display = 'flex';
-};
+  rende

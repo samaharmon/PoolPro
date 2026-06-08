@@ -2932,8 +2932,10 @@ body.dark-mode .help-text {
   flex: 0 0 40%;
   border-right: 1px solid #aaa;
 }
-.time-with-day-wrap select:not(.day-select) {
+.time-with-day-wrap select:not(.day-select),
+.time-with-day-wrap input[type="text"] {
   flex: 1;
+  min-width: 0;
 }
 .multi-day-date-range {
   display: flex;

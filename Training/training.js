@@ -201,6 +201,12 @@ const TIME_OPTIONS = [
 
 function buildTimeOptions(selectEl, placeholderText) {
   if (!selectEl) return;
+  if (selectEl.tagName === 'INPUT') {
+    const text = String(placeholderText || 'Enter time')
+      .replace(/^Select\s+/i, 'Enter ');
+    selectEl.placeholder = text === placeholderText ? 'e.g. 3:00 PM' : text;
+    return;
+  }
   const current = selectEl.value;
   selectEl.innerHTML = '';
 
@@ -1927,15 +1933,4 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       const loginModal = document.getElementById('trainingLoginModal');
       if (loginModal) {
-        loginModal.style.display = 'flex';
-        requestAnimationFrame(() => loginModal.classList.add('visible'));
-      }
-    }
-  } else {
-    showLifeguardView();
-  }
-});
-
-window.addEventListener('load', () => {
-  document.body.classList.add('page-loaded');
-});
+        loginModal.style.display = 'f
