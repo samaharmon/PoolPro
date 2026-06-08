@@ -1355,6 +1355,62 @@ function setupAdmin(el) {
   });
 }
 
+let rosterEmployeeSuggestionsCache = [];
+
+function normalizeRosterEmployeeOption(employee) {
+  const normalized = mergeTrainingEmployeeSources(employee);
+  return {
+    id: normalized.id || normalized.employeeId || normalized.email || '',
+    employeeId: normalized.employeeId || normalized.id || normalized.email || '',
+    email: normalized.email || '',
+    username: normalized.username || '',
+    firstName: normalized.firstName || normalized.name || '',
+    lastName: normalized.lastName || '',
+    homePool: normalized.homePool || normalized.pool || '',
+    phone: normalized.phone || '',
+  };
+}
+
+function setRosterEmployeeSuggestionsCache(employees) {
+  if (!Array.isArray(employees)) return;
+  rosterEmployeeSuggestionsCache = employees
+    .map(normalizeRosterEmployeeOption)
+    .filter((employee) => employee.firstName || employee.lastName || employee.email);
+}
+
+function getRosterEmployeeSuggestions() {
+  const sharedEmployees = Array.isArray(window.poolProEmployeesData)
+    ? window.poolProEmployeesData
+    : (Array.isArray(window.poolProEmployees) ? window.poolProEmployees : null);
+  if (sharedEmployees) {
+    setRosterEmployeeSuggestionsCache(sharedEmployees);
+  }
+  return rosterEmployeeSuggestionsCache;
+}
+
+window.addEventListener('poolpro:employees-loaded', (event) => {
+  setRosterEmployeeSuggestionsCache(event.detail?.employees || []);
+});
+
+function findRosterEmployee(firstName, lastName, email) {
+  const cleanFirst = normalizeTrainingIdentityKey(firstName);
+  const cleanLast = normalizeTrainingIdentityKey(lastName);
+  const cleanEmail = normalizeTrainingIdentityKey(email);
+  const employees = getRosterEmployeeSuggestions();
+  if (cleanEmail) {
+    const byEmail = employees.find((employee) => normalizeTrainingIdentityKey(employee.email || employee.employeeId) === cleanEmail);
+    if (byEmail) return byEmail;
+  }
+  if (cleanLast) {
+    return employees.find((employee) => {
+      const employeeLast = normalizeTrainingIdentityKey(employee.lastName);
+      const employeeFirst = normalizeTrainingIdentityKey(employee.firstName);
+      return employeeLast === cleanLast && (!cleanFirst || employeeFirst.startsWith(cleanFirst) || cleanFirst.startsWith(employeeFirst));
+    }) || null;
+  }
+  return null;
+}
+
 function openRosterModal(sessionId) {
   const session = trainingSessions.find(s => s.id === sessionId);
   if (!session) return;
@@ -1363,7 +1419,7 @@ function openRosterModal(sessionId) {
   const tbody = document.getElementById('attendanceTableBody');
   if (!modal || !tbody) return;
 
-  let editingAttendeeIdx = -1;
+  let selectedRosterEmployee = null;
 
   function renderRosterRows() {
     tbody.innerHTML = '';
@@ -1379,6 +1435,21 @@ function openRosterModal(sessionId) {
 
     attendees.forEach((a, idx) => {
       const tr = document.createElement('tr');
+
+      const deleteTd = document.createElement('td');
+      deleteTd.className = 'attendance-delete-cell';
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'attendance-row-delete-btn';
+      deleteBtn.setAttribute('aria-label', `Remove ${a.firstName || a.name || 'participant'} from roster`);
+      deleteBtn.textContent = '×';
+      deleteBtn.addEventListener('click', () => {
+        attendees.splice(idx, 1);
+        saveSessions();
+        renderRosterRows();
+      });
+      deleteTd.appendChild(deleteBtn);
+      tr.appendChild(deleteTd);
 
       // Text cells: Preferred First Name, Last Name, Home Pool, Phone Number
       const cellValues = [
@@ -1405,40 +1476,80 @@ function openRosterModal(sessionId) {
       });
       cbTd.appendChild(cb);
       tr.appendChild(cbTd);
-
-      // Edit + Delete buttons
-      const actionsTd = document.createElement('td');
-      actionsTd.className = 'actions-cell';
-
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.textContent = 'Edit';
-      editBtn.className = 'editAndSave edit-training-btn';
-      editBtn.addEventListener('click', () => {
-        editingAttendeeIdx = idx;
-        document.getElementById('attendanceAddFirstName').value = a.firstName || a.name || '';
-        document.getElementById('attendanceAddEmployeeId').value = a.email || a.employeeId || '';
-      });
-
-      const deleteBtn = document.createElement('button');
-      deleteBtn.type = 'button';
-      deleteBtn.textContent = 'Delete';
-      deleteBtn.className = 'editAndSave danger-button delete-training-btn';
-      deleteBtn.style.marginLeft = '4px';
-      deleteBtn.addEventListener('click', () => {
-        attendees.splice(idx, 1);
-        saveSessions();
-        renderRosterRows();
-      });
-
-      actionsTd.appendChild(editBtn);
-      actionsTd.appendChild(deleteBtn);
-      tr.appendChild(actionsTd);
       tbody.appendChild(tr);
     });
   }
 
   renderRosterRows();
+
+  const firstNameInput = document.getElementById('attendanceAddFirstName');
+  const emailInput = document.getElementById('attendanceAddEmployeeId');
+  const lastNameInputOriginal = document.getElementById('attendanceAddLastName');
+  let lastNameInput = lastNameInputOriginal;
+  const suggestionsEl = document.getElementById('attendanceLastNameSuggestions');
+
+  if (lastNameInputOriginal?.parentNode) {
+    const clonedLastNameInput = lastNameInputOriginal.cloneNode(true);
+    lastNameInputOriginal.parentNode.replaceChild(clonedLastNameInput, lastNameInputOriginal);
+    lastNameInput = clonedLastNameInput;
+  }
+
+  function hideRosterSuggestions() {
+    if (!suggestionsEl) return;
+    suggestionsEl.classList.remove('show');
+    suggestionsEl.innerHTML = '';
+  }
+
+  function chooseRosterEmployee(employee) {
+    selectedRosterEmployee = employee;
+    if (firstNameInput) firstNameInput.value = employee.firstName || '';
+    if (lastNameInput) lastNameInput.value = employee.lastName || '';
+    if (emailInput) emailInput.value = employee.email || employee.employeeId || '';
+    hideRosterSuggestions();
+  }
+
+  function renderRosterSuggestions() {
+    if (!suggestionsEl || !lastNameInput) return;
+    const query = lastNameInput.value.trim().toLowerCase();
+    selectedRosterEmployee = null;
+    suggestionsEl.innerHTML = '';
+    if (!query) {
+      suggestionsEl.classList.remove('show');
+      return;
+    }
+
+    const matches = getRosterEmployeeSuggestions()
+      .filter((employee) => {
+        const last = (employee.lastName || '').toLowerCase();
+        const first = (employee.firstName || '').toLowerCase();
+        return last.includes(query) || first.includes(query);
+      })
+      .slice(0, 8);
+
+    if (!matches.length) {
+      suggestionsEl.classList.remove('show');
+      return;
+    }
+
+    matches.forEach((employee) => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'attendance-suggestion-option';
+      const name = [employee.firstName, employee.lastName].filter(Boolean).join(' ');
+      const detail = [employee.homePool, employee.email].filter(Boolean).join(' • ');
+      option.innerHTML = `<span>${name || employee.email}</span>${detail ? `<small>${detail}</small>` : ''}`;
+      option.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        chooseRosterEmployee(employee);
+      });
+      suggestionsEl.appendChild(option);
+    });
+    suggestionsEl.classList.add('show');
+  }
+
+  lastNameInput?.addEventListener('input', renderRosterSuggestions);
+  lastNameInput?.addEventListener('focus', renderRosterSuggestions);
+  lastNameInput?.addEventListener('blur', () => window.setTimeout(hideRosterSuggestions, 150));
 
   // Wire Add/Save button — replace node to clear previous listeners
   const oldAddBtn = document.getElementById('attendanceAddBtn');
@@ -1448,36 +1559,35 @@ function openRosterModal(sessionId) {
     newAddBtn.addEventListener('click', () => {
       if (!Array.isArray(session.attendees)) session.attendees = [];
       const firstName = document.getElementById('attendanceAddFirstName')?.value.trim() || '';
+      const typedLastName = document.getElementById('attendanceAddLastName')?.value.trim() || '';
       const emailVal = (document.getElementById('attendanceAddEmployeeId')?.value.trim() || '').toLowerCase();
-      if (!firstName && !emailVal) return;
+      if (!firstName && !typedLastName && !emailVal) return;
 
-      const base = editingAttendeeIdx >= 0 ? session.attendees[editingAttendeeIdx] : {};
-
-      // Look up employee data by email
-      const empRec = window.getEmployeeByEmail ? window.getEmployeeByEmail(emailVal) : null;
-      const lastName = empRec?.lastName || base.lastName || '';
-      const homePool = empRec?.homePool || base.homePool || '';
-      const phone = empRec?.phone || base.phone || '';
+      const empRec = selectedRosterEmployee
+        || (emailVal && window.getEmployeeByEmail ? window.getEmployeeByEmail(emailVal) : null)
+        || findRosterEmployee(firstName, typedLastName, emailVal);
+      const lastName = empRec?.lastName || typedLastName || '';
+      const homePool = empRec?.homePool || '';
+      const phone = empRec?.phone || '';
 
       const entry = {
-        id: base.id || ('att_' + Math.random().toString(36).slice(2, 9)),
-        firstName, lastName, homePool, phone,
-        email: emailVal || base.email || '',
-        employeeId: emailVal || base.employeeId || '',
-        attended: base.attended || false,
-        signupTimestamp: base.signupTimestamp || new Date().toISOString()
+        id: 'att_' + Math.random().toString(36).slice(2, 9),
+        firstName: empRec?.firstName || firstName,
+        lastName,
+        homePool,
+        phone,
+        email: emailVal || empRec?.email || '',
+        employeeId: emailVal || empRec?.employeeId || empRec?.email || '',
+        attended: false,
+        signupTimestamp: new Date().toISOString()
       };
 
-      if (editingAttendeeIdx >= 0) {
-        session.attendees[editingAttendeeIdx] = entry;
-        editingAttendeeIdx = -1;
-      } else {
-        session.attendees.push(entry);
-      }
-
+      session.attendees.push(entry);
       saveSessions();
       renderRosterRows();
-      ['attendanceAddFirstName', 'attendanceAddEmployeeId']
+      selectedRosterEmployee = null;
+      hideRosterSuggestions();
+      ['attendanceAddFirstName', 'attendanceAddLastName', 'attendanceAddEmployeeId']
         .forEach(fid => { const fEl = document.getElementById(fid); if (fEl) fEl.value = ''; });
     });
   }
@@ -1613,7 +1723,6 @@ function getTrainingSignupModalEls() {
     body: document.getElementById('trainingSignupConfirmBody'),
     actions: document.getElementById('trainingSignupConfirmActions'),
     confirmBtn: document.getElementById('trainingSignupConfirmBtn'),
-    cancelBtn: document.getElementById('trainingSignupCancelBtn'),
     closeBtn: document.getElementById('trainingSignupModalClose'),
   };
 }
@@ -1774,12 +1883,11 @@ function setupSignup(el) {
       field.removeAttribute('required');
     });
 
-  const { modal, confirmBtn, cancelBtn, closeBtn } = getTrainingSignupModalEls();
+  const { modal, confirmBtn, closeBtn } = getTrainingSignupModalEls();
   confirmBtn?.addEventListener('click', async () => {
     if (!pendingTrainingSignupSessionId) return;
     await submitTrainingSignupForSession(pendingTrainingSignupSessionId, el);
   });
-  cancelBtn?.addEventListener('click', closeTrainingSignupModal);
   closeBtn?.addEventListener('click', closeTrainingSignupModal);
   modal?.addEventListener('click', (event) => {
     if (event.target === modal) closeTrainingSignupModal();
@@ -1960,4 +2068,149 @@ function setupLogin(el) {
       if (window.supervisorSignIn) {
         await window.supervisorSignIn(email, password);
       } else {
-        throw new Error('Auth service not 
+        throw new Error('Auth service not ready. Please refresh and try again.');
+      }
+      setLoggedIn(true);
+      closeModal();
+    } catch (err) {
+      const msg = err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found'
+        ? 'Invalid email or password.'
+        : (err.message || 'Login failed.');
+      messageEl.textContent = msg;
+      messageEl.classList.add('error');
+    }
+  });
+}
+
+function setupPublicFilters(el) {
+  const typeFilter = document.getElementById('publicTrainingTypeFilter');
+  if (typeFilter) {
+    typeFilter.addEventListener('change', () => {
+      activePublicTypeFilter = typeFilter.value || 'all';
+      renderPublicTables(el);
+    });
+  }
+  const cityFilter = document.getElementById('publicTrainingCityFilter');
+  if (cityFilter) {
+    cityFilter.addEventListener('change', () => {
+      activePublicCityFilter = cityFilter.value || 'all';
+      renderPublicTables(el);
+    });
+  }
+}
+
+// ---------- Bootstrapping ----------
+
+document.addEventListener('DOMContentLoaded', async () => {
+  normalizeTrainingHeaderCopy();
+  wrapResponsiveTables();
+  observeResponsiveTables();
+  // Set up login + basic UI wiring
+  const el = {
+    trainingAdminPanel: document.getElementById('trainingAdminPanel'),
+    openLoginBtn: document.getElementById('openTrainingLoginBtn'),
+    loginModal: document.getElementById('trainingLoginModal'),
+    loginForm: document.getElementById('trainingLoginForm'),
+    loginMessage: document.getElementById('trainingLoginMessage'),
+    closeLoginBtn: document.getElementById('closeTrainingLoginModal'),
+
+    signupForm: document.getElementById('trainingSignupForm'),
+    signupMessage: document.getElementById('signupMessage'),
+    trainingMonthSelect: document.getElementById('trainingMonth'),
+    trainingSessionSelect: document.getElementById('trainingSession'),
+    guardEmployeeIdInput: document.getElementById('guardEmployeeId'),
+    guardNameInput: document.getElementById('guardName'),
+    guardPoolInput: document.getElementById('guardPool'),
+
+    marketSelect: document.getElementById('trainingMarketSelect'),
+    trainingTypeInput: document.getElementById('trainingTypeInput'),
+    dateInput: document.getElementById('trainingDateInput'),
+    multiDayCheckbox: document.getElementById('multiDayCheckbox'),
+    dateRangeGroup: document.getElementById('trainingDateRangeGroup'),
+    startDateInput: document.getElementById('trainingStartDateInput'),
+    endDateInput: document.getElementById('trainingEndDateInput'),
+    startDaySelect: document.getElementById('trainingStartDaySelect'),
+    endDaySelect: document.getElementById('trainingEndDaySelect'),
+    startTimeSelect: document.getElementById('trainingStartTimeSelect'),
+    endTimeSelect: document.getElementById('trainingEndTimeSelect'),
+    poolSelect: document.getElementById('trainingPoolSelect'),
+    addressInput: document.getElementById('trainingAddressInput'),
+    capacityInput: document.getElementById('trainingCapacityInput'),
+    capacityInfo: document.getElementById('trainingCapacityInfo'),
+    notesInput: document.getElementById('trainingNotesInput'),
+    sessionIdInput: document.getElementById('trainingSessionId'),
+    saveSessionBtn: document.getElementById('saveTrainingSessionBtn'),
+    scheduleSection: document.getElementById('scheduleTrainingsSection'),
+    adminMessage: document.getElementById('adminMessage'),
+
+    adminTablesContainer: document.getElementById('adminScheduledTablesContainer'),
+    publicTablesContainer: document.getElementById('publicScheduledTablesContainer')
+  };
+
+  // Numeric-only Capacity
+  const capacityInput = el.capacityInput;
+  if (capacityInput) {
+    capacityInput.addEventListener('input', () => {
+      capacityInput.value = capacityInput.value.replace(/\D/g, '');
+    });
+  }
+  initTrainingNotesEditor(el.notesInput);
+
+  // Load sessions — prefer Firestore (shared/persistent), fall back to localStorage
+  if (window.loadTrainingSessionsFromFirestore) {
+    const firestoreSessions = await window.loadTrainingSessionsFromFirestore();
+    if (firestoreSessions && firestoreSessions.length > 0) {
+      trainingSessions = firestoreSessions.map(normalizeSession);
+      // Keep localStorage in sync
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(trainingSessions)); } catch (_) {}
+    } else {
+      trainingSessions = loadSessions();
+      // If localStorage has sessions but Firestore doesn't, push them up
+      if (trainingSessions.length > 0 && window.syncTrainingSessionsToFirestore) {
+        window.syncTrainingSessionsToFirestore(trainingSessions);
+      }
+    }
+  } else {
+    trainingSessions = loadSessions();
+  }
+
+  setupLogin(el);
+  renderAdminTables(el);
+  renderPublicTables(el);
+  updateCapacityInfo(null, el);
+  setupAdmin(el);
+  setupPublicFilters(el);
+  setupSignup(el);
+
+  // Initialize the session dropdown based on any pre-selected month
+  if (el.trainingMonthSelect && el.trainingMonthSelect.value) {
+    updateSessionSelectForType(el.trainingMonthSelect.value, el);
+  } else {
+    updateSessionSelectForType('', el);
+  }
+
+  // Check if we arrived via "Training Setup" from another page
+  const adminIntent = sessionStorage.getItem('trainingIntentAdmin');
+  if (adminIntent === '1') {
+    sessionStorage.removeItem('trainingIntentAdmin');
+    // Check all auth sources before showing login modal
+    const alreadyAuth = hasFreshSupervisorSession();
+    if (alreadyAuth) {
+      localStorage.setItem(LOGIN_KEY, 'true');
+      showSupervisorView();
+    } else {
+      const loginModal = document.getElementById('trainingLoginModal');
+      if (loginModal) {
+        loginModal.style.display = 'flex';
+        requestAnimationFrame(() => loginModal.classList.add('visible'));
+      }
+    }
+  } else {
+    showLifeguardView();
+  }
+});
+
+window.addEventListener('load', () => {
+  document.body.classList.add('page-loaded');
+});
+                                                                             

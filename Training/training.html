@@ -273,12 +273,12 @@
         <table class="attendance-table">
           <thead>
             <tr>
+              <th aria-label="Remove participant"></th>
               <th>Preferred First Name</th>
               <th>Last Name</th>
               <th>Home Pool</th>
               <th>Phone Number</th>
               <th>Attendance</th>
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="attendanceTableBody">
@@ -290,8 +290,16 @@
       <div class="attendance-add-row">
         <h3>Add participant</h3>
         <div class="attendance-add-grid">
-          <input id="attendanceAddFirstName" type="text" placeholder="Preferred First Name">
-          <input id="attendanceAddEmployeeId" type="email" placeholder="Email">
+          <div class="attendance-add-field">
+            <input id="attendanceAddFirstName" type="text" placeholder="Preferred First Name">
+          </div>
+          <div class="attendance-add-field attendance-suggest-field">
+            <input id="attendanceAddLastName" type="text" placeholder="Last Name" autocomplete="off">
+            <div id="attendanceLastNameSuggestions" class="attendance-suggestions" role="listbox"></div>
+          </div>
+          <div class="attendance-add-field">
+            <input id="attendanceAddEmployeeId" type="email" placeholder="Email">
+          </div>
           <button type="button" id="attendanceAddBtn" class="submit-btn">Add</button>
         </div>
       </div>
@@ -310,7 +318,6 @@
     <div class="training-signup-confirm-body" id="trainingSignupConfirmBody"></div>
 
     <div class="training-signup-confirm-actions" id="trainingSignupConfirmActions">
-      <button type="button" class="editAndSave" id="trainingSignupCancelBtn">Cancel</button>
       <button type="button" class="submit-btn" id="trainingSignupConfirmBtn">Sign Up</button>
     </div>
   </div>
