@@ -107,7 +107,7 @@ function normalizeSession(raw) {
 }
 
 /**
- * ✅ This is the function the console is complaining about.
+ * This is the function the console is complaining about.
  * It loads any locally saved sessions and returns them as an array.
  */
 function loadSessions() {
@@ -522,13 +522,13 @@ function updateCapacityInfo(session, el) {
 
   if (!capacity) {
     el.capacityInfo.textContent =
-      `${taken} sign‑ups so far. Add a capacity to track remaining spots.`;
+      `${taken} sign-ups so far. Add a capacity to track remaining spots.`;
     return;
   }
 
   const remaining = Math.max(capacity - taken, 0);
   el.capacityInfo.textContent =
-    `${taken} of ${capacity} spots used • ${remaining} remaining`;
+    `${taken} of ${capacity} spots used - ${remaining} remaining`;
 }
 
 function updateSessionSelectForType(typeKey, el) {
@@ -590,14 +590,14 @@ function updateSessionSelectForType(typeKey, el) {
       const datePart = formatDateNice(session.date);
       const timeRange = formatTimeRange(session.startTime, session.endTime);
       const pieces = [datePart, timeRange, session.pool].filter(Boolean);
-      let label = pieces.join(' – ');
+      let label = pieces.join(' - ');
 
       const taken = Array.isArray(session.attendees) ? session.attendees.length : 0;
       const capacity = session.capacity || 0;
       const remaining = capacity ? Math.max(capacity - taken, 0) : null;
 
       if (capacity) {
-        label += ` (${taken}/${capacity} spots filled${remaining === 0 ? ' – FULL' : ''})`;
+        label += ` (${taken}/${capacity} spots filled${remaining === 0 ? ' - FULL' : ''})`;
       } else if (taken) {
         label += ` (${taken} signed up)`;
       }
@@ -816,7 +816,7 @@ function handleSaveSession(el) {
     const taken = Array.isArray(targetSession.attendees) ? targetSession.attendees.length : 0;
     if (capacity < taken) {
       messageEl.textContent =
-        `Capacity (${capacity}) cannot be less than current sign‑ups (${taken}).`;
+        `Capacity (${capacity}) cannot be less than current sign-ups (${taken}).`;
       messageEl.classList.add('error');
       return;
     }
@@ -950,7 +950,7 @@ function handleDeleteSessionClick(sessionId, el) {
 
   const confirmMsg = `Delete ${formatDateNice(session.date)} ${
     session.time || ''
-  } at ${session.pool || 'this location'}?\n\nThis will also remove ${taken} existing sign‑up(s).`;
+  } at ${session.pool || 'this location'}?\n\nThis will also remove ${taken} existing sign-up(s).`;
   if (!window.confirm(confirmMsg)) {
     return;
   }
@@ -1045,7 +1045,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'emp-metrics-toggle';
-    toggle.innerHTML = `<span class="emp-metrics-arrow">▸</span><span>${MONTH_LABELS[mIdx]}</span>`;
+    toggle.innerHTML = `<span class="emp-metrics-arrow">&gt;</span><span>${MONTH_LABELS[mIdx]}</span>`;
     section.appendChild(toggle);
 
     const contentWrap = document.createElement('div');
@@ -1053,7 +1053,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
     const stateMap = isAdmin ? adminScheduleOpenState : publicScheduleOpenState;
     if (stateMap[mKey]) {
       contentWrap.classList.remove('hidden');
-      toggle.querySelector('.emp-metrics-arrow').textContent = '▾';
+      toggle.querySelector('.emp-metrics-arrow').textContent = 'v';
     }
 
     const monthEditable = !!adminScheduleEditState[mKey];
@@ -1129,7 +1129,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
       const capCell = document.createElement('td');
       const taken = Array.isArray(session.attendees) ? session.attendees.length : 0;
       const capacity = session.capacity || 0;
-      capCell.textContent = capacity ? `${taken} / ${capacity}` : `${taken} / —`;
+      capCell.textContent = capacity ? `${taken} / ${capacity}` : `${taken} / -`;
       row.appendChild(capCell);
 
       if (capacity && taken >= capacity) row.classList.add('session-row-full');
@@ -1170,7 +1170,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
       contentWrap.classList.toggle('hidden');
       const open = !contentWrap.classList.contains('hidden');
       stateMap[mKey] = open;
-      toggle.querySelector('.emp-metrics-arrow').textContent = open ? '▾' : '▸';
+      toggle.querySelector('.emp-metrics-arrow').textContent = open ? 'v' : '>';
     });
     section.appendChild(contentWrap);
     fragment.appendChild(section);
@@ -1442,7 +1442,7 @@ function openRosterModal(sessionId) {
       deleteBtn.type = 'button';
       deleteBtn.className = 'attendance-row-delete-btn';
       deleteBtn.setAttribute('aria-label', `Remove ${a.firstName || a.name || 'participant'} from roster`);
-      deleteBtn.textContent = '×';
+      deleteBtn.textContent = 'X';
       deleteBtn.addEventListener('click', () => {
         attendees.splice(idx, 1);
         saveSessions();
@@ -1536,7 +1536,7 @@ function openRosterModal(sessionId) {
       option.type = 'button';
       option.className = 'attendance-suggestion-option';
       const name = [employee.firstName, employee.lastName].filter(Boolean).join(' ');
-      const detail = [employee.homePool, employee.email].filter(Boolean).join(' • ');
+      const detail = [employee.homePool, employee.email].filter(Boolean).join(' - ');
       option.innerHTML = `<span>${name || employee.email}</span>${detail ? `<small>${detail}</small>` : ''}`;
       option.addEventListener('mousedown', (event) => {
         event.preventDefault();
@@ -1551,7 +1551,7 @@ function openRosterModal(sessionId) {
   lastNameInput?.addEventListener('focus', renderRosterSuggestions);
   lastNameInput?.addEventListener('blur', () => window.setTimeout(hideRosterSuggestions, 150));
 
-  // Wire Add/Save button — replace node to clear previous listeners
+  // Wire Add/Save button - replace node to clear previous listeners
   const oldAddBtn = document.getElementById('attendanceAddBtn');
   if (oldAddBtn) {
     const newAddBtn = oldAddBtn.cloneNode(true);
@@ -1594,7 +1594,7 @@ function openRosterModal(sessionId) {
 
   modal.style.display = 'flex';
 
-  // Close button — replace node to clear previous listeners
+  // Close button - replace node to clear previous listeners
   const oldClose = document.getElementById('attendanceModalClose');
   if (oldClose) {
     const newClose = oldClose.cloneNode(true);
@@ -2156,7 +2156,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   initTrainingNotesEditor(el.notesInput);
 
-  // Load sessions — prefer Firestore (shared/persistent), fall back to localStorage
+  // Load sessions - prefer Firestore (shared/persistent), fall back to localStorage
   if (window.loadTrainingSessionsFromFirestore) {
     const firestoreSessions = await window.loadTrainingSessionsFromFirestore();
     if (firestoreSessions && firestoreSessions.length > 0) {
@@ -2213,4 +2213,3 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.addEventListener('load', () => {
   document.body.classList.add('page-loaded');
 });
-                                                                             

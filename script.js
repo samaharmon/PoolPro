@@ -7616,15 +7616,18 @@ document.addEventListener('click', (event) => {
   const href = link.getAttribute('href') || '';
   if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
   if (link.target && link.target !== '_self') return;
+  if (link.hasAttribute('download')) return;
   try {
     const url = new URL(href, window.location.href);
     if (url.origin !== window.location.origin) return;
+    event.preventDefault();
     url.searchParams.set('_reload', String(Date.now()));
-    link.href = url.pathname + url.search + url.hash;
+    document.querySelectorAll('.dropdown-menu.show').forEach((menu) => menu.classList.remove('show'));
+    window.location.href = url.pathname + url.search + url.hash;
   } catch (_) {
     // Ignore malformed URLs
   }
-});
+}, true);
 
 // ============================================================
 // SUPERVISOR DASHBOARD ANCHOR — handle #supervisorDashboard
