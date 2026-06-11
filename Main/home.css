@@ -91,7 +91,7 @@ html {
   background-size: 100% var(--home-menu-gradient-height);
   background-position: 0 0;
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  border: 0;
   border-radius: 0;
   font-size: 28px;
   text-align: center;
@@ -112,7 +112,7 @@ html {
 }
 
 .home-menu-item:last-child {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.32);
+  border-bottom: 0;
 }
 
 .home-menu-item::before {
@@ -126,7 +126,7 @@ html {
 
 .home-menu-item:hover {
   transform: translateY(-1px);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26);
+  box-shadow: none;
   filter: brightness(1.08);
 }
 
@@ -136,12 +136,12 @@ html {
 
 .home-menu-item:active {
   transform: translateY(1px);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  box-shadow: none;
   filter: brightness(0.96);
 }
 
 .home-menu-item-supervisor {
-  border-color: #ffffff;
+  border: 0;
 }
 
 .home-menu-item[data-access-role="attendant"] {

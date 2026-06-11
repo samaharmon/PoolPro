@@ -3426,7 +3426,7 @@ function formatElapsedSince(value) {
 }
 
 function getLogRespondentName(log) {
-  return getSubmissionRespondentName(log);
+  return log ? getSubmissionRespondentName(log) : '—';
 }
 
 function normalizeOperationalStatusRecord(rawDoc, idOverride = '') {
@@ -4687,9 +4687,31 @@ window.poolProEmployeesReady = new Promise((resolve) => {
   resolvePoolProEmployeesReady = resolve;
 });
 
+function ensureEmployeeSearchField() {
+  const filterBar = document.getElementById('employeeFilterBar');
+  if (!filterBar || document.getElementById('employeeSettingsSearch')) return;
+
+  const searchField = document.createElement('div');
+  searchField.className = 'settings-field roles-search-field employee-search-field';
+  searchField.innerHTML = `
+    <label for="employeeSettingsSearch">Search</label>
+    <input type="text" id="employeeSettingsSearch" class="employee-search-input" autocomplete="off" placeholder="Search employees">
+  `;
+
+  const marketFilter = document.getElementById('employeeMarketFilter');
+  if (marketFilter && marketFilter.parentElement === filterBar) {
+    filterBar.insertBefore(searchField, marketFilter);
+    return;
+  }
+
+  filterBar.appendChild(searchField);
+}
+
 function ensureEmployeeSettingsUi() {
   const tableSection = document.getElementById('employeeTableSection');
   if (!tableSection) return;
+
+  ensureEmployeeSearchField();
 
   if (!document.getElementById('employeeControls')) {
     const controlsRow = document.createElement('div');
@@ -5076,20 +5098,22 @@ function normalizeEmployeeLookupKey(value) {
 }
 
 function getSubmissionIdentityKeys(record = {}) {
+  const source = record || {};
   return [
-    record.employeeId,
-    record.respondentEmail,
-    record.submitterEmail,
-    record.email,
-    record.username,
-    record.respondentUsername,
-    record.submitterUsername,
-    record.id,
+    source.employeeId,
+    source.respondentEmail,
+    source.submitterEmail,
+    source.email,
+    source.username,
+    source.respondentUsername,
+    source.submitterUsername,
+    source.id,
   ].map(normalizeEmployeeLookupKey).filter(Boolean);
 }
 
 function findEmployeeForSubmission(record = {}) {
-  const keys = new Set(getSubmissionIdentityKeys(record));
+  const source = record || {};
+  const keys = new Set(getSubmissionIdentityKeys(source));
   if (!keys.size || !Array.isArray(employeesData)) return null;
   return employeesData
     .map(normalizeEmployeeRecord)
@@ -5102,10 +5126,11 @@ function findEmployeeForSubmission(record = {}) {
 }
 
 function getSubmissionRespondentName(record = {}) {
-  const employee = findEmployeeForSubmission(record);
+  const source = record || {};
+  const employee = findEmployeeForSubmission(source);
   const recordName = [
-    record.firstName,
-    record.lastName,
+    source.firstName,
+    source.lastName,
   ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
   const employeeName = [
     employee?.firstName,
@@ -5113,14 +5138,15 @@ function getSubmissionRespondentName(record = {}) {
   ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
   return recordName
     || employeeName
-    || String(record.respondentName || record.submitterName || '').trim()
-    || getSubmissionIdentityKeys(record)[0]
+    || String(source.respondentName || source.submitterName || '').trim()
+    || getSubmissionIdentityKeys(source)[0]
     || '—';
 }
 
 function getSubmissionRespondentEmail(record = {}) {
-  const employee = findEmployeeForSubmission(record);
-  return String(record.respondentEmail || record.submitterEmail || record.email || employee?.email || '').trim();
+  const source = record || {};
+  const employee = findEmployeeForSubmission(source);
+  return String(source.respondentEmail || source.submitterEmail || source.email || employee?.email || '').trim();
 }
 
 function renderEmployeesTable() {
