@@ -42,15 +42,36 @@ function isManagerialReportPage() {
 // ============================================================
 
 function initSubmitterInfo() {
-  const email = sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId') || '';
   const infoEl = document.getElementById('dutiesSubmitterInfo');
-  if (infoEl && email) {
-    infoEl.textContent = `Submitting as: ${email}`;
+  const submitter = getSubmitterInfo();
+  if (infoEl && submitter.displayName) {
+    infoEl.textContent = `Submitting as: ${submitter.displayName}`;
   }
 }
 
 function getSubmitterEmail() {
   return sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId') || '';
+}
+
+function getSubmitterInfo() {
+  const helperRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  const firstName = (helperRecord?.firstName || sessionStorage.getItem('chemlogEmployeeFirstName') || '').trim();
+  const lastName = (helperRecord?.lastName || sessionStorage.getItem('chemlogEmployeeLastName') || '').trim();
+  const email = (helperRecord?.email || getSubmitterEmail() || '').trim();
+  const username = (helperRecord?.username || sessionStorage.getItem('chemlogEmployeeUsername') || '').trim();
+  const employeeId = (helperRecord?.employeeId || helperRecord?.id || email || sessionStorage.getItem('chemlogEmployeeId') || '').trim();
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+  return {
+    firstName,
+    lastName,
+    submitterName: fullName || username || email || employeeId || 'Unknown',
+    displayName: fullName || username || email || employeeId || '',
+    submitterEmail: email,
+    employeeId,
+    username,
+  };
 }
 
 // ============================================================
@@ -789,7 +810,7 @@ async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgr
 
 window.submitDutiesForm = async function () {
   const pool = document.getElementById('dutiesPool')?.value;
-  const submitterEmail = getSubmitterEmail();
+  const submitter = getSubmitterInfo();
   const msgEl = document.getElementById('dutiesMessage');
   const managerialPage = isManagerialReportPage();
 
@@ -905,7 +926,13 @@ window.submitDutiesForm = async function () {
     await setDoc(submissionRef, {
       reportType: managerialPage ? 'managerial' : 'cleanliness',
       pool,
-      submitterEmail: submitterEmail || 'unknown',
+      firstName: submitter.firstName,
+      lastName: submitter.lastName,
+      submitterName: submitter.submitterName,
+      respondentName: submitter.submitterName,
+      submitterEmail: submitter.submitterEmail || 'unknown',
+      employeeId: submitter.employeeId || submitter.submitterEmail || '',
+      username: submitter.username || '',
       photos: {
         deck: uploadedPhotos.deck || [],
         pool: uploadedPhotos.pool || [],

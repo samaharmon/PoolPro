@@ -58,12 +58,28 @@ function getSubmitterEmail() {
 }
 
 function getSubmitterName() {
-  const first = sessionStorage.getItem('chemlogEmployeeFirstName') || '';
-  const last = sessionStorage.getItem('chemlogEmployeeLastName') || '';
-  return [first, last].filter(Boolean).join(' ').trim() ||
-    sessionStorage.getItem('chemlogEmployeeUsername') ||
-    getSubmitterEmail() ||
-    'Unknown';
+  const info = getSubmitterInfo();
+  return info.submitterName;
+}
+
+function getSubmitterInfo() {
+  const helperRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  const first = helperRecord?.firstName || sessionStorage.getItem('chemlogEmployeeFirstName') || '';
+  const last = helperRecord?.lastName || sessionStorage.getItem('chemlogEmployeeLastName') || '';
+  const email = helperRecord?.email || getSubmitterEmail() || '';
+  const username = helperRecord?.username || sessionStorage.getItem('chemlogEmployeeUsername') || '';
+  const employeeId = helperRecord?.employeeId || helperRecord?.id || email || sessionStorage.getItem('chemlogEmployeeId') || '';
+  const fullName = [first, last].filter(Boolean).join(' ').trim();
+  return {
+    firstName: first,
+    lastName: last,
+    submitterName: fullName || username || email || employeeId || 'Unknown',
+    submitterEmail: email,
+    employeeId,
+    username,
+  };
 }
 
 function initSubmitterInfo() {
@@ -502,12 +518,18 @@ async function submitDesLogbooksForm(event) {
       },
     });
 
+    const submitter = getSubmitterInfo();
     await setDoc(submissionRef, {
       reportType: 'desLogbooks',
       pool,
       facilityName: pool,
-      submitterEmail: getSubmitterEmail() || 'unknown',
-      submitterName: getSubmitterName(),
+      firstName: submitter.firstName,
+      lastName: submitter.lastName,
+      submitterEmail: submitter.submitterEmail || 'unknown',
+      submitterName: submitter.submitterName,
+      respondentName: submitter.submitterName,
+      employeeId: submitter.employeeId || submitter.submitterEmail || '',
+      username: submitter.username || '',
       photos: { desLogbooks: photos },
       timestamp: serverTimestamp(),
     });

@@ -1398,7 +1398,12 @@ function findRosterEmployee(firstName, lastName, email) {
   const cleanEmail = normalizeTrainingIdentityKey(email);
   const employees = getRosterEmployeeSuggestions();
   if (cleanEmail) {
-    const byEmail = employees.find((employee) => normalizeTrainingIdentityKey(employee.email || employee.employeeId) === cleanEmail);
+    const byEmail = employees.find((employee) => [
+      employee.email,
+      employee.employeeId,
+      employee.id,
+      employee.username,
+    ].map(normalizeTrainingIdentityKey).some((key) => key && key === cleanEmail));
     if (byEmail) return byEmail;
   }
   if (cleanLast) {
@@ -1409,6 +1414,29 @@ function findRosterEmployee(firstName, lastName, email) {
     }) || null;
   }
   return null;
+}
+
+function resolveRosterAttendee(attendee) {
+  const employee = findRosterEmployee(
+    attendee?.firstName || attendee?.name || '',
+    attendee?.lastName || '',
+    attendee?.email || attendee?.employeeId || attendee?.id || attendee?.username || ''
+  );
+  return mergeTrainingEmployeeSources(attendee, employee);
+}
+
+function backfillRosterAttendee(attendee, resolved) {
+  let changed = false;
+  ['firstName', 'lastName', 'homePool', 'phone', 'email', 'employeeId', 'username'].forEach((key) => {
+    if (attendee[key] || !resolved[key]) return;
+    attendee[key] = resolved[key];
+    changed = true;
+  });
+  if (!attendee.name && resolved.firstName) {
+    attendee.name = resolved.firstName;
+    changed = true;
+  }
+  return changed;
 }
 
 function openRosterModal(sessionId) {
@@ -1433,7 +1461,10 @@ function openRosterModal(sessionId) {
       return;
     }
 
+    let rosterChanged = false;
     attendees.forEach((a, idx) => {
+      const resolvedAttendee = resolveRosterAttendee(a);
+      rosterChanged = backfillRosterAttendee(a, resolvedAttendee) || rosterChanged;
       const tr = document.createElement('tr');
 
       const deleteTd = document.createElement('td');
@@ -1453,10 +1484,10 @@ function openRosterModal(sessionId) {
 
       // Text cells: Preferred First Name, Last Name, Home Pool, Phone Number
       const cellValues = [
-        a.firstName || a.name || '',  // Preferred First Name
-        a.lastName || '',              // Last Name (looked up)
-        a.homePool || a.pool || '',   // Home Pool
-        a.phone || ''                  // Phone Number
+        resolvedAttendee.firstName || resolvedAttendee.name || '',  // Preferred First Name
+        resolvedAttendee.lastName || '',                            // Last Name
+        resolvedAttendee.homePool || resolvedAttendee.pool || '',   // Home Pool
+        resolvedAttendee.phone || ''                                // Phone Number
       ];
       cellValues.forEach(val => {
         const td = document.createElement('td');
@@ -1478,6 +1509,7 @@ function openRosterModal(sessionId) {
       tr.appendChild(cbTd);
       tbody.appendChild(tr);
     });
+    if (rosterChanged) saveSessions();
   }
 
   renderRosterRows();
@@ -1798,12 +1830,16 @@ async function submitTrainingSignupForSession(sessionId, el) {
 
   try {
     const employeeRecord = await waitForCurrentTrainingEmployeeRecord();
-    const employeeId = getTrainingEmployeePrimaryKey(employeeRecord);
-    const firstName = employeeRecord.firstName || '';
-    const lastName = employeeRecord.lastName || '';
-    const homePool = employeeRecord.homePool || '';
-    const phone = employeeRecord.phone || '';
-    const email = normalizeTrainingIdentityKey(employeeRecord.email || (employeeId.includes('@') ? employeeId : ''));
+    const resolvedEmployee = mergeTrainingEmployeeSources(
+      employeeRecord,
+      findRosterEmployee(employeeRecord.firstName, employeeRecord.lastName, employeeRecord.email || employeeRecord.employeeId || employeeRecord.username)
+    );
+    const employeeId = getTrainingEmployeePrimaryKey(resolvedEmployee);
+    const firstName = resolvedEmployee.firstName || '';
+    const lastName = resolvedEmployee.lastName || '';
+    const homePool = resolvedEmployee.homePool || '';
+    const phone = resolvedEmployee.phone || '';
+    const email = normalizeTrainingIdentityKey(resolvedEmployee.email || (employeeId.includes('@') ? employeeId : ''));
 
     if (!employeeId) {
       showTrainingSignupModalError('PoolPro could not identify your employee profile. Please log out and sign in again.');
@@ -1826,7 +1862,7 @@ async function submitTrainingSignupForSession(sessionId, el) {
       id: 'att_' + Math.random().toString(36).slice(2, 9),
       employeeId,
       email,
-      username: employeeRecord.username || '',
+      username: resolvedEmployee.username || '',
       name: firstName,
       firstName,
       lastName,
@@ -1850,7 +1886,7 @@ async function submitTrainingSignupForSession(sessionId, el) {
         homePool,
         email,
         employeeId,
-        username: employeeRecord.username || '',
+        username: resolvedEmployee.username || '',
         phone
       });
     }

@@ -15,6 +15,8 @@ body {
 html {
   width: 100%;
   overflow-x: hidden;
+  background-color: #222;
+  min-height: 100%;
 }
 
 *,
@@ -64,6 +66,10 @@ html {
 }
 
 .home-menu {
+  --home-menu-gradient: linear-gradient(to bottom, #69140e 0%, #202834 100%);
+  --home-menu-row-height: 82px;
+  --home-menu-gap: 12px;
+  --home-menu-gradient-height: calc((var(--home-menu-row-height) * 4) + (var(--home-menu-gap) * 3));
   width: 100%;
   max-width: 500px;
   display: flex;
@@ -78,9 +84,12 @@ html {
   position: relative;
   isolation: isolate;
   width: 100%;
-  min-height: 82px;
+  min-height: var(--home-menu-row-height);
   padding: 18px 24px;
-  background: #303030;
+  background-image: var(--home-menu-gradient);
+  background-repeat: no-repeat;
+  background-size: 100% var(--home-menu-gradient-height);
+  background-position: 0 0;
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 0;
@@ -89,11 +98,17 @@ html {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: rgba(255, 255, 255, 0.18);
-  transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.1s ease;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, filter 0.2s ease;
   box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.home-menu-item span {
+  pointer-events: none;
 }
 
 .home-menu-item:last-child {
@@ -112,6 +127,7 @@ html {
 .home-menu-item:hover {
   transform: translateY(-1px);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26);
+  filter: brightness(1.08);
 }
 
 .home-menu-item:hover::before {
@@ -121,6 +137,7 @@ html {
 .home-menu-item:active {
   transform: translateY(1px);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  filter: brightness(0.96);
 }
 
 .home-menu-item-supervisor {
@@ -128,37 +145,20 @@ html {
 }
 
 .home-menu-item[data-access-role="attendant"] {
-  background-color: #69140e;
+  background-position: 0 0;
 }
 
 .home-menu-item[data-access-role="lifeguard"] {
-  background-color: #5b2b2f;
+  background-position: 0 calc(-1 * (var(--home-menu-row-height) + var(--home-menu-gap)));
 }
 
 .home-menu-item[data-access-role="manager"] {
-  background-color: #3f303e;
+  background-position: 0 calc(-2 * (var(--home-menu-row-height) + var(--home-menu-gap)));
 }
 
 .home-menu-item[data-access-role="supervisor"],
 .home-menu-item-supervisor {
-  background-color: #202834;
-}
-
-.home-menu-item[data-access-role="attendant"]:hover {
-  background-color: #7a1b14;
-}
-
-.home-menu-item[data-access-role="lifeguard"]:hover {
-  background-color: #6a3539;
-}
-
-.home-menu-item[data-access-role="manager"]:hover {
-  background-color: #4a394a;
-}
-
-.home-menu-item[data-access-role="supervisor"]:hover,
-.home-menu-item-supervisor:hover {
-  background-color: #2a3444;
+  background-position: 0 calc(-3 * (var(--home-menu-row-height) + var(--home-menu-gap)));
 }
 
 /* Modal shell – match main site feel */
@@ -208,6 +208,53 @@ html {
 .modal.visible .modal-content.home-login-modal {
   opacity: 1;
   transform: translateY(0);
+}
+
+.home-cleanliness-reminder-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2200;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.58);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.home-cleanliness-reminder-modal.visible {
+  opacity: 1;
+}
+
+.home-cleanliness-reminder-card {
+  width: min(420px, calc(100vw - 40px));
+  padding: 24px;
+  border: 2px solid #b8860b;
+  background: #fff2cc;
+  color: #3a2a00;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.home-cleanliness-reminder-modal.visible .home-cleanliness-reminder-card {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.home-cleanliness-reminder-card p {
+  margin: 0 0 18px;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.home-cleanliness-reminder-card .submit-btn {
+  min-width: 110px;
+  margin-top: 0;
 }
 
 .modal-content h2 {
@@ -412,6 +459,9 @@ html {
   font-size: 16px;
   font-weight: bold;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
   border-radius: 0;
   margin-top: 10px;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
@@ -431,6 +481,31 @@ html {
   cursor: not-allowed;
   opacity: 0.65;
   transform: none;
+}
+
+.submit-btn.is-loading {
+  position: relative;
+  padding-right: 42px;
+}
+
+.submit-btn.is-loading::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: home-button-spin 0.75s linear infinite;
+}
+
+@keyframes home-button-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .submit-btn.secondary-btn:hover {
@@ -499,6 +574,22 @@ html {
 
 .hidden { display: none !important; }
 
+@media (hover: none), (pointer: coarse) {
+  .home-menu-item:hover,
+  .home-menu-item:active {
+    transform: none;
+    filter: none;
+  }
+
+  .submit-btn:active {
+    transform: none;
+  }
+
+  .home-menu-item:hover::before {
+    background: rgba(0, 0, 0, 0.1);
+  }
+}
+
 @media (max-width: 480px) {
   .home-title {
     font-size: 36px;
@@ -544,5 +635,14 @@ html {
 
   .home-create-link-btn {
     width: 100%;
+  }
+
+  .home-cleanliness-reminder-card {
+    width: calc(100vw - 28px);
+    padding: 20px 18px;
+  }
+
+  .home-cleanliness-reminder-card p {
+    font-size: 18px;
   }
 }

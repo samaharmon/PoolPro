@@ -259,13 +259,20 @@ function syncFormType() {
 }
 
 function getRespondentInfo() {
-  const firstName = sessionStorage.getItem('chemlogEmployeeFirstName') || '';
-  const lastName = sessionStorage.getItem('chemlogEmployeeLastName') || '';
+  const helperRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  const firstName = helperRecord?.firstName || sessionStorage.getItem('chemlogEmployeeFirstName') || '';
+  const lastName = helperRecord?.lastName || sessionStorage.getItem('chemlogEmployeeLastName') || '';
+  const email = helperRecord?.email || sessionStorage.getItem('chemlogEmployeeEmail') || '';
+  const username = helperRecord?.username || sessionStorage.getItem('chemlogEmployeeUsername') || '';
   const name = [firstName, lastName].filter(Boolean).join(' ').trim();
   return {
-    respondentName: name || sessionStorage.getItem('chemlogEmployeeUsername') || sessionStorage.getItem('chemlogEmployeeEmail') || '',
-    respondentEmail: sessionStorage.getItem('chemlogEmployeeEmail') || '',
-    respondentUsername: sessionStorage.getItem('chemlogEmployeeUsername') || '',
+    firstName,
+    lastName,
+    respondentName: name || username || email || '',
+    respondentEmail: email,
+    respondentUsername: username,
   };
 }
 

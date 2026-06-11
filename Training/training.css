@@ -2,7 +2,7 @@
 
 html {
   --poolpro-accent-gradient: linear-gradient(135deg, rgba(105, 20, 14, 0.92), rgba(32, 40, 52, 0.92));
-  background-color: #666;
+  background-color: #69140e;
   background-image: var(--poolpro-accent-gradient), linear-gradient(#666, #666);
   background-repeat: no-repeat, no-repeat;
   background-position: top, bottom;
@@ -1659,7 +1659,7 @@ body.dark-mode .training-filter-select {
   border-top: 2px solid #fff;
   justify-content: center;
   color: #fff;
-  text-align: center;
+  text-align: left;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -1685,6 +1685,8 @@ body.dark-mode .training-filter-select {
 .site-footer-copy {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
   gap: 2px;
 }
 
@@ -3105,9 +3107,9 @@ body.dark-mode .help-text {
   pointer-events: none;
   transform: translateY(-8px);
   transition: opacity 0.36s ease, transform 0.36s ease, visibility 0s linear 0.36s;
-  z-index: 800;
-  padding-top: calc(10px + env(safe-area-inset-top, 0px));
-  padding-bottom: 10px;
+  z-index: 1100;
+  min-height: 0 !important;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 8px 8px;
 }
 
 .floating-header.visible {
@@ -3127,17 +3129,27 @@ body.dark-mode .help-text {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  gap: 18px;
+  gap: 8px;
 }
 
 .floating-header #logo,
 .floating-header img[alt*="logo" i] {
-  height: 62px !important;
+  height: 54px !important;
   margin-left: auto;
 }
 
 .floating-header .menu-container {
   grid-area: auto;
+  margin: 0;
+}
+
+.floating-header .menu-btn {
+  padding: 10px 15px;
+  font-size: 18px;
+  line-height: normal;
+  min-height: 0;
+  display: flex;
+  align-items: center;
 }
 
 .training-schedule-table thead,
@@ -3962,5 +3974,234 @@ body {
 
   .training-signup-confirm-actions {
     flex-direction: column;
+  }
+}
+
+/* Final roster and signup modal fixes */
+.training-signup-confirm-card .modal-header {
+  padding-left: 32px;
+  padding-right: 32px;
+}
+
+.training-signup-confirm-card .modal-header .attendance-close-btn {
+  margin-left: auto;
+  padding: 0;
+}
+
+.training-signup-confirm-actions {
+  justify-content: flex-end;
+  padding-left: 32px;
+  padding-right: 32px;
+}
+
+.training-schedule-table.training-schedule-table--admin th:nth-child(6),
+.training-schedule-table.training-schedule-table--admin td:nth-child(6) {
+  width: 112px !important;
+  min-width: 112px !important;
+  max-width: 112px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+.training-schedule-table .training-actions-cell {
+  display: table-cell !important;
+  padding: 8px !important;
+  white-space: nowrap !important;
+}
+
+.training-schedule-table .training-actions-cell .training-roster-btn {
+  position: static !important;
+  transform: none !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+  min-width: 78px !important;
+  max-width: none !important;
+  margin: 0 auto !important;
+  padding: 8px 14px !important;
+  line-height: 1.1;
+}
+
+.attendance-table-wrapper {
+  max-width: 100%;
+  position: relative;
+  overflow-x: auto !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.attendance-table-wrapper .table-scroll-shell {
+  outline: 1px solid #ddd;
+  overflow: hidden;
+  background: #fff;
+}
+
+.attendance-table-wrapper .table-scroll-shell::before,
+.attendance-table-wrapper .table-scroll-shell::after {
+  width: 34px;
+  height: 100% !important;
+}
+
+.attendance-table-wrapper .table-scroll-shell::before {
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0));
+}
+
+.attendance-table-wrapper .table-scroll-shell::after {
+  background: linear-gradient(to left, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0));
+}
+
+.attendance-table-wrapper .table-scroll-wrap {
+  max-width: 100%;
+  overflow-x: auto !important;
+}
+
+.attendance-table {
+  width: max(100%, 760px) !important;
+  min-width: 760px !important;
+  table-layout: auto;
+}
+
+.attendance-table th,
+.attendance-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.attendance-table th:first-child,
+.attendance-table td:first-child {
+  width: 46px !important;
+  min-width: 46px !important;
+  max-width: 46px !important;
+  text-align: center !important;
+}
+
+.attendance-table th:nth-child(2),
+.attendance-table td:nth-child(2) {
+  min-width: 150px;
+  text-align: left !important;
+}
+
+.attendance-table th:nth-child(3),
+.attendance-table td:nth-child(3) {
+  min-width: 130px;
+  text-align: left !important;
+}
+
+.attendance-table th:nth-child(4),
+.attendance-table td:nth-child(4) {
+  min-width: 160px;
+  text-align: left !important;
+}
+
+.attendance-table th:nth-child(5),
+.attendance-table td:nth-child(5) {
+  min-width: 145px;
+  text-align: left !important;
+}
+
+.attendance-table th:nth-child(6),
+.attendance-table td:nth-child(6) {
+  width: 92px !important;
+  min-width: 92px !important;
+  text-align: center !important;
+}
+
+.attendance-row-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  min-width: 28px;
+  height: 28px;
+  border: 0;
+  background: transparent;
+  color: #d92116;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  box-shadow: none;
+}
+
+.attendance-row-delete-btn:hover {
+  background: transparent;
+  color: #ff3b30;
+}
+
+.attendance-add-grid {
+  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(190px, 1.1fr) auto !important;
+  align-items: end !important;
+}
+
+.attendance-add-field {
+  position: relative;
+  min-width: 0;
+}
+
+.attendance-suggestions {
+  display: none;
+  position: absolute;
+  z-index: 7000;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #c8c8c8;
+  background: #2e2e2e;
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.35);
+}
+
+.attendance-suggestions.show {
+  display: block;
+}
+
+.attendance-suggestion-option {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #555;
+  background: #2e2e2e;
+  color: #fff;
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.attendance-suggestion-option:hover {
+  background: #444;
+}
+
+.attendance-suggestion-option span,
+.attendance-suggestion-option small {
+  display: block;
+}
+
+.attendance-suggestion-option small {
+  color: #ccc;
+  font-size: 0.78rem;
+  margin-top: 2px;
+}
+
+#attendanceAddBtn {
+  height: 36px;
+  align-self: end;
+}
+
+@media (max-width: 700px) {
+  .attendance-add-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  #attendanceAddBtn {
+    width: 100%;
+  }
+
+  .training-signup-confirm-card .modal-header,
+  .training-signup-confirm-actions {
+    padding-left: 22px;
+    padding-right: 22px;
   }
 }

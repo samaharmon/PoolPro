@@ -1,5 +1,5 @@
 // home.js – landing page login logic
-import { db, auth, doc, getDoc, setDoc, getDocs, collection, deleteDoc } from '../firebase.js';
+import { db, auth, doc, getDoc, setDoc, getDocs, collection, deleteDoc, query, orderBy, limit } from '../firebase.js';
 import { requireUserAgreement } from '../agreement.js';
 import {
   createUserWithEmailAndPassword,
@@ -38,6 +38,11 @@ const LOGIN_ATTEMPT_STORAGE_KEY = 'poolproLoginAttempts';
 const LOGIN_ATTEMPT_DOC_PREFIX = 'loginAttempt__';
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOGIN_ATTEMPT_LOCKOUT_MS = 15 * 60 * 1000;
+const CLEANLINESS_REMINDER_START_HOUR = 18;
+const CLEANLINESS_REMINDER_END_HOUR = 21;
+const CLEANLINESS_REMINDER_RECENT_MS = 3 * 60 * 60 * 1000;
+const CLEANLINESS_REMINDER_QUERY_LIMIT = 200;
+const CLEANLINESS_REMINDER_MESSAGE = 'DO NOT FORGET to fill out the Cleanliness Report at the end of your shift.';
 const ROLE_DEFINITIONS = [
   { key: 'lifeguard', label: 'Lifeguard' },
   { key: 'attendant', label: 'Attendant' },
@@ -134,11 +139,16 @@ let verifyCooldownTimer = null;
 let verifyStatusPoller = null;
 let createAccountSubmitting = false;
 let lastHomeMenuActivationAt = 0;
+let cleanlinessReminderModal = null;
+let loginSubmitting = false;
+let loginSubmitTouchAt = 0;
+let modalOpenedAt = 0;
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
 const modalTitle = document.getElementById('homeModalTitle');
 const form = document.getElementById('homeLoginForm');
+const loginSubmitBtn = document.getElementById('homeLoginSubmit');
 const createAccountForm = document.getElementById('homeCreateAccountForm');
 const verifyForm = document.getElementById('homeVerifyForm');
 const usernameInput = document.getElementById('homeUsernameInput');
@@ -298,6 +308,117 @@ function normalizeRolesPermissionsData(data = {}) {
 
 function normalizeIdentityKey(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeFacilityName(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function timestampToMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  if (typeof value.seconds === 'number') {
+    return (value.seconds * 1000) + Math.floor(Number(value.nanoseconds || 0) / 1000000);
+  }
+  return 0;
+}
+
+function isSameLocalDay(firstMs, secondMs) {
+  if (!firstMs || !secondMs) return false;
+  const first = new Date(firstMs);
+  const second = new Date(secondMs);
+  return first.getFullYear() === second.getFullYear()
+    && first.getMonth() === second.getMonth()
+    && first.getDate() === second.getDate();
+}
+
+function isCleanlinessReminderWindow(now = new Date()) {
+  const hour = now.getHours();
+  return hour >= CLEANLINESS_REMINDER_START_HOUR && hour < CLEANLINESS_REMINDER_END_HOUR;
+}
+
+function ensureCleanlinessReminderModal() {
+  if (cleanlinessReminderModal) return cleanlinessReminderModal;
+  const modalEl = document.createElement('div');
+  modalEl.id = 'homeCleanlinessReminderModal';
+  modalEl.className = 'home-cleanliness-reminder-modal';
+  modalEl.innerHTML = `
+    <div class="home-cleanliness-reminder-card" role="alertdialog" aria-modal="true" aria-describedby="homeCleanlinessReminderText">
+      <p id="homeCleanlinessReminderText">${CLEANLINESS_REMINDER_MESSAGE}</p>
+      <button type="button" class="submit-btn" id="homeCleanlinessReminderOk">OK</button>
+    </div>
+  `;
+  document.body.appendChild(modalEl);
+  cleanlinessReminderModal = modalEl;
+  return cleanlinessReminderModal;
+}
+
+function showCleanlinessReminderModal() {
+  return new Promise((resolve) => {
+    const modalEl = ensureCleanlinessReminderModal();
+    const okBtn = modalEl.querySelector('#homeCleanlinessReminderOk');
+
+    const close = () => {
+      okBtn?.removeEventListener('click', close);
+      modalEl.classList.remove('visible');
+      setTimeout(() => {
+        if (!modalEl.classList.contains('visible')) modalEl.style.display = 'none';
+        resolve();
+      }, 180);
+    };
+
+    okBtn?.addEventListener('click', close);
+    modalEl.style.display = 'flex';
+    requestAnimationFrame(() => {
+      modalEl.classList.add('visible');
+      okBtn?.focus();
+    });
+  });
+}
+
+async function hasRecentCleanlinessReportForPool(poolName) {
+  const normalizedPool = normalizeFacilityName(poolName);
+  if (!normalizedPool) return false;
+
+  const nowMs = Date.now();
+  const recentCutoffMs = nowMs - CLEANLINESS_REMINDER_RECENT_MS;
+
+  try {
+    const reportsQuery = query(
+      collection(db, 'dutySubmissions'),
+      orderBy('timestamp', 'desc'),
+      limit(CLEANLINESS_REMINDER_QUERY_LIMIT)
+    );
+    const snap = await getDocs(reportsQuery);
+    return snap.docs.some((docSnap) => {
+      const report = docSnap.data() || {};
+      const submittedMs = timestampToMillis(report.timestamp);
+      if (!submittedMs || submittedMs < recentCutoffMs) return false;
+      if (!isSameLocalDay(submittedMs, nowMs)) return false;
+      return normalizeFacilityName(report.pool) === normalizedPool;
+    });
+  } catch (err) {
+    console.warn('Could not check recent cleanliness reports:', err);
+    return false;
+  }
+}
+
+async function maybeShowCleanlinessReminder(homePool) {
+  if (!isCleanlinessReminderWindow()) return;
+  if (!normalizeFacilityName(homePool)) return;
+  if (await hasRecentCleanlinessReportForPool(homePool)) return;
+  await showCleanlinessReminderModal();
+}
+
+async function maybeShowLifeguardCleanlinessReminder(accessMode, homePool) {
+  if (normalizeAccessMode(accessMode) !== 'lifeguard') return;
+  await maybeShowCleanlinessReminder(homePool);
 }
 
 async function loadHomeRolesPermissions() {
@@ -701,6 +822,14 @@ function setCreateAccountSubmitting(isSubmitting) {
   createSubmitBtn.textContent = isSubmitting ? 'Creating...' : 'Save Info';
 }
 
+function setLoginSubmitting(isSubmitting) {
+  loginSubmitting = isSubmitting;
+  if (!loginSubmitBtn) return;
+  loginSubmitBtn.disabled = isSubmitting;
+  loginSubmitBtn.textContent = isSubmitting ? 'Continuing...' : 'Continue';
+  loginSubmitBtn.classList.toggle('is-loading', isSubmitting);
+}
+
 function clearMessages() {
   setMessage(messageEl, '');
   setMessage(createMessageEl, '');
@@ -944,6 +1073,16 @@ function buildSupervisorAgreementContext(email, accessMode = 'supervisor') {
   };
 }
 
+function getEmployeeHomePoolByEmail(email) {
+  const normalizedEmail = normalizeIdentityKey(email);
+  if (!normalizedEmail) return '';
+  const employee = employeesCache.find((entry) => {
+    const normalized = normalizeEmployeeRecord(entry);
+    return normalized.email === normalizedEmail || normalizeIdentityKey(normalized.id) === normalizedEmail;
+  });
+  return employee?.homePool || '';
+}
+
 function setRole(role) {
   currentRole = normalizeAccessMode(role);
 
@@ -1001,6 +1140,7 @@ function openModal(target) {
   pendingTarget = 'chem';
   setRole(role);
   if (roleToggle) roleToggle.style.display = 'none';
+  modalOpenedAt = Date.now();
   modal.style.display = 'flex';
   requestAnimationFrame(() => modal.classList.add('visible'));
   resetForms();
@@ -1304,6 +1444,7 @@ async function finalizeLifeguardAccess({ username, account, target, method, acce
   });
   if (!accepted) return;
 
+  await maybeShowLifeguardCleanlinessReminder(normalizedAccessMode, account?.homePool);
   window.location.href = target || getDestinationPath();
 }
 
@@ -1370,7 +1511,7 @@ function openVerificationView({
     username: pendingVerification.username,
     email,
     target: pendingVerification.target,
-    sentAt: priorSentAt,
+    sentAt: force ? 0 : priorSentAt,
     emailAuthMode,
     accessMode: normalizedAccessMode,
   });
@@ -1384,7 +1525,7 @@ function openVerificationView({
   if (verifyResendBtn) verifyResendBtn.textContent = 'Resend Verification';
   setMessage(
     verifyMessageEl,
-    ''
+    'Sending verification email...'
   );
   setModalView('verify');
   startVerificationStatusPolling();
@@ -1397,6 +1538,7 @@ function openVerificationView({
     existingEmail === email &&
     existingContext?.emailAuthMode === emailAuthMode &&
     normalizeAccessMode(existingContext?.accessMode) === normalizedAccessMode &&
+    !force &&
     Number(existingContext?.sentAt || 0) > 0 &&
     (Date.now() - Number(existingContext.sentAt)) < VERIFY_EMAIL_RESEND_MS
   ) {
@@ -1416,6 +1558,7 @@ function openVerificationView({
     return;
   }
 
+  if (verifyResendBtn) verifyResendBtn.disabled = true;
   sendVerificationEmail({ isResend: false }).catch((err) => {
     console.error('Unable to send initial verification email:', err);
     const code = err.code || '';
@@ -1427,6 +1570,8 @@ function openVerificationView({
         ? 'That email address is invalid.'
       : (err.message || 'Unable to send the verification email.');
     setMessage(verifyMessageEl, friendly, true);
+    verifyCooldownUntil = 0;
+    updateVerifyCooldownUi();
   });
 }
 
@@ -1692,7 +1837,9 @@ async function handleEmailVerificationRedirect() {
 
 async function handleSubmit(event) {
   event.preventDefault();
-  setMessage(messageEl, '');
+  if (loginSubmitting) return;
+  setLoginSubmitting(true);
+  setMessage(messageEl, 'Signing in...');
 
   try {
     const result = await authenticateForCurrentRole(usernameInput.value, passwordInput.value);
@@ -1719,6 +1866,8 @@ async function handleSubmit(event) {
         ? 'You must accept the user agreement before using PoolPro.'
       : (err.message || 'Login failed. Please try again.');
     setMessage(messageEl, friendly, true);
+  } finally {
+    setLoginSubmitting(false);
   }
 }
 
@@ -1901,7 +2050,6 @@ async function activateHomeMenuButton(btn, event) {
 
 function wireMenu() {
   document.querySelectorAll('.home-menu-item').forEach((btn) => {
-    btn.addEventListener('pointerup', (event) => activateHomeMenuButton(btn, event));
     btn.addEventListener('click', (event) => activateHomeMenuButton(btn, event));
   });
 }
@@ -1915,6 +2063,48 @@ function wireRoleToggle() {
   });
 }
 
+function requestLoginSubmitFromButton() {
+  if (!form || loginSubmitting) return;
+  if (typeof form.requestSubmit === 'function') {
+    form.requestSubmit(loginSubmitBtn || undefined);
+    return;
+  }
+  form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+}
+
+function handleLoginSubmitTouch(event) {
+  if (event.type === 'pointerdown' && event.pointerType && !['touch', 'pen'].includes(event.pointerType)) return;
+
+  const now = Date.now();
+  event.preventDefault();
+  event.stopPropagation();
+
+  if (now - loginSubmitTouchAt < 700) return;
+  loginSubmitTouchAt = now;
+  requestAnimationFrame(requestLoginSubmitFromButton);
+}
+
+function handleLoginSubmitClick(event) {
+  if (Date.now() - loginSubmitTouchAt >= 700) return;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
+function wireLoginSubmitTouchFallback() {
+  if (!loginSubmitBtn) return;
+  loginSubmitBtn.addEventListener('pointerdown', handleLoginSubmitTouch);
+  loginSubmitBtn.addEventListener('touchend', handleLoginSubmitTouch);
+  loginSubmitBtn.addEventListener('click', handleLoginSubmitClick);
+}
+
+function handleForgotPasswordClick(event) {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!modal || modal.style.display !== 'flex' || currentView !== 'login') return;
+  if (Date.now() - modalOpenedAt < 700) return;
+  setModalView('reset');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   mountUnifiedFooter();
   const handledVerificationRedirect = await handleEmailVerificationRedirect();
@@ -1925,6 +2115,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupMobileModalFocusGuards();
 
   form?.addEventListener('submit', handleSubmit);
+  wireLoginSubmitTouchFallback();
   createAccountForm?.addEventListener('submit', handleCreateAccountSubmit);
   closeBtn?.addEventListener('click', async () => {
     if (auth.currentUser && currentRole !== 'supervisor') {
@@ -1933,7 +2124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     closeModal();
   });
   showCreateAccountBtn?.addEventListener('click', () => setModalView('create'));
-  forgotPasswordBtn?.addEventListener('click', () => setModalView('reset'));
+  forgotPasswordBtn?.addEventListener('click', handleForgotPasswordClick);
   resetPasswordForm?.addEventListener('submit', handleResetPasswordSubmit);
   resetBackBtn?.addEventListener('click', () => {
     setMessage(resetMessageEl, '');

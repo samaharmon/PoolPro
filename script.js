@@ -649,18 +649,18 @@ async function findLinkedLifeguardAccountsByEmail(email) {
 async function deleteLinkedLifeguardAccessForEmployee(employee) {
   const normalizedEmployee = normalizeEmployeeRecord(employee || {});
   const email = (normalizedEmployee.email || normalizedEmployee.id || '').trim().toLowerCase();
-  if (!email) return { authDeleteError: null };
+  if (!email) return { authDeleteError: null, linkedAccounts: [] };
 
   const linkedAccounts = await findLinkedLifeguardAccountsByEmail(email);
-  if (!linkedAccounts.length) return { authDeleteError: null };
 
   const authTarget = linkedAccounts.find((account) => account.username) || linkedAccounts[0];
   let authDeleteError = null;
   try {
     await deleteFirebaseAuthCredentialForAccount({
       email,
-      username: authTarget.username,
+      username: authTarget?.username || '',
       role: 'lifeguard',
+      preferRemoteDelete: true,
     });
   } catch (err) {
     authDeleteError = err;
@@ -670,7 +670,22 @@ async function deleteLinkedLifeguardAccessForEmployee(employee) {
   await Promise.all(
     linkedAccounts.map((account) => deleteDoc(doc(db, 'lifeguardAccounts', account.username)))
   );
-  return { authDeleteError };
+  return { authDeleteError, linkedAccounts };
+}
+
+function buildDeletedEmployeeAccountContext(employee, linkedAccounts = []) {
+  const normalizedEmployee = normalizeEmployeeRecord(employee || {});
+  const accounts = Array.isArray(linkedAccounts) ? linkedAccounts : [];
+  const accountEmails = accounts.flatMap((account) => {
+    const data = account?.data || {};
+    return [data.authEmail, data.employeeEmail, data.email, data.id];
+  });
+  return {
+    email: normalizedEmployee.email || normalizedEmployee.id || accountEmails.find(Boolean) || '',
+    employeeId: normalizedEmployee.id || normalizedEmployee.email || '',
+    emails: [normalizedEmployee.email, normalizedEmployee.id, ...accountEmails],
+    usernames: accounts.map((account) => account?.username),
+  };
 }
 
 function isDeletedAccountMatch(value, identifiers) {
@@ -680,14 +695,20 @@ function isDeletedAccountMatch(value, identifiers) {
 
 function redactedIdentityPatch() {
   return {
-    firstName: 'Redacted',
-    lastName: 'Redacted',
-    employeeId: 'Redacted',
-    email: 'Redacted',
-    submitterEmail: 'Redacted',
-    phone: 'Redacted',
-    username: 'Redacted',
-    submitterName: 'Redacted',
+    firstName: 'Anonymous',
+    lastName: '',
+    employeeId: '',
+    email: '',
+    submitterEmail: '',
+    respondentEmail: '',
+    authEmail: '',
+    employeeEmail: '',
+    phone: '',
+    username: '',
+    respondentUsername: '',
+    submitterUsername: '',
+    submitterName: 'Anonymous',
+    respondentName: 'Anonymous',
   };
 }
 
@@ -730,12 +751,12 @@ async function redactTrainingScheduleIdentity(identifiers) {
       changed = true;
       return {
         ...attendee,
-        firstName: 'Redacted',
-        lastName: 'Redacted',
-        name: 'Redacted',
-        email: 'Redacted',
-        employeeId: 'Redacted',
-        phone: 'Redacted',
+        firstName: 'Anonymous',
+        lastName: '',
+        name: 'Anonymous',
+        email: '',
+        employeeId: '',
+        phone: '',
       };
     });
     return { ...session, attendees };
@@ -747,18 +768,26 @@ async function redactTrainingScheduleIdentity(identifiers) {
 }
 
 async function redactDeletedAccountData(context) {
-  const email = (context?.email || '').trim().toLowerCase();
-  const username = (context?.username || '').trim().toLowerCase();
-  const employeeId = (context?.employeeId || '').trim().toLowerCase();
-  const identifiers = new Set([email, username, employeeId].filter(Boolean));
+  const identifiers = new Set([
+    context?.email,
+    context?.username,
+    context?.employeeId,
+    ...(Array.isArray(context?.emails) ? context.emails : []),
+    ...(Array.isArray(context?.usernames) ? context.usernames : []),
+    ...(Array.isArray(context?.employeeIds) ? context.employeeIds : []),
+  ].map((value) => String(value || '').trim().toLowerCase()).filter(Boolean));
   if (!identifiers.size) return;
 
+  const submitterFields = ['employeeId', 'email', 'submitterEmail', 'respondentEmail', 'authEmail', 'employeeEmail', 'username', 'submitterUsername', 'respondentUsername'];
   await Promise.all([
-    redactCollectionIdentity('poolSubmissions', identifiers, ['employeeId', 'email', 'submitterEmail', 'username']),
-    redactCollectionIdentity('dutySubmissions', identifiers, ['submitterEmail', 'employeeId', 'email', 'username']),
-    redactCollectionIdentity('managerialReports', identifiers, ['submitterEmail', 'employeeId', 'email', 'username']),
-    redactCollectionIdentity('trainingSignups', identifiers, ['employeeId', 'email', 'username']),
-    redactCollectionIdentity('operationalStatusLogs', identifiers, ['employeeId', 'email', 'submitterEmail', 'username']),
+    redactCollectionIdentity('poolSubmissions', identifiers, submitterFields),
+    redactCollectionIdentity('dutySubmissions', identifiers, submitterFields),
+    redactCollectionIdentity('managerialReports', identifiers, submitterFields),
+    redactCollectionIdentity('trainingSignups', identifiers, submitterFields),
+    redactCollectionIdentity('operationalStatusLogs', identifiers, submitterFields),
+    redactCollectionIdentity('inventorySubmissions', identifiers, submitterFields),
+    redactCollectionIdentity('desPreInspections', identifiers, submitterFields),
+    redactCollectionIdentity('desLogbookSubmissions', identifiers, submitterFields),
     redactTrainingScheduleIdentity(identifiers),
   ]);
 }
@@ -768,7 +797,7 @@ async function deleteFirebaseAuthCredentialForAccount(context, password = '') {
   const username = (context?.username || '').trim().toLowerCase();
   if (!email) return;
 
-  if (auth.currentUser && (auth.currentUser.email || '').trim().toLowerCase() === email) {
+  if (!context?.preferRemoteDelete && auth.currentUser && (auth.currentUser.email || '').trim().toLowerCase() === email) {
     if (password) {
       const credential = EmailAuthProvider.credential(auth.currentUser.email, password);
       await reauthenticateWithCredential(auth.currentUser, credential);
@@ -777,7 +806,7 @@ async function deleteFirebaseAuthCredentialForAccount(context, password = '') {
     return;
   }
 
-  if (context?.role !== 'lifeguard' || !username) return;
+  if (context?.role !== 'lifeguard') return;
 
   const headers = { 'Content-Type': 'application/json' };
   if (auth.currentUser) {
@@ -827,7 +856,6 @@ async function handleDeleteCurrentAccount() {
     if (passwordRequired) {
       await reauthenticateAccountForDeletion(email, password);
     }
-    await deleteFirebaseAuthCredentialForAccount(context, password);
     await redactDeletedAccountData(context);
 
     if (role === 'lifeguard') {
@@ -836,6 +864,7 @@ async function handleDeleteCurrentAccount() {
     }
 
     await deleteDoc(doc(db, 'userAgreements', getAgreementDocIdForContext(context))).catch(() => {});
+    await deleteFirebaseAuthCredentialForAccount(context, password);
 
     setAccountManagementMessage('Account deleted. Signing out...');
     setTimeout(() => {
@@ -2299,6 +2328,10 @@ function ensureStandardSettingsSections() {
       </div>
       <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
         <span class="filter-by-label">Filter By:</span>
+        <div class="settings-field roles-search-field employee-search-field">
+          <label for="employeeSettingsSearch">Search</label>
+          <input type="text" id="employeeSettingsSearch" class="employee-search-input" autocomplete="off" placeholder="Search employees">
+        </div>
         <select id="employeeMarketFilter" class="training-filter-select">
           <option value="all">Market</option>
           <option value="Charleston">Charleston</option>
@@ -2801,6 +2834,12 @@ async function uploadChemControllerPhotos({ submissionId, poolName, photoRows, o
 // ============================================================
 
 function getLoggedInEmployeeName() {
+  const currentRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  if (currentRecord?.firstName || currentRecord?.lastName) {
+    return { firstName: currentRecord.firstName || '', lastName: currentRecord.lastName || '' };
+  }
   const empId = sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId');
   if (empId && employeesData.length) {
     const emp = employeesData.find(e =>
@@ -3387,8 +3426,7 @@ function formatElapsedSince(value) {
 }
 
 function getLogRespondentName(log) {
-  const fullName = [log?.firstName, log?.lastName].filter(Boolean).join(' ').trim();
-  return fullName || log?.submitterName || log?.employeeId || log?.submitterEmail || '—';
+  return getSubmissionRespondentName(log);
 }
 
 function normalizeOperationalStatusRecord(rawDoc, idOverride = '') {
@@ -3969,19 +4007,9 @@ async function loadDashboardData() {
 
 function fillDashboardRespondentCell(cell, log) {
   cell.innerHTML = '';
-  const firstName = log?.firstName || '';
-  const lastName = log?.lastName || '';
-  const fullName = [firstName, lastName].filter(Boolean).join(' ');
-  if (!fullName) {
-    cell.textContent = log?.submitterEmail || '—';
-    return;
-  }
-
-  const empId = log?.employeeId || '';
-  const empRecord = empId ? employeesData.find(e =>
-    String(e.id || '').toLowerCase() === String(empId).toLowerCase() ||
-    String(e.email || '').toLowerCase() === String(empId).toLowerCase()
-  ) : null;
+  const fullName = getSubmissionRespondentName(log);
+  const empId = getSubmissionIdentityKeys(log)[0] || '';
+  const empRecord = findEmployeeForSubmission(log);
   const rawPhone = empRecord?.phone || '';
   const homePool = empRecord?.homePool || '—';
   const phoneDigits = getTenDigitPhone(rawPhone);
@@ -4648,6 +4676,7 @@ let employeesData = [];
 let editingEmployeeIdx = -1;
 let employeeMarketFilter = 'all';
 let employeePoolFilter = 'all';
+let employeeSearchTerm = '';
 let employeePage = 1;
 let employeeTableEditable = false;
 let employeeUndoState = null;
@@ -5042,6 +5071,58 @@ function normalizeEmployeeRecord(rawEmployee) {
   };
 }
 
+function normalizeEmployeeLookupKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function getSubmissionIdentityKeys(record = {}) {
+  return [
+    record.employeeId,
+    record.respondentEmail,
+    record.submitterEmail,
+    record.email,
+    record.username,
+    record.respondentUsername,
+    record.submitterUsername,
+    record.id,
+  ].map(normalizeEmployeeLookupKey).filter(Boolean);
+}
+
+function findEmployeeForSubmission(record = {}) {
+  const keys = new Set(getSubmissionIdentityKeys(record));
+  if (!keys.size || !Array.isArray(employeesData)) return null;
+  return employeesData
+    .map(normalizeEmployeeRecord)
+    .find((employee) => [
+      employee.email,
+      employee.id,
+      employee.username,
+      employee.employeeId,
+    ].map(normalizeEmployeeLookupKey).some((key) => key && keys.has(key))) || null;
+}
+
+function getSubmissionRespondentName(record = {}) {
+  const employee = findEmployeeForSubmission(record);
+  const recordName = [
+    record.firstName,
+    record.lastName,
+  ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
+  const employeeName = [
+    employee?.firstName,
+    employee?.lastName,
+  ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
+  return recordName
+    || employeeName
+    || String(record.respondentName || record.submitterName || '').trim()
+    || getSubmissionIdentityKeys(record)[0]
+    || '—';
+}
+
+function getSubmissionRespondentEmail(record = {}) {
+  const employee = findEmployeeForSubmission(record);
+  return String(record.respondentEmail || record.submitterEmail || record.email || employee?.email || '').trim();
+}
+
 function renderEmployeesTable() {
   ensureEmployeeSettingsUi();
   const tbody = document.getElementById('employeesTableBody');
@@ -5060,6 +5141,24 @@ function renderEmployeesTable() {
       })
       .map(p => p.name || p.id);
     filteredEmployees = filteredEmployees.filter(({ emp }) => marketPoolNames.includes(emp.homePool));
+  }
+  const normalizedSearch = employeeSearchTerm.trim().toLowerCase();
+  if (normalizedSearch) {
+    filteredEmployees = filteredEmployees.filter(({ emp }) => {
+      const normalized = normalizeEmployeeRecord(emp);
+      const haystack = [
+        employeeDisplayName(normalized),
+        normalized.firstName,
+        normalized.lastName,
+        normalized.email,
+        normalized.id,
+        normalized.username,
+        normalized.phone,
+        formatPhoneDisplay(normalized.phone),
+        normalized.homePool,
+      ].join(' ').toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
   }
   filteredEmployees.sort((a, b) => {
     const aLast = String(a.emp.lastName || '').toLowerCase();
@@ -5209,9 +5308,10 @@ function setupEmployeeManagement() {
       let linkedAccessResult = { authDeleteError: null };
       try {
         linkedAccessResult = await deleteLinkedLifeguardAccessForEmployee(removed);
+        await redactDeletedAccountData(buildDeletedEmployeeAccountContext(removed, linkedAccessResult?.linkedAccounts));
       } catch (err) {
-        console.error('[ChemLog] Could not delete linked lifeguard access:', err);
-        alert('Unable to delete the linked PoolPro login right now. The employee record was not removed.');
+        console.error('[ChemLog] Could not delete linked lifeguard access or anonymize employee submissions:', err);
+        alert('Unable to delete the linked PoolPro login or anonymize this employee\'s submissions right now. The employee record was not removed.');
         return;
       }
       employeesData.splice(removedIndex, 1);
@@ -5358,12 +5458,23 @@ function populateEmployeePoolFilter(market) {
 }
 
 function setupEmployeeFilters() {
+  const searchInput = document.getElementById('employeeSettingsSearch');
   const marketFilter = document.getElementById('employeeMarketFilter');
   const poolFilter = document.getElementById('employeePoolFilter');
   if (!marketFilter || !poolFilter) return;
 
   // Populate pool filter options initially with all pools
   populateEmployeePoolFilter('all');
+
+  if (searchInput && searchInput.dataset.bound !== 'true') {
+    searchInput.dataset.bound = 'true';
+    searchInput.value = employeeSearchTerm;
+    searchInput.addEventListener('input', () => {
+      employeeSearchTerm = searchInput.value || '';
+      employeePage = 1;
+      renderEmployeesTable();
+    });
+  }
 
   marketFilter.addEventListener('change', () => {
     employeeMarketFilter = marketFilter.value;
@@ -7157,8 +7268,8 @@ function summarizeReportRecord(data = {}, id = '') {
     id,
     timestamp: exportDateString(data.timestamp || data.submittedAtIso || data.createdAt),
     facility: data.pool || data.facilityName || data.poolName || data.poolLocation || '',
-    respondent: data.respondentName || data.submitterName || [data.firstName, data.lastName].filter(Boolean).join(' ') || '',
-    email: data.respondentEmail || data.submitterEmail || data.email || data.employeeId || '',
+    respondent: getSubmissionRespondentName(data),
+    email: getSubmissionRespondentEmail(data) || data.employeeId || '',
     type: data.type || data.formType || '',
   };
 }
@@ -7890,7 +8001,7 @@ function renderReportSubmissions(submissions, container, {
         tr.appendChild(formCell);
         tr.insertAdjacentHTML('beforeend', `
           <td>${escapeHtml(sub.pool || '—')}</td>
-          <td>${escapeHtml(sub.submitterEmail || '—')}</td>
+          <td>${escapeHtml(getSubmissionRespondentName(sub))}</td>
           <td>${ts ? ts.toLocaleString() : '—'}</td>
         `);
         tbody.appendChild(tr);
@@ -7942,7 +8053,7 @@ function renderReportSubmissions(submissions, container, {
       tr.appendChild(facilityCell);
       tr.appendChild(formCell);
       tr.insertAdjacentHTML('beforeend', `
-        <td>${escapeHtml(mostRecent?.submitterEmail || '—')}</td>
+        <td>${escapeHtml(mostRecent ? getSubmissionRespondentName(mostRecent) : '—')}</td>
         <td>${ts ? ts.toLocaleString() : '—'}</td>
       `);
       tbody.appendChild(tr);
@@ -7977,7 +8088,7 @@ function loadJobFormSubmissions() {
 function getReportMetaRows(sub) {
   return [
     ['Facility', sub?.pool || '—'],
-    ['Respondent', sub?.respondentName || sub?.submitterName || sub?.submitterEmail || '—'],
+    ['Respondent', getSubmissionRespondentName(sub)],
     ['Submitted', formatTimestampDisplay(sub?.timestamp)],
   ];
 }
@@ -8335,9 +8446,10 @@ function renderNeededSuppliesSection(container, rows) {
             ? `${row.facilityName || '—'} (${row.status})`
             : (row.facilityName || '—');
           facilityBtn.addEventListener('click', () => openInspectionMetaPopup({
+            ...row.report,
             pool: row.facilityName,
-            respondentName: row.report?.respondentName || row.report?.respondentEmail || '—',
-            submitterEmail: row.report?.respondentEmail || '—',
+            respondentName: getSubmissionRespondentName(row.report),
+            submitterEmail: getSubmissionRespondentEmail(row.report),
             timestamp: row.report?.timestamp || row.report?.submittedAtIso,
           }, 'Inventory Details'));
           facilityList.appendChild(facilityBtn);
@@ -8466,9 +8578,10 @@ function renderFullInventorySection(container, rows) {
           .join('')
       }</div></td>`;
       tr.querySelector('.supply-facility-meta-btn')?.addEventListener('click', () => openInspectionMetaPopup({
+        ...latestReport,
         pool: facilityName,
-        respondentName: latestReport.respondentName || latestReport.respondentEmail || latestReport.submitterEmail || '—',
-        submitterEmail: latestReport.respondentEmail || latestReport.submitterEmail || '—',
+        respondentName: getSubmissionRespondentName(latestReport),
+        submitterEmail: getSubmissionRespondentEmail(latestReport),
         timestamp: latestReport.timestamp || latestReport.submittedAtIso,
       }, 'Inventory Submission Details'));
       tr.querySelector('.supply-expand-btn')?.addEventListener('click', (event) => {
@@ -9459,7 +9572,7 @@ function openDesPreInspectionModal(sub) {
       <div class="duty-report-modal-scroll">
         <div class="duty-report-meta">
           <p><strong>Pool:</strong> ${esc(sub.pool || '—')}</p>
-          <p><strong>Respondent:</strong> ${esc(sub.respondentName || sub.submitterName || sub.submitterEmail || '—')}</p>
+          <p><strong>Respondent:</strong> ${esc(getSubmissionRespondentName(sub))}</p>
           <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
         </div>
         <section class="des-inspection-item-list">
@@ -9582,7 +9695,7 @@ function openDutyFormModal(sub) {
       <div class="duty-report-modal-scroll">
         <div class="duty-report-meta">
           <p><strong>Pool:</strong> ${esc(sub.pool)}</p>
-          <p><strong>Submitted by:</strong> ${esc(sub.submitterEmail)}</p>
+          <p><strong>Submitted by:</strong> ${esc(getSubmissionRespondentName(sub))}</p>
           <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
         </div>
 
