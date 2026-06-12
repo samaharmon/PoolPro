@@ -81,7 +81,8 @@
 
 #poolMetadataSection input[type="text"],
 #poolMetadataSection input[type="number"],
-#supplyInfoSection input[type="text"] {
+#supplyInfoSection input[type="text"],
+#supplyInfoSection select {
   padding: 10px;
   font-size: 14px;
    background-color: #eee;
@@ -92,7 +93,8 @@
 #poolMetadataSection input[type="text"]:enabled,
 #poolMetadataSection input[type="number"]:enabled,
 #poolMetadataSection select:enabled,
-#supplyInfoSection input[type="text"]:enabled {
+#supplyInfoSection input[type="text"]:enabled,
+#supplyInfoSection select:enabled {
     background-color: #fff;
 }
  
@@ -188,6 +190,61 @@
   gap: 16px;
 }
 
+.supply-type-editor {
+  margin: 16px 0 18px;
+  padding: 14px;
+  border: 1px solid #555;
+  background: #303030;
+}
+
+.supply-type-editor h4 {
+  margin: 0 0 12px;
+  color: #fff;
+}
+
+.supply-type-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(220px, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.supply-type-editor-field {
+  display: grid;
+  gap: 6px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.supply-type-editor-fields {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(220px, 1fr);
+  gap: 12px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.supply-type-editor-save {
+  width: auto;
+  min-width: 120px;
+  margin-top: 12px;
+}
+
+.supply-type-editor-message {
+  min-height: 18px;
+  margin: 8px 0 0;
+  color: #ddd;
+  font-size: 13px;
+}
+
+.supply-type-editor-message.error {
+  color: #ffb5ae;
+}
+
+.supply-type-editor-message.success {
+  color: #b8f5c5;
+}
+
 .supply-info-card {
   border: 1px solid #555;
   background: #303030;
@@ -221,6 +278,11 @@
 
   .supply-info-type {
     grid-column: 2;
+  }
+
+  .supply-type-editor-grid,
+  .supply-type-editor-fields {
+    grid-template-columns: 1fr;
   }
 }
  

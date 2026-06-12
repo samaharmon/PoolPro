@@ -605,27 +605,208 @@ function getDefaultSupplyInfo() {
   return Object.fromEntries(
     SUPPLY_SECTIONS.flatMap((section) => section.items).map((item) => [
       item.id,
-      { enabled: true, type: '' },
+      { enabled: true, type: '', types: [] },
     ])
   );
+}
+
+function normalizeSupplyTypeList(setting = {}) {
+  const rawTypes = Array.isArray(setting.types) ? setting.types : [];
+  const values = [...rawTypes, setting.type]
+    .map((value) => String(value || '').trim())
+    .filter(Boolean);
+  return [...new Set(values)];
 }
 
 function normalizeSupplyInfo(source = {}) {
   const defaults = getDefaultSupplyInfo();
   Object.keys(defaults).forEach((itemId) => {
     const existing = source?.[itemId] || {};
+    const types = normalizeSupplyTypeList(existing);
+    const selectedType = (existing.type || '').toString().trim();
     defaults[itemId] = {
       enabled: existing.enabled !== false,
-      type: (existing.type || '').toString(),
+      type: selectedType && types.includes(selectedType) ? selectedType : (types[0] || ''),
+      types,
     };
   });
   return defaults;
 }
 
+function getAllSupplyEditorItems() {
+  return SUPPLY_SECTIONS.flatMap((section) =>
+    section.items.map((item) => ({ ...item, section: section.label }))
+  );
+}
+
+function getSupplyTypeEditorElements() {
+  return {
+    action: document.getElementById('supplyTypeEditorAction'),
+    supply: document.getElementById('supplyTypeEditorSupply'),
+    fields: document.getElementById('supplyTypeEditorFields'),
+    save: document.getElementById('supplyTypeEditorSave'),
+    message: document.getElementById('supplyTypeEditorMessage'),
+  };
+}
+
+function setSupplyTypeEditorMessage(message = '', type = '') {
+  const { message: messageEl } = getSupplyTypeEditorElements();
+  if (!messageEl) return;
+  messageEl.textContent = message;
+  messageEl.classList.toggle('error', type === 'error');
+  messageEl.classList.toggle('success', type === 'success');
+}
+
+function getSupplyTypeSelect(itemId) {
+  return Array.from(document.querySelectorAll('.supply-info-type'))
+    .find((select) => select.dataset.supplyType === itemId) || null;
+}
+
+function typeOptionsHtml(types, selectedType = '') {
+  const options = ['<option value="">Type</option>'];
+  types.forEach((type) => {
+    options.push(`<option value="${escapeHtmlUnsafe(type)}" ${type === selectedType ? 'selected' : ''}>${escapeHtmlUnsafe(type)}</option>`);
+  });
+  return options.join('');
+}
+
+function updateSupplyTypeSelect(itemId, setting) {
+  const select = getSupplyTypeSelect(itemId);
+  if (!select) return;
+  const types = normalizeSupplyTypeList(setting);
+  const selectedType = types.includes(setting.type) ? setting.type : (types[0] || '');
+  select.innerHTML = typeOptionsHtml(types, selectedType);
+  select.value = selectedType;
+}
+
+function populateSupplyTypeEditorSupplyOptions(selectedSupplyId = '') {
+  const { supply } = getSupplyTypeEditorElements();
+  if (!supply) return;
+  const selected = selectedSupplyId || supply.value;
+  supply.innerHTML = '';
+  SUPPLY_SECTIONS.forEach((section) => {
+    const group = document.createElement('optgroup');
+    group.label = section.label;
+    section.items.forEach((item) => {
+      const option = document.createElement('option');
+      option.value = item.id;
+      option.textContent = item.label;
+      group.appendChild(option);
+    });
+    supply.appendChild(group);
+  });
+  const allIds = getAllSupplyEditorItems().map((item) => item.id);
+  supply.value = allIds.includes(selected) ? selected : (allIds[0] || '');
+}
+
+function renderSupplyTypeEditorFields() {
+  const { action, supply, fields } = getSupplyTypeEditorElements();
+  if (!action || !supply || !fields) return;
+  const info = collectSupplyInfo();
+  const setting = info[supply.value] || { type: '', types: [] };
+  const types = normalizeSupplyTypeList(setting);
+  fields.innerHTML = '';
+  setSupplyTypeEditorMessage('');
+
+  if (action.value === 'add') {
+    fields.innerHTML = `
+      <label class="supply-type-editor-field">
+        <span>New Type</span>
+        <input type="text" id="supplyTypeEditorValue" class="adjustment-feedback" autocomplete="off">
+      </label>
+    `;
+    return;
+  }
+
+  if (action.value === 'edit') {
+    fields.innerHTML = `
+      <label class="supply-type-editor-field">
+        <span>Current Type</span>
+        <select id="supplyTypeEditorExisting" class="adjustment-feedback" ${types.length ? '' : 'disabled'}>
+          ${types.length
+            ? types.map((type) => `<option value="${escapeHtmlUnsafe(type)}" ${type === setting.type ? 'selected' : ''}>${escapeHtmlUnsafe(type)}</option>`).join('')
+            : '<option value="">No types</option>'}
+        </select>
+      </label>
+      <label class="supply-type-editor-field">
+        <span>Edited Type</span>
+        <input type="text" id="supplyTypeEditorValue" class="adjustment-feedback" autocomplete="off" value="${escapeHtmlUnsafe(types.includes(setting.type) ? setting.type : (types[0] || ''))}">
+      </label>
+    `;
+    const existingSelect = document.getElementById('supplyTypeEditorExisting');
+    const valueInput = document.getElementById('supplyTypeEditorValue');
+    existingSelect?.addEventListener('change', () => {
+      if (valueInput) valueInput.value = existingSelect.value;
+    });
+  }
+}
+
+function setupSupplyTypeEditorEvents() {
+  const { action, supply, save } = getSupplyTypeEditorElements();
+  if (!action || !supply || !save || save.dataset.bound === 'true') return;
+  save.dataset.bound = 'true';
+  action.addEventListener('change', renderSupplyTypeEditorFields);
+  supply.addEventListener('change', renderSupplyTypeEditorFields);
+  save.addEventListener('click', saveSupplyTypeEditorChange);
+}
+
+function renderSupplyTypeEditorControls() {
+  populateSupplyTypeEditorSupplyOptions();
+  setupSupplyTypeEditorEvents();
+  renderSupplyTypeEditorFields();
+}
+
+async function saveSupplyTypeEditorChange() {
+  const { action, supply } = getSupplyTypeEditorElements();
+  if (!action || !supply?.value) return;
+
+  const info = collectSupplyInfo();
+  const itemId = supply.value;
+  const setting = info[itemId] || { enabled: true, type: '', types: [] };
+  const types = normalizeSupplyTypeList(setting);
+
+  if (action.value === 'add') {
+    const newType = document.getElementById('supplyTypeEditorValue')?.value?.trim() || '';
+    if (!newType) {
+      setSupplyTypeEditorMessage('Enter a type to add.', 'error');
+      return;
+    }
+    if (types.includes(newType)) {
+      setSupplyTypeEditorMessage('That type already exists for this supply.', 'error');
+      return;
+    }
+    setting.types = [...types, newType];
+    setting.type = newType;
+  } else if (action.value === 'edit') {
+    const oldType = document.getElementById('supplyTypeEditorExisting')?.value?.trim() || '';
+    const newType = document.getElementById('supplyTypeEditorValue')?.value?.trim() || '';
+    if (!oldType || !newType) {
+      setSupplyTypeEditorMessage('Select a type and enter the replacement text.', 'error');
+      return;
+    }
+    setting.types = types.map((type) => type === oldType ? newType : type);
+    setting.types = [...new Set(setting.types)];
+    if (setting.type === oldType || !setting.type) setting.type = newType;
+  } else if (action.value === 'delete') {
+    const typeToDelete = setting.type || types[0] || '';
+    if (!typeToDelete) {
+      setSupplyTypeEditorMessage('There is no selected type to delete.', 'error');
+      return;
+    }
+    setting.types = types.filter((type) => type !== typeToDelete);
+    setting.type = setting.types[0] || '';
+  }
+
+  updateSupplyTypeSelect(itemId, setting);
+  renderSupplyTypeEditorFields();
+  const success = await attemptSave();
+  setSupplyTypeEditorMessage(success ? 'Supply type saved.' : 'Supply type was not saved.', success ? 'success' : 'error');
+}
+
 function setSupplyInfoEnabled(enabled) {
   const section = document.getElementById('supplyInfoSection');
   if (!section) return;
-  section.querySelectorAll('.supply-info-content input, .supply-info-content select, .supply-info-content textarea').forEach((field) => {
+  section.querySelectorAll('.supply-info-content input, .supply-info-content select, .supply-info-content textarea, .supply-info-content button').forEach((field) => {
     field.disabled = !enabled;
   });
   section.classList.toggle('overlay-disabled', !enabled);
@@ -643,17 +824,20 @@ function renderSupplyInfo(poolDoc = {}) {
     card.innerHTML = `<h4>${escapeHtmlUnsafe(section.label)}</h4>`;
     section.items.forEach((item) => {
       const setting = supplyInfo[item.id] || { enabled: true, type: '' };
-      const row = document.createElement('label');
+      const row = document.createElement('div');
       row.className = 'supply-info-row';
       row.innerHTML = `
         <input type="checkbox" class="market-filter-checkbox supply-info-enabled" data-supply-id="${escapeHtmlUnsafe(item.id)}" ${setting.enabled ? 'checked' : ''}>
         <span class="supply-info-name">${escapeHtmlUnsafe(item.label)}</span>
-        <input type="text" class="supply-info-type adjustment-feedback" data-supply-type="${escapeHtmlUnsafe(item.id)}" value="${escapeHtmlUnsafe(setting.type)}" placeholder="Type">
+        <select class="supply-info-type adjustment-feedback" data-supply-type="${escapeHtmlUnsafe(item.id)}">
+          ${typeOptionsHtml(setting.types || [], setting.type || '')}
+        </select>
       `;
       card.appendChild(row);
     });
     container.appendChild(card);
   });
+  renderSupplyTypeEditorControls();
   setSupplyInfoEnabled(false);
 }
 
@@ -667,7 +851,14 @@ function collectSupplyInfo() {
   document.querySelectorAll('.supply-info-type').forEach((input) => {
     const itemId = input.dataset.supplyType;
     if (!itemId || !info[itemId]) return;
+    const types = Array.from(input.options || [])
+      .map((option) => option.value.trim())
+      .filter(Boolean);
+    info[itemId].types = [...new Set(types)];
     info[itemId].type = input.value.trim();
+    if (info[itemId].type && !info[itemId].types.includes(info[itemId].type)) {
+      info[itemId].types.push(info[itemId].type);
+    }
   });
   return info;
 }

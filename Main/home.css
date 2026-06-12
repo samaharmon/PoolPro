@@ -91,7 +91,7 @@ html {
   background-size: 100% var(--home-menu-gradient-height);
   background-position: 0 0;
   color: #fff;
-  border: 0;
+  border: 2px solid #fff;
   border-radius: 0;
   font-size: 28px;
   text-align: center;
@@ -112,7 +112,7 @@ html {
 }
 
 .home-menu-item:last-child {
-  border-bottom: 0;
+  border-bottom: 2px solid #fff;
 }
 
 .home-menu-item::before {
@@ -141,7 +141,7 @@ html {
 }
 
 .home-menu-item-supervisor {
-  border: 0;
+  border: 2px solid #fff;
 }
 
 .home-menu-item[data-access-role="attendant"] {

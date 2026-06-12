@@ -4282,8 +4282,7 @@ td.concern-major {
   position: absolute;
   inset: 52px 0 0;
   background: rgba(255, 255, 255, 0.08);
-  pointer-events: auto;
-  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .supply-needed-facility-list {
@@ -4295,6 +4294,30 @@ td.concern-major {
 
 .supply-needed-facility-list .dashboard-link-button {
   white-space: nowrap;
+}
+
+.supply-needed-facility-checklist {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+}
+
+.supply-needed-facility-check {
+  display: grid;
+  grid-template-columns: auto minmax(140px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.supply-needed-facility-check .market-filter-checkbox {
+  margin: 0;
+}
+
+.supply-needed-facility-button {
+  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
 }
 
 .dashboard-supplies-table th,

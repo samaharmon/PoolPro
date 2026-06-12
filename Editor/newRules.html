@@ -162,6 +162,26 @@
                     <div class="supply-info-content">
                         <h3>Supply Information</h3>
                         <p class="section-subtitle">Choose which supplies this facility uses and enter the specific type when needed.</p>
+                        <div id="supplyTypeEditor" class="supply-type-editor">
+                            <h4>Supply Type Editor</h4>
+                            <div class="supply-type-editor-grid">
+                                <label class="supply-type-editor-field">
+                                    <span>Action</span>
+                                    <select id="supplyTypeEditorAction" class="adjustment-feedback">
+                                        <option value="add">Add</option>
+                                        <option value="edit">Edit</option>
+                                        <option value="delete">Delete</option>
+                                    </select>
+                                </label>
+                                <label class="supply-type-editor-field">
+                                    <span>Supply</span>
+                                    <select id="supplyTypeEditorSupply" class="adjustment-feedback"></select>
+                                </label>
+                            </div>
+                            <div id="supplyTypeEditorFields" class="supply-type-editor-fields"></div>
+                            <button type="button" id="supplyTypeEditorSave" class="submit-btn supply-type-editor-save">Save</button>
+                            <p id="supplyTypeEditorMessage" class="supply-type-editor-message"></p>
+                        </div>
                         <div id="supplyInfoRows" class="supply-info-rows"></div>
                     </div>
                     <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px; justify-content: flex-start; align-items: center;">

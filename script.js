@@ -8318,7 +8318,6 @@ function getSupplyNeedGroupKey(row) {
   return [
     row.itemId || row.item,
     row.item,
-    row.type || '',
   ].map((value) => String(value || '').trim().toLowerCase()).join('::');
 }
 
@@ -8332,6 +8331,12 @@ function getSupplyNeedGroupPriority(rows) {
   return Math.min(...rows.map((row) => SUPPLY_STATUS_PRIORITY[row.status] ?? 99));
 }
 
+function getSupplyNeedGroupType(rows) {
+  const types = [...new Set(rows.map((row) => String(row.type || '').trim()).filter(Boolean))];
+  if (!types.length) return '—';
+  return types.join(', ');
+}
+
 function getGroupedNeededSupplyRows(rows) {
   const groups = new Map();
   rows
@@ -8342,7 +8347,6 @@ function getGroupedNeededSupplyRows(rows) {
         groups.set(key, {
           key,
           item: row.item,
-          type: row.type || '',
           rows: [],
         });
       }
@@ -8353,6 +8357,7 @@ function getGroupedNeededSupplyRows(rows) {
     .map((group) => ({
       ...group,
       keys: group.rows.map(getSupplyNeedKey),
+      type: getSupplyNeedGroupType(group.rows),
       status: getSupplyNeedGroupStatus(group.rows),
       priority: getSupplyNeedGroupPriority(group.rows),
     }))
@@ -8433,41 +8438,42 @@ function renderNeededSuppliesSection(container, rows) {
   tableWrap.className = `supply-needed-table-wrap${supplyNeededEditMode ? '' : ' overlay-disabled'}`;
   const table = document.createElement('table');
   table.className = 'data-table dashboard-pool-table dashboard-supplies-table';
-  table.innerHTML = '<thead><tr><th></th><th>Item</th><th>Type</th><th>Facility</th><th>Status</th></tr></thead>';
+  table.innerHTML = '<thead><tr><th>Resolve By Pool</th><th>Item</th><th>Type</th><th>Status</th></tr></thead>';
   const tbody = document.createElement('tbody');
   const neededGroups = getGroupedNeededSupplyRows(rows);
 
   if (!neededGroups.length) {
-    tbody.innerHTML = '<tr><td colspan="5">No needed supplies are currently listed.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4">No needed supplies are currently listed.</td></tr>';
   } else {
     neededGroups.forEach((group) => {
       const tr = document.createElement('tr');
       const checkCell = document.createElement('td');
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.className = 'market-filter-checkbox';
-      checkbox.disabled = !supplyNeededEditMode;
-      checkbox.addEventListener('change', () => {
-        if (!checkbox.checked) return;
-        tr.classList.add('supply-row-fading');
-        window.setTimeout(async () => {
-          group.keys.forEach((key) => { supplyResolvedItems[key] = true; });
-          supplyUndoItem = [...group.keys];
-          await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true }).catch(() => {});
-          renderSuppliesDashboard();
-        }, 3000);
-      });
-      checkCell.appendChild(checkbox);
-      const facilityCell = document.createElement('td');
       const facilityList = document.createElement('div');
-      facilityList.className = 'supply-needed-facility-list';
+      facilityList.className = 'supply-needed-facility-checklist';
       const showFacilityStatuses = new Set(group.rows.map((row) => row.status)).size > 1;
       group.rows
         .sort((a, b) => a.facilityName.localeCompare(b.facilityName))
         .forEach((row) => {
+          const rowKey = getSupplyNeedKey(row);
+          const facilityItem = document.createElement('div');
+          facilityItem.className = 'supply-needed-facility-check';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.className = 'market-filter-checkbox';
+          checkbox.disabled = !supplyNeededEditMode;
+          checkbox.addEventListener('change', () => {
+            if (!checkbox.checked) return;
+            facilityItem.classList.add('supply-row-fading');
+            window.setTimeout(async () => {
+              supplyResolvedItems[rowKey] = true;
+              supplyUndoItem = rowKey;
+              await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true }).catch(() => {});
+              renderSuppliesDashboard();
+            }, 3000);
+          });
           const facilityBtn = document.createElement('button');
           facilityBtn.type = 'button';
-          facilityBtn.className = 'dashboard-link-button';
+          facilityBtn.className = 'dashboard-link-button supply-needed-facility-button';
           facilityBtn.textContent = showFacilityStatuses
             ? `${row.facilityName || '—'} (${row.status})`
             : (row.facilityName || '—');
@@ -8478,17 +8484,16 @@ function renderNeededSuppliesSection(container, rows) {
             submitterEmail: getSubmissionRespondentEmail(row.report),
             timestamp: row.report?.timestamp || row.report?.submittedAtIso,
           }, 'Inventory Details'));
-          facilityList.appendChild(facilityBtn);
+          facilityItem.append(checkbox, facilityBtn);
+          facilityList.appendChild(facilityItem);
         });
-      facilityCell.appendChild(facilityList);
-      const itemLabel = group.rows.length > 1 ? `${group.rows.length}x ${group.item}` : group.item;
+      checkCell.appendChild(facilityList);
       tr.appendChild(checkCell);
       tr.insertAdjacentHTML('beforeend', `
-        <td>${escapeHtml(itemLabel)}</td>
+        <td>${escapeHtml(group.item)}</td>
         <td>${escapeHtml(group.type || '—')}</td>
+        <td>${escapeHtml(group.status)}</td>
       `);
-      tr.appendChild(facilityCell);
-      tr.insertAdjacentHTML('beforeend', `<td>${escapeHtml(group.status)}</td>`);
       tbody.appendChild(tr);
     });
   }
