@@ -49,6 +49,7 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-top: 2px solid #fff;
   border-bottom: 2px solid #fff;
 }
 
@@ -1657,6 +1658,7 @@ body.dark-mode .training-filter-select {
   display: flex;
   align-items: center;
   border-top: 2px solid #fff;
+  border-bottom: 2px solid #fff;
   justify-content: center;
   color: #fff;
   text-align: left;

@@ -2866,6 +2866,37 @@ function getLoggedInEmployeeName() {
   return { firstName: '', lastName: '' };
 }
 
+function getLoggedInSubmissionIdentity() {
+  const currentRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  const { firstName, lastName } = getLoggedInEmployeeName();
+  const cleanFirstName = String(currentRecord?.firstName || firstName || '').trim();
+  const cleanLastName = String(currentRecord?.lastName || lastName || '').trim();
+  const fullName = [cleanFirstName, cleanLastName].filter(Boolean).join(' ').trim();
+  const sessionEmail = sessionStorage.getItem('chemlogEmployeeEmail') || '';
+  const sessionId = sessionStorage.getItem('chemlogEmployeeId') || '';
+  const sessionUsername = sessionStorage.getItem('chemlogEmployeeUsername') || '';
+  const authEmail = typeof auth !== 'undefined' ? (auth.currentUser?.email || '') : '';
+  const email = String(currentRecord?.email || sessionEmail || authEmail || '').trim().toLowerCase();
+  const username = String(currentRecord?.username || sessionUsername || '').trim().toLowerCase();
+  const employeeId = String(currentRecord?.employeeId || currentRecord?.id || sessionId || email || username || '').trim();
+
+  return {
+    firstName: cleanFirstName,
+    lastName: cleanLastName,
+    submitterName: fullName || 'Unknown',
+    respondentName: fullName || 'Unknown',
+    submitterEmail: email,
+    respondentEmail: email,
+    email,
+    employeeId,
+    username,
+    submitterUsername: username,
+    respondentUsername: username,
+  };
+}
+
 function setupChemForm() {
   const submitBtn = document.getElementById('submitBtn');
   if (!submitBtn) return;
@@ -2892,7 +2923,8 @@ function setupChemForm() {
   submitBtn.addEventListener('click', async (e) => {
     e.preventDefault();
 
-    const { firstName, lastName } = getLoggedInEmployeeName();
+    const submitter = getLoggedInSubmissionIdentity();
+    const { firstName, lastName } = submitter;
     const poolId = document.getElementById('poolLocation')?.value || '';
 
     if (!poolId) {
@@ -2908,7 +2940,15 @@ function setupChemForm() {
       timestamp: Timestamp.now(),
       firstName,
       lastName,
-      employeeId: sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId') || '',
+      submitterName: submitter.submitterName,
+      respondentName: submitter.respondentName,
+      submitterEmail: submitter.submitterEmail,
+      respondentEmail: submitter.respondentEmail,
+      email: submitter.email,
+      employeeId: submitter.employeeId,
+      username: submitter.username,
+      submitterUsername: submitter.submitterUsername,
+      respondentUsername: submitter.respondentUsername,
       poolLocation: poolName,
       mainPoolPH: document.getElementById('mainPoolPH')?.value || '',
       mainPoolCl: document.getElementById('mainPoolCl')?.value || '',
@@ -4589,8 +4629,8 @@ async function saveOperationalStatusLog() {
   const facilityName = getPoolName(poolDoc);
   const poolCount = Math.max(1, Number(poolDoc.numPools || poolDoc.poolCount || 1));
   const market = Array.isArray(poolDoc.markets) ? (poolDoc.markets[0] || '') : (poolDoc.market || '');
-  const { firstName, lastName } = getLoggedInEmployeeName();
-  const employeeId = sessionStorage.getItem('chemlogEmployeeEmail') || sessionStorage.getItem('chemlogEmployeeId') || '';
+  const submitter = getLoggedInSubmissionIdentity();
+  const { firstName, lastName } = submitter;
   const writes = [];
 
   try {
@@ -4621,7 +4661,15 @@ async function saveOperationalStatusLog() {
         poolLabel: getPoolSimpleLabel(poolDoc, idx),
         firstName,
         lastName,
-        employeeId,
+        submitterName: submitter.submitterName,
+        respondentName: submitter.respondentName,
+        submitterEmail: submitter.submitterEmail,
+        respondentEmail: submitter.respondentEmail,
+        email: submitter.email,
+        employeeId: submitter.employeeId,
+        username: submitter.username,
+        submitterUsername: submitter.submitterUsername,
+        respondentUsername: submitter.respondentUsername,
       };
       if (fillChanged) payload.fillStatus = fillStatus;
       if (bleachChanged) payload.bleachStatus = bleachStatus;
@@ -5111,6 +5159,25 @@ function getSubmissionIdentityKeys(record = {}) {
   ].map(normalizeEmployeeLookupKey).filter(Boolean);
 }
 
+function isOpaqueSubmissionDisplayName(value, record = {}) {
+  const raw = String(value || '').trim();
+  if (!raw) return true;
+  const normalized = normalizeEmployeeLookupKey(raw);
+  if (normalized.includes('@')) return true;
+  if (getSubmissionIdentityKeys(record).includes(normalized)) return true;
+  return !/\s/.test(raw) && /[0-9]/.test(raw) && /^[a-z0-9_-]{10,}$/i.test(raw);
+}
+
+function getStoredSubmissionName(record = {}) {
+  const source = record || {};
+  return [
+    source.respondentName,
+    source.submitterName,
+    source.displayName,
+  ].map((value) => String(value || '').trim())
+    .find((value) => value && !isOpaqueSubmissionDisplayName(value, source)) || '';
+}
+
 function findEmployeeForSubmission(record = {}) {
   const source = record || {};
   const keys = new Set(getSubmissionIdentityKeys(source));
@@ -5136,10 +5203,10 @@ function getSubmissionRespondentName(record = {}) {
     employee?.firstName,
     employee?.lastName,
   ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
+  const storedName = getStoredSubmissionName(source);
   return recordName
     || employeeName
-    || String(source.respondentName || source.submitterName || '').trim()
-    || getSubmissionIdentityKeys(source)[0]
+    || storedName
     || '—';
 }
 
@@ -7696,10 +7763,17 @@ window.getEmployeeByID = function (idOrEmail) {
 window.getEmployeeByEmail = window.getEmployeeByID;
 
 window.getCurrentEmployeeRecord = function () {
+  let tokenIdentity = {};
+  try {
+    tokenIdentity = JSON.parse(localStorage.getItem('loginToken') || 'null') || {};
+  } catch (_) {
+    tokenIdentity = {};
+  }
   const sessionEmail = (sessionStorage.getItem('chemlogEmployeeEmail') || '').trim().toLowerCase();
   const sessionId = (sessionStorage.getItem('chemlogEmployeeId') || '').trim().toLowerCase();
-  const sessionUsername = (sessionStorage.getItem('chemlogEmployeeUsername') || '').trim().toLowerCase();
-  const supervisorEmail = (auth.currentUser?.email || getStoredSupervisorEmail() || '').trim().toLowerCase();
+  const sessionUsername = (sessionStorage.getItem('chemlogEmployeeUsername') || tokenIdentity.username || '').trim().toLowerCase();
+  const tokenEmail = String(tokenIdentity.email || (String(tokenIdentity.username || '').includes('@') ? tokenIdentity.username : '') || '').trim().toLowerCase();
+  const supervisorEmail = (auth.currentUser?.email || getStoredSupervisorEmail() || tokenEmail || '').trim().toLowerCase();
   const keys = [sessionEmail, sessionId, sessionUsername, supervisorEmail].filter(Boolean);
   const matched = employeesData
     .map(normalizeEmployeeRecord)
@@ -7712,8 +7786,8 @@ window.getCurrentEmployeeRecord = function () {
     email: sessionEmail || supervisorEmail || '',
     id: sessionId || sessionEmail || supervisorEmail || '',
     username: sessionUsername || '',
-    firstName: sessionStorage.getItem('chemlogEmployeeFirstName') || '',
-    lastName: sessionStorage.getItem('chemlogEmployeeLastName') || '',
+    firstName: sessionStorage.getItem('chemlogEmployeeFirstName') || tokenIdentity.firstName || '',
+    lastName: sessionStorage.getItem('chemlogEmployeeLastName') || tokenIdentity.lastName || '',
     homePool: sessionStorage.getItem('chemlogEmployeeHomePool') || '',
     phone: sessionStorage.getItem('chemlogEmployeePhone') || '',
   });

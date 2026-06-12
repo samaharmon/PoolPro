@@ -252,14 +252,49 @@ function collectFormItems() {
   });
 }
 
+function getDesSubmitterInfo(fallbackName = '') {
+  const helperRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  const firstName = String(helperRecord?.firstName || sessionStorage.getItem('chemlogEmployeeFirstName') || '').trim();
+  const lastName = String(helperRecord?.lastName || sessionStorage.getItem('chemlogEmployeeLastName') || '').trim();
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+  const respondentName = fullName || String(fallbackName || '').trim() || 'Unknown';
+  const email = String(helperRecord?.email || sessionStorage.getItem('chemlogEmployeeEmail') || '').trim().toLowerCase();
+  const username = String(helperRecord?.username || sessionStorage.getItem('chemlogEmployeeUsername') || '').trim().toLowerCase();
+  const employeeId = String(helperRecord?.employeeId || helperRecord?.id || sessionStorage.getItem('chemlogEmployeeId') || email || username || '').trim();
+
+  return {
+    firstName,
+    lastName,
+    respondentName,
+    submitterName: respondentName,
+    respondentEmail: email,
+    submitterEmail: email,
+    employeeId,
+    username,
+    respondentUsername: username,
+    submitterUsername: username,
+  };
+}
+
+function initRespondentNameField() {
+  const field = document.getElementById('desRespondentName');
+  const submitter = getDesSubmitterInfo();
+  if (field && submitter.respondentName !== 'Unknown') {
+    field.value = submitter.respondentName;
+  }
+}
+
 async function handleSubmit(event) {
   event.preventDefault();
   const submitBtn = document.getElementById('desSubmitBtn');
-  const respondentName = document.getElementById('desRespondentName')?.value.trim() || '';
+  const typedRespondentName = document.getElementById('desRespondentName')?.value.trim() || '';
+  const submitter = getDesSubmitterInfo(typedRespondentName);
   const pool = document.getElementById('desPoolSelect')?.value || '';
   const items = collectFormItems();
 
-  if (!respondentName || !pool) {
+  if (submitter.respondentName === 'Unknown' || !pool) {
     alert('Please enter your name and select a pool.');
     return;
   }
@@ -307,8 +342,16 @@ async function handleSubmit(event) {
     await setDoc(submissionRef, {
       timestamp: serverTimestamp(),
       pool,
-      respondentName,
-      submitterName: respondentName,
+      firstName: submitter.firstName,
+      lastName: submitter.lastName,
+      respondentName: submitter.respondentName,
+      submitterName: submitter.submitterName,
+      respondentEmail: submitter.respondentEmail,
+      submitterEmail: submitter.submitterEmail,
+      employeeId: submitter.employeeId,
+      username: submitter.username,
+      respondentUsername: submitter.respondentUsername,
+      submitterUsername: submitter.submitterUsername,
       reportType: 'desPreInspection',
       inspectionItems,
       version: 1,
@@ -330,6 +373,7 @@ async function handleSubmit(event) {
 
 document.addEventListener('DOMContentLoaded', () => {
   renderInspectionItems();
+  initRespondentNameField();
   bindPhotoInputs();
   bindTextareaAutoResize();
   document.getElementById('desInspectionForm')?.addEventListener('submit', handleSubmit);

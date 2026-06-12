@@ -75,7 +75,8 @@ function getSubmitterInfo() {
   return {
     firstName: first,
     lastName: last,
-    submitterName: fullName || username || email || employeeId || 'Unknown',
+    submitterName: fullName || 'Unknown',
+    respondentName: fullName || 'Unknown',
     submitterEmail: email,
     employeeId,
     username,
@@ -527,7 +528,7 @@ async function submitDesLogbooksForm(event) {
       lastName: submitter.lastName,
       submitterEmail: submitter.submitterEmail || 'unknown',
       submitterName: submitter.submitterName,
-      respondentName: submitter.submitterName,
+      respondentName: submitter.respondentName,
       employeeId: submitter.employeeId || submitter.submitterEmail || '',
       username: submitter.username || '',
       photos: { desLogbooks: photos },

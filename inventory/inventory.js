@@ -270,9 +270,14 @@ function getRespondentInfo() {
   return {
     firstName,
     lastName,
-    respondentName: name || username || email || '',
+    respondentName: name || 'Unknown',
+    submitterName: name || 'Unknown',
     respondentEmail: email,
+    submitterEmail: email,
+    employeeId: helperRecord?.employeeId || helperRecord?.id || email || '',
     respondentUsername: username,
+    submitterUsername: username,
+    username,
   };
 }
 
