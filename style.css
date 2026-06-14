@@ -4213,7 +4213,73 @@ body.resource-esign-open {
 .table-scroll-wrap > .employee-table td:nth-child(5) { min-width: 190px; width: auto; }
 
 .table-scroll-wrap > .employee-table th:nth-child(6),
-.table-scroll-wrap > .employee-table td:nth-child(6) { min-width: 130px; width: auto; text-align: center; }
+.table-scroll-wrap > .employee-table td:nth-child(6) { min-width: 170px; width: auto; }
+
+.table-scroll-wrap > .employee-table th:nth-child(7),
+.table-scroll-wrap > .employee-table td:nth-child(7) { min-width: 130px; width: auto; }
+
+.table-scroll-wrap > .employee-table th:nth-child(8),
+.table-scroll-wrap > .employee-table td:nth-child(8),
+.table-scroll-wrap > .employee-table th:nth-child(9),
+.table-scroll-wrap > .employee-table td:nth-child(9) { min-width: 185px; width: auto; }
+
+.table-scroll-wrap > .employee-table th:nth-child(10),
+.table-scroll-wrap > .employee-table td:nth-child(10) { min-width: 170px; width: auto; text-align: center; }
+
+.employee-unverified-section {
+  margin-top: 28px;
+}
+
+.employee-unverified-section h4 {
+  margin: 0 0 8px;
+  color: #69140e;
+  font-size: 20px;
+}
+
+.employee-unverified-table tbody tr.employee-unverified-row {
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.employee-unverified-table tbody tr.employee-unverified-row:hover,
+.employee-unverified-table tbody tr.employee-unverified-row:focus {
+  background: rgba(105, 20, 14, 0.12);
+  outline: none;
+}
+
+.employee-unverified-status {
+  color: #a40000;
+  font-weight: 700;
+}
+
+.email-override-card {
+  width: min(520px, 100%);
+}
+
+.email-override-summary {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  background: #f4f4f4;
+  border: 1px solid #ccc;
+}
+
+.email-override-summary div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.email-override-summary strong {
+  color: #69140e;
+}
+
+.email-override-summary span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 
 .table-scroll-wrap > .resource-table:not(.resource-table-admin) th:nth-child(1),
 .table-scroll-wrap > .resource-table:not(.resource-table-admin) td:nth-child(1) { min-width: 160px; width: auto; }

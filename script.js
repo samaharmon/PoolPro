@@ -436,7 +436,8 @@ function getResponsiveTableMinWidth(table) {
   if (table.matches('.dashboard-pool-table, .pool-table')) return '1200px';
   if (table.matches('.training-schedule-table')) return '760px';
   if (table.matches('.attendance-table, .test-rubric-table')) return '900px';
-  if (table.matches('.employee-table')) return '980px';
+  if (table.matches('.employee-unverified-table')) return '1260px';
+  if (table.matches('.employee-table')) return '1520px';
   if (table.matches('.sanitation-table--settings')) return '420px';
   if (table.matches('.sanitation-table')) return '700px';
   if (table.matches('.resource-table-admin')) return '980px';
@@ -5347,6 +5348,8 @@ function setupOperationalStatusLog() {
 // ============================================================
 
 let employeesData = [];
+let lifeguardAccountsData = [];
+let lifeguardAccountsLoaded = false;
 let editingEmployeeIdx = -1;
 let employeeMarketFilter = 'all';
 let employeePoolFilter = 'all';
@@ -5355,6 +5358,28 @@ let employeePage = 1;
 let employeeTableEditable = false;
 let employeeUndoState = null;
 const EMPLOYEES_PER_PAGE = 10;
+const EMPLOYEE_TABLE_COLUMNS = [
+  { key: 'firstName', label: 'Preferred First Name' },
+  { key: 'lastName', label: 'Last Name' },
+  { key: 'email', label: 'Email' },
+  { key: 'username', label: 'Username' },
+  { key: 'phone', label: 'Phone Number' },
+  { key: 'homePool', label: 'Home Pool' },
+  { key: 'role', label: 'Role' },
+  { key: 'createdAt', label: 'Account Created' },
+  { key: 'lastVerifiedAt', label: 'Last Verified' },
+  { key: 'emailVerificationOverride', label: 'Email Override' },
+];
+const UNVERIFIED_ACCOUNT_COLUMNS = [
+  'Name',
+  'Email',
+  'Username',
+  'Phone Number',
+  'Home Pool',
+  'Role',
+  'Created',
+  'Status',
+];
 let resolvePoolProEmployeesReady = null;
 window.poolProEmployeesLoaded = false;
 window.poolProEmployeesReady = new Promise((resolve) => {
@@ -5381,11 +5406,64 @@ function ensureEmployeeSearchField() {
   filterBar.appendChild(searchField);
 }
 
+function setEmployeeTableHeaders() {
+  const headerRow = document.querySelector('#employeeTableSection .employee-table thead tr');
+  if (!headerRow) return;
+  headerRow.innerHTML = EMPLOYEE_TABLE_COLUMNS
+    .map(({ label }) => `<th>${escapeHtml(label)}</th>`)
+    .join('');
+}
+
+function ensureUnverifiedAccountsSection() {
+  if (document.getElementById('unverifiedAccountsSection')) return;
+
+  const tableSection = document.getElementById('employeeTableSection');
+  if (!tableSection?.parentElement) return;
+
+  const section = document.createElement('div');
+  section.id = 'unverifiedAccountsSection';
+  section.className = 'employee-unverified-section';
+  section.innerHTML = `
+    <h4>Unverified Account Attempts</h4>
+    <p class="section-subtitle">PoolPro signup records that have not completed app email verification.</p>
+    <div id="unverifiedAccountsTableSection" class="sanitation-section">
+      <table class="employee-table employee-unverified-table">
+        <thead>
+          <tr>
+            ${UNVERIFIED_ACCOUNT_COLUMNS.map((label) => `<th>${escapeHtml(label)}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody id="unverifiedAccountsTableBody"></tbody>
+      </table>
+    </div>
+  `;
+
+  const deleteAllWrap = document.getElementById('employeeDeleteAllBtn')?.parentElement;
+  if (deleteAllWrap && deleteAllWrap.parentElement === tableSection.parentElement) {
+    deleteAllWrap.insertAdjacentElement('beforebegin', section);
+  } else {
+    tableSection.insertAdjacentElement('afterend', section);
+  }
+
+  const table = section.querySelector('.employee-unverified-table');
+  if (table) {
+    wrapResponsiveTables(section);
+    table.style.setProperty('--table-min-width', '1260px');
+    const wrap = table.closest('.table-scroll-wrap');
+    if (wrap) {
+      wrap.style.setProperty('--table-min-width', '1260px');
+      bindTableScrollShadow(wrap);
+      updateTableScrollShadow(wrap);
+    }
+  }
+}
+
 function ensureEmployeeSettingsUi() {
   const tableSection = document.getElementById('employeeTableSection');
   if (!tableSection) return;
 
   ensureEmployeeSearchField();
+  ensureUnverifiedAccountsSection();
 
   if (!document.getElementById('employeeControls')) {
     const controlsRow = document.createElement('div');
@@ -5406,18 +5484,23 @@ function ensureEmployeeSettingsUi() {
     shell.className = 'table-scroll-shell';
     const wrap = document.createElement('div');
     wrap.className = 'table-scroll-wrap';
-    wrap.style.setProperty('--table-min-width', '900px');
+    wrap.style.setProperty('--table-min-width', '1520px');
     tableSection.insertBefore(shell, table);
     shell.appendChild(wrap);
     wrap.appendChild(table);
     bindTableScrollShadow(wrap);
     updateTableScrollShadow(wrap);
+  } else if (table) {
+    table.style.setProperty('--table-min-width', '1520px');
+    const wrap = table.closest('.table-scroll-wrap');
+    if (wrap) {
+      wrap.style.setProperty('--table-min-width', '1520px');
+      bindTableScrollShadow(wrap);
+      updateTableScrollShadow(wrap);
+    }
   }
 
-  const headerRow = tableSection.querySelector('.employee-table thead tr');
-  while (headerRow && headerRow.children.length > 5) {
-    headerRow.lastElementChild?.remove();
-  }
+  setEmployeeTableHeaders();
 
   const addRow = document.querySelector('.employee-add-btn-row');
   if (addRow) {
@@ -5555,9 +5638,13 @@ async function loadEmployees() {
     } else {
       employeesData = [];
     }
+    await loadLifeguardAccounts();
     renderEmployeesTable();
+    renderUnverifiedAccountsTable();
   } catch (err) {
     console.error('[ChemLog] Error loading employees:', err);
+    renderEmployeesTable();
+    renderUnverifiedAccountsTable();
   } finally {
     const normalizedEmployees = employeesData.map(normalizeEmployeeRecord);
     window.poolProEmployees = normalizedEmployees;
@@ -5570,6 +5657,19 @@ async function loadEmployees() {
     window.dispatchEvent(new CustomEvent('poolpro:employees-loaded', {
       detail: { employees: normalizedEmployees },
     }));
+  }
+}
+
+async function loadLifeguardAccounts() {
+  try {
+    const snap = await getDocs(collection(db, 'lifeguardAccounts'));
+    lifeguardAccountsData = snap.docs
+      .map((docSnap) => normalizeLifeguardAccountRecord(docSnap.data(), docSnap.id));
+    lifeguardAccountsLoaded = true;
+  } catch (err) {
+    lifeguardAccountsLoaded = false;
+    lifeguardAccountsData = [];
+    console.error('[ChemLog] Error loading lifeguard accounts:', err);
   }
 }
 
@@ -5767,8 +5867,123 @@ function normalizeEmployeeRecord(rawEmployee) {
   };
 }
 
+function normalizeLifeguardAccountRecord(rawAccount, docId = '') {
+  const account = rawAccount || {};
+  const username = normalizeEmployeeLookupKey(account.username || docId);
+  const authEmail = (account.authEmail || account.employeeEmail || account.email || account.id || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+  const employeeEmail = (account.employeeEmail || account.email || account.id || account.authEmail || '')
+    .toString()
+    .trim()
+    .toLowerCase();
+  return {
+    ...account,
+    id: (account.id || employeeEmail || authEmail || username).toString().trim(),
+    username,
+    authEmail,
+    employeeEmail,
+    email: (account.email || employeeEmail || authEmail).toString().trim().toLowerCase(),
+    firstName: (account.firstName ?? '').toString().trim(),
+    lastName: (account.lastName ?? '').toString().trim(),
+    phone: normalizePhoneDigits(account.phone ?? ''),
+    homePool: (account.homePool ?? '').toString().trim(),
+    role: (account.role ?? '').toString().trim(),
+    createdAt: account.createdAt || '',
+    lastVerifiedAt: account.lastVerifiedAt || '',
+    lastVerificationMethod: account.lastVerificationMethod || '',
+    emailVerificationOverride: account.emailVerificationOverride === true,
+    emailVerificationOverrideAt: account.emailVerificationOverrideAt || '',
+    emailVerificationOverrideBy: account.emailVerificationOverrideBy || '',
+  };
+}
+
 function normalizeEmployeeLookupKey(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function getLifeguardAccountIdentityKeys(account = {}) {
+  return [
+    account.username,
+    account.authEmail,
+    account.employeeEmail,
+    account.email,
+    account.id,
+  ].map(normalizeEmployeeLookupKey).filter(Boolean);
+}
+
+function findLifeguardAccountForEmployee(employee = {}) {
+  const normalizedEmployee = normalizeEmployeeRecord(employee);
+  const employeeKeys = new Set([
+    normalizedEmployee.email,
+    normalizedEmployee.id,
+    normalizedEmployee.username,
+  ].map(normalizeEmployeeLookupKey).filter(Boolean));
+  if (!employeeKeys.size) return null;
+  return lifeguardAccountsData.find((account) => (
+    getLifeguardAccountIdentityKeys(account).some((key) => employeeKeys.has(key))
+  )) || null;
+}
+
+function mergeEmployeeAndAccountData(employee = {}) {
+  const normalizedEmployee = normalizeEmployeeRecord(employee);
+  const account = findLifeguardAccountForEmployee(normalizedEmployee);
+  if (!account) return normalizedEmployee;
+
+  return normalizeEmployeeRecord({
+    ...account,
+    ...normalizedEmployee,
+    id: normalizedEmployee.id || normalizedEmployee.email || account.employeeEmail || account.authEmail || account.username,
+    email: normalizedEmployee.email || account.employeeEmail || account.authEmail || account.email,
+    username: normalizedEmployee.username || account.username,
+    firstName: normalizedEmployee.firstName || account.firstName,
+    lastName: normalizedEmployee.lastName || account.lastName,
+    phone: normalizedEmployee.phone || account.phone,
+    homePool: normalizedEmployee.homePool || account.homePool,
+    role: normalizedEmployee.role || account.role,
+    createdAt: normalizedEmployee.createdAt || account.createdAt,
+    lastVerifiedAt: normalizedEmployee.lastVerifiedAt || account.lastVerifiedAt,
+    lastVerificationMethod: normalizedEmployee.lastVerificationMethod || account.lastVerificationMethod,
+    emailVerificationOverride: normalizedEmployee.emailVerificationOverride === true || account.emailVerificationOverride === true,
+    emailVerificationOverrideAt: normalizedEmployee.emailVerificationOverrideAt || account.emailVerificationOverrideAt,
+    emailVerificationOverrideBy: normalizedEmployee.emailVerificationOverrideBy || account.emailVerificationOverrideBy,
+  });
+}
+
+function formatEmployeeDateTime(value) {
+  const millis = timestampToMillis(value);
+  if (!millis) return '';
+  return new Date(millis).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatEmployeeRole(value) {
+  const role = String(value || '').trim();
+  return ROLE_DEFINITIONS.find((entry) => entry.key === role)?.label || role || '';
+}
+
+function formatEmployeeCell(record, columnKey) {
+  switch (columnKey) {
+    case 'phone':
+      return formatPhoneDisplay(record.phone);
+    case 'role':
+      return formatEmployeeRole(record.role);
+    case 'createdAt':
+    case 'lastVerifiedAt':
+      return formatEmployeeDateTime(record[columnKey]);
+    case 'emailVerificationOverride':
+      return record.emailVerificationOverride === true
+        ? `Yes${record.emailVerificationOverrideAt ? ` (${formatEmployeeDateTime(record.emailVerificationOverrideAt)})` : ''}`
+        : 'No';
+    default:
+      return record[columnKey] || '';
+  }
 }
 
 function getSubmissionIdentityKeys(record = {}) {
@@ -5851,7 +6066,10 @@ function renderEmployeesTable() {
   tbody.innerHTML = '';
 
   // Determine which employees to show based on active filters
-  let filteredEmployees = employeesData.map((emp, index) => ({ emp, index }));
+  let filteredEmployees = employeesData.map((emp, index) => ({
+    emp: mergeEmployeeAndAccountData(emp),
+    index,
+  }));
   if (employeePoolFilter !== 'all') {
     filteredEmployees = filteredEmployees.filter(({ emp }) => emp.homePool === employeePoolFilter);
   } else if (employeeMarketFilter !== 'all') {
@@ -5877,6 +6095,10 @@ function renderEmployeesTable() {
         normalized.phone,
         formatPhoneDisplay(normalized.phone),
         normalized.homePool,
+        formatEmployeeRole(normalized.role),
+        formatEmployeeDateTime(normalized.createdAt),
+        formatEmployeeDateTime(normalized.lastVerifiedAt),
+        normalized.emailVerificationOverride === true ? 'email override yes' : 'email override no',
       ].join(' ').toLowerCase();
       return haystack.includes(normalizedSearch);
     });
@@ -5898,29 +6120,173 @@ function renderEmployeesTable() {
   const pageEmployees = filteredEmployees.slice(pageStart, pageStart + EMPLOYEES_PER_PAGE);
 
   if (!pageEmployees.length) {
-    tbody.innerHTML = '<tr><td colspan="5">No employees match the current filters.</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="${EMPLOYEE_TABLE_COLUMNS.length}">No employees match the current filters.</td></tr>`;
   }
 
   pageEmployees.forEach(({ emp, index: sourceIndex }) => {
+    const displayRecord = mergeEmployeeAndAccountData(emp);
     const tr = document.createElement('tr');
     tr.dataset.employeeIndex = String(sourceIndex);
     if (employeeTableEditable) tr.classList.add('employee-row-clickable');
     if (employeeTableEditable && sourceIndex === editingEmployeeIdx) {
       tr.classList.add('employee-row-selected');
     }
-    tr.innerHTML = `
-      <td>${emp.firstName || ''}</td>
-      <td>${emp.lastName || ''}</td>
-      <td>${emp.email || emp.id || ''}</td>
-      <td>${formatPhoneDisplay(emp.phone)}</td>
-      <td>${emp.homePool || ''}</td>
-    `;
+    tr.innerHTML = EMPLOYEE_TABLE_COLUMNS
+      .map(({ key }) => `<td>${escapeHtml(formatEmployeeCell(displayRecord, key))}</td>`)
+      .join('');
     tr.addEventListener('click', () => selectEmployeeRow(sourceIndex));
     tbody.appendChild(tr);
   });
 
   syncEmployeeActionButtons();
   renderEmployeePagination(totalPages);
+}
+
+function isUnverifiedAccountAttempt(account = {}) {
+  const normalized = normalizeLifeguardAccountRecord(account, account.username || '');
+  return normalized.emailVerificationOverride !== true && !normalized.lastVerifiedAt;
+}
+
+function getUnverifiedAccountRows() {
+  return lifeguardAccountsData
+    .map((account) => normalizeLifeguardAccountRecord(account, account.username || ''))
+    .filter(isUnverifiedAccountAttempt)
+    .sort((a, b) => {
+      const bTime = timestampToMillis(b.createdAt);
+      const aTime = timestampToMillis(a.createdAt);
+      if (aTime !== bTime) return bTime - aTime;
+      return employeeDisplayName(a).localeCompare(employeeDisplayName(b));
+    });
+}
+
+function renderUnverifiedAccountsTable() {
+  ensureEmployeeSettingsUi();
+  const tbody = document.getElementById('unverifiedAccountsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  if (!lifeguardAccountsLoaded) {
+    tbody.innerHTML = `<tr><td colspan="${UNVERIFIED_ACCOUNT_COLUMNS.length}">Unable to load account attempts right now.</td></tr>`;
+    return;
+  }
+
+  const rows = getUnverifiedAccountRows();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${UNVERIFIED_ACCOUNT_COLUMNS.length}">No unverified account attempts found.</td></tr>`;
+    return;
+  }
+
+  rows.forEach((account) => {
+    const tr = document.createElement('tr');
+    tr.className = 'employee-unverified-row';
+    tr.tabIndex = 0;
+    tr.dataset.accountUsername = account.username || '';
+    const name = employeeDisplayName(account);
+    const email = account.employeeEmail || account.authEmail || account.email || '';
+    tr.innerHTML = `
+      <td>${escapeHtml(name)}</td>
+      <td>${escapeHtml(email)}</td>
+      <td>${escapeHtml(account.username || '')}</td>
+      <td>${escapeHtml(formatPhoneDisplay(account.phone))}</td>
+      <td>${escapeHtml(account.homePool || '')}</td>
+      <td>${escapeHtml(formatEmployeeRole(account.role))}</td>
+      <td>${escapeHtml(formatEmployeeDateTime(account.createdAt))}</td>
+      <td><span class="employee-unverified-status">Awaiting verification</span></td>
+    `;
+    const openOverrideModal = () => openEmailVerificationOverrideModal(account);
+    tr.addEventListener('click', openOverrideModal);
+    tr.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openOverrideModal();
+      }
+    });
+    tbody.appendChild(tr);
+  });
+
+  const wrap = document.querySelector('#unverifiedAccountsTableSection .table-scroll-wrap');
+  if (wrap) updateTableScrollShadow(wrap);
+}
+
+function closeEmailVerificationOverrideModal() {
+  const modal = document.getElementById('emailVerificationOverrideModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  setTimeout(() => {
+    modal.style.display = 'none';
+  }, 180);
+}
+
+function ensureEmailVerificationOverrideModal() {
+  let modal = document.getElementById('emailVerificationOverrideModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'emailVerificationOverrideModal';
+  modal.className = 'poolpro-confirm-modal email-override-modal';
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function openEmailVerificationOverrideModal(account = {}) {
+  const normalized = normalizeLifeguardAccountRecord(account, account.username || '');
+  const modal = ensureEmailVerificationOverrideModal();
+  const email = normalized.employeeEmail || normalized.authEmail || normalized.email || '';
+  modal.innerHTML = `
+    <div class="poolpro-confirm-card email-override-card" role="dialog" aria-modal="true" aria-labelledby="emailOverrideTitle">
+      <h3 id="emailOverrideTitle">Override Email Verification</h3>
+      <p>Allow this PoolPro account to continue without Firebase email verification.</p>
+      <div class="email-override-summary">
+        <div><strong>Name</strong><span>${escapeHtml(employeeDisplayName(normalized))}</span></div>
+        <div><strong>Email</strong><span>${escapeHtml(email || '—')}</span></div>
+        <div><strong>Username</strong><span>${escapeHtml(normalized.username || '—')}</span></div>
+        <div><strong>Home Pool</strong><span>${escapeHtml(normalized.homePool || '—')}</span></div>
+      </div>
+      <div class="poolpro-confirm-actions">
+        <button type="button" class="submit-btn" data-override-cancel>Cancel</button>
+        <button type="button" class="submit-btn danger-button" data-override-confirm>Override Email Verification</button>
+      </div>
+    </div>
+  `;
+
+  modal.onclick = (event) => {
+    if (event.target === modal) closeEmailVerificationOverrideModal();
+  };
+  const cancelButton = modal.querySelector('[data-override-cancel]');
+  const confirmButton = modal.querySelector('[data-override-confirm]');
+  if (cancelButton) cancelButton.onclick = closeEmailVerificationOverrideModal;
+  if (confirmButton) confirmButton.onclick = async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    button.textContent = 'Saving...';
+    try {
+      await overrideEmailVerificationForAccount(normalized);
+      closeEmailVerificationOverrideModal();
+    } catch (err) {
+      console.error('[ChemLog] Error overriding email verification:', err);
+      button.disabled = false;
+      button.textContent = 'Override Email Verification';
+      alert(err.message || 'Unable to override email verification right now.');
+    }
+  };
+
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => modal.classList.add('visible'));
+}
+
+async function overrideEmailVerificationForAccount(account = {}) {
+  const normalized = normalizeLifeguardAccountRecord(account, account.username || '');
+  if (!normalized.username) throw new Error('This account is missing a username.');
+  const supervisor = (auth.currentUser?.email || getStoredSupervisorEmail() || '').trim().toLowerCase();
+  const overrideAt = new Date().toISOString();
+  await setDoc(doc(db, 'lifeguardAccounts', normalized.username), {
+    emailVerificationOverride: true,
+    emailVerificationOverrideAt: overrideAt,
+    emailVerificationOverrideBy: supervisor,
+  }, { merge: true });
+  await loadLifeguardAccounts();
+  renderEmployeesTable();
+  renderUnverifiedAccountsTable();
 }
 
 function renderEmployeePagination(totalPages) {

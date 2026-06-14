@@ -587,6 +587,10 @@ function getAuthEmail(account) {
   return (account?.authEmail || account?.employeeEmail || '').toString().trim().toLowerCase();
 }
 
+function hasEmailVerificationOverride(account) {
+  return account?.emailVerificationOverride === true;
+}
+
 function buildEmployeeFromAccount(account) {
   return normalizeEmployeeRecord({
     email: account?.employeeEmail || account?.authEmail || '',
@@ -596,6 +600,12 @@ function buildEmployeeFromAccount(account) {
     lastName: account?.lastName || '',
     homePool: account?.homePool || '',
     phone: account?.phone || '',
+    role: account?.role || '',
+    createdAt: account?.createdAt || '',
+    lastVerifiedAt: account?.lastVerifiedAt || '',
+    emailVerificationOverride: account?.emailVerificationOverride === true,
+    emailVerificationOverrideAt: account?.emailVerificationOverrideAt || '',
+    emailVerificationOverrideBy: account?.emailVerificationOverrideBy || '',
   });
 }
 
@@ -1390,6 +1400,7 @@ function getSignupRoleForCurrentAccessMode() {
 
 function buildSignupRecords({ username, firstName, lastName, email, phone, homePool, role = 'lifeguard' }) {
   const normalizedRole = role === 'attendant' ? 'attendant' : 'lifeguard';
+  const createdAt = new Date().toISOString();
   const employeeRecord = {
     email,
     id: email,
@@ -1399,6 +1410,7 @@ function buildSignupRecords({ username, firstName, lastName, email, phone, homeP
     phone,
     homePool,
     role: normalizedRole,
+    createdAt,
   };
 
   const accountData = {
@@ -1411,7 +1423,7 @@ function buildSignupRecords({ username, firstName, lastName, email, phone, homeP
     homePool,
     role: normalizedRole,
     phoneLinked: false,
-    createdAt: new Date().toISOString(),
+    createdAt,
   };
 
   return { employeeRecord, accountData };
@@ -1550,7 +1562,7 @@ async function requireVerifiedCurrentUserForAccount(account) {
     throw new Error('This verified email does not match this PoolPro account. Sign in again.');
   }
 
-  if (!refreshedUser?.emailVerified) {
+  if (!refreshedUser?.emailVerified && !hasEmailVerificationOverride(account)) {
     clearLifeguardSession();
     throw new Error('Verify your email before opening PoolPro.');
   }
@@ -1571,9 +1583,10 @@ async function finalizeLifeguardAccess({ username, account, target, method, acce
   clearPendingVerificationContext();
 
   try {
+    const overrideUsed = hasEmailVerificationOverride(account) && !auth.currentUser?.emailVerified;
     await setDoc(doc(db, 'lifeguardAccounts', username), {
-      lastVerifiedAt: new Date().toISOString(),
-      lastVerificationMethod: method || '',
+      lastVerifiedAt: overrideUsed ? (account.lastVerifiedAt || new Date().toISOString()) : new Date().toISOString(),
+      lastVerificationMethod: overrideUsed ? 'supervisor-email-override' : (method || ''),
       phoneLinked: !!account.phoneLinked,
     }, { merge: true });
   } catch (err) {
@@ -1857,7 +1870,7 @@ async function authenticateLifeguard(usernameRaw, passwordRaw, accessMode = 'lif
   await clearLoginFailures('lifeguard', username);
   const user = auth.currentUser;
 
-  if (!user?.emailVerified) {
+  if (!user?.emailVerified && !hasEmailVerificationOverride(account)) {
     openVerificationView({
       username,
       account,
@@ -2074,15 +2087,24 @@ async function handleProfileCompletionSubmit() {
     role,
   });
   const preservedRole = account?.role || accountData.role;
+  const preservedCreatedAt = account?.createdAt || accountData.createdAt;
+  const preservedEmailOverride = account?.emailVerificationOverride === true ? {
+    emailVerificationOverride: true,
+    emailVerificationOverrideAt: account.emailVerificationOverrideAt || '',
+    emailVerificationOverrideBy: account.emailVerificationOverrideBy || '',
+  } : {};
   const updatedAccount = {
     ...account,
     ...accountData,
     role: preservedRole,
+    createdAt: preservedCreatedAt,
+    ...preservedEmailOverride,
     profileCompletedAt: new Date().toISOString(),
   };
   const completedEmployeeRecord = {
     ...employeeRecord,
     role: preservedRole,
+    createdAt: preservedCreatedAt,
   };
 
   await Promise.all([
