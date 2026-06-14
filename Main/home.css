@@ -3,20 +3,35 @@
 body {
   margin: 0;
   padding: 0;
-  background-color: #222;
+  background-color: #000;
   color: #fff;
   font-family: "Franklin Gothic Medium", Arial, sans-serif;
   overflow-x: hidden;
   width: 100%;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  animation: homePageFadeIn 0.28s ease both;
+  transition: opacity 0.25s ease;
 }
 
 html {
   width: 100%;
   overflow-x: hidden;
-  background-color: #222;
+  background-color: #000;
   min-height: 100%;
+}
+
+body.page-exiting {
+  opacity: 0;
+}
+
+@keyframes homePageFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 *,

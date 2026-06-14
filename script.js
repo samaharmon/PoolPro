@@ -57,6 +57,16 @@ let securitySettings = {
   sessionTimeout: '360',
   requirePasswordConfirm: true,
 };
+let alertsRemindersData = {
+  active: [],
+  history: [],
+};
+let alertsReminderEditing = {
+  id: '',
+  source: '',
+};
+let alertsRemindersLoaded = false;
+let alertsReminderPopupChecked = false;
 let securityIdleTimer = null;
 let securityEventsBound = false;
 let agreementGatePromise = null;
@@ -75,12 +85,46 @@ const CHEM_CONTROLLER_IMAGE_QUALITY = 0.72;
 const CHEM_CONTROLLER_COMPRESS_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
 const CHEM_AUTO_CONTROLLER_REUSE_WINDOW_MS = 30 * 60 * 1000;
 window.trainingSchedule = trainingSchedule;
+
+const PAGE_LOADING_MIN_MS = 180;
+let pageLoadingStartedAt = Date.now();
+
+function ensurePageLoadingOverlay() {
+  if (!document.body || document.getElementById('poolproPageLoadingOverlay')) return null;
+  const overlay = document.createElement('div');
+  overlay.id = 'poolproPageLoadingOverlay';
+  overlay.className = 'poolpro-loading-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.innerHTML = '<div class="poolpro-loading-spinner" role="status" aria-label="Loading"></div>';
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
 function markPageLoaded() {
   document.body.classList.add('page-loaded');
 }
+
+function hidePageLoadingOverlay() {
+  const overlay = document.getElementById('poolproPageLoadingOverlay');
+  if (!overlay) return;
+  const waitMs = Math.max(0, PAGE_LOADING_MIN_MS - (Date.now() - pageLoadingStartedAt));
+  setTimeout(() => overlay.classList.add('hidden'), waitMs);
+}
+
+function showPageLoadingOverlay() {
+  const overlay = ensurePageLoadingOverlay();
+  pageLoadingStartedAt = Date.now();
+  overlay?.classList.remove('hidden');
+}
+
+ensurePageLoadingOverlay();
 markPageLoaded();
 window.addEventListener('DOMContentLoaded', markPageLoaded);
-window.addEventListener('load', markPageLoaded);
+window.addEventListener('load', () => {
+  markPageLoaded();
+  hidePageLoadingOverlay();
+});
+if (document.readyState === 'complete') hidePageLoadingOverlay();
 
 // PoolPro now uses dark styling by default across the app.
 localStorage.setItem('chemlogDarkMode', 'true');
@@ -90,6 +134,47 @@ document.body.classList.add('dark-mode');
 // MENU / DROPDOWN
 // ============================================================
 
+function ensureDropdownMenuOverlay() {
+  if (!document.body) return null;
+  let overlay = document.getElementById('dropdownMenuOverlay');
+  if (overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'dropdownMenuOverlay';
+  overlay.className = 'dropdown-menu-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.addEventListener('click', closeDropdownMenus);
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function syncDropdownMenuOverlay() {
+  const overlay = ensureDropdownMenuOverlay();
+  if (!overlay) return;
+  const hasOpenMenu = !!document.querySelector('.dropdown-menu.show');
+  overlay.classList.toggle('visible', hasOpenMenu);
+  overlay.setAttribute('aria-hidden', hasOpenMenu ? 'false' : 'true');
+}
+
+function closeDropdownMenus() {
+  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  document.querySelectorAll('.menu-btn.open').forEach(btn => btn.classList.remove('open'));
+  syncDropdownMenuOverlay();
+}
+
+function observeDropdownMenus() {
+  if (!document.body || document.body.dataset.dropdownOverlayObserver === 'true') return;
+  document.body.dataset.dropdownOverlayObserver = 'true';
+  ensureDropdownMenuOverlay();
+  const observer = new MutationObserver(syncDropdownMenuOverlay);
+  observer.observe(document.body, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['class'],
+  });
+  syncDropdownMenuOverlay();
+}
+
 window.toggleMenu = function (btn) {
   const container = btn.closest('.menu-container');
   if (!container) return;
@@ -98,15 +183,21 @@ window.toggleMenu = function (btn) {
   const isOpen = menu.classList.contains('show');
   // Close all open menus first
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  document.querySelectorAll('.menu-btn.open').forEach(button => button.classList.remove('open'));
   if (!isOpen) menu.classList.add('show');
+  btn.classList.toggle('open', !isOpen);
+  syncDropdownMenuOverlay();
 };
 
 // Close dropdown when clicking outside any menu container
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.menu-container')) {
-    document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+    closeDropdownMenus();
   }
 });
+
+window.addEventListener('DOMContentLoaded', observeDropdownMenus);
+if (document.body) observeDropdownMenus();
 
 // Open inline/chunked resources as blob URLs (direct data: links are blocked in modern browsers)
 document.addEventListener('click', async (e) => {
@@ -122,6 +213,10 @@ document.addEventListener('click', async (e) => {
       || resourceUrl.startsWith(`${FIRESTORE_RESOURCE_STORAGE}:`)
       ? await getFirestoreResourceDataUrl(key)
       : resourceUrl;
+    if (isResourceESignPdf(resource)) {
+      await openResourceESignModal(resource, dataUrl);
+      return;
+    }
     openResourceDataUrl(dataUrl);
   } catch (err) {
     console.error('[PoolPro] Could not open resource file:', err);
@@ -451,6 +546,31 @@ function bindTableScrollShadow(wrapper) {
   }
 }
 
+function updateHorizontalScrollShadow(wrapper) {
+  if (!wrapper) return;
+  const shell = wrapper.closest('.dashboard-metrics-scroll-shell') || wrapper.parentElement;
+  const hasOverflow = wrapper.scrollWidth > wrapper.clientWidth + 2;
+  const hasRight = hasOverflow && (wrapper.scrollLeft + wrapper.clientWidth) < (wrapper.scrollWidth - 2);
+  const hasLeft = hasOverflow && wrapper.scrollLeft > 2;
+  shell?.classList.toggle('has-overflow-right', hasRight);
+  shell?.classList.toggle('has-overflow-left', hasLeft);
+  shell?.classList.toggle('has-overflow', hasOverflow);
+}
+
+function bindHorizontalScrollShadow(wrapper) {
+  if (!wrapper || wrapper.dataset.horizontalShadowBound === 'true') return;
+  wrapper.dataset.horizontalShadowBound = 'true';
+  const refresh = () => updateHorizontalScrollShadow(wrapper);
+  wrapper.addEventListener('scroll', refresh, { passive: true });
+  window.addEventListener('resize', refresh, { passive: true });
+  requestAnimationFrame(refresh);
+  setTimeout(refresh, 100);
+  setTimeout(refresh, 500);
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(refresh).observe(wrapper);
+  }
+}
+
 function observeResponsiveTables() {
   if (!document.body || document.body.dataset.tableObserverReady === 'true') return;
   document.body.dataset.tableObserverReady = 'true';
@@ -518,16 +638,18 @@ window.openSettings = function () {
   ensureAccountManagementSection();
   ensureDataStorageSettingsSection();
   ensureResourcesSettingsSection();
+  ensureAlertsRemindersSettingsSection();
   setupResourcesSettingsUI();
   refreshResourceControls();
   renderResourcesSettingsTable();
+  loadAlertsRemindersSettings().catch((err) => console.error('[PoolPro] Error refreshing alerts and reminders for settings:', err));
   loadResourcesDocuments().catch((err) => console.error('[PoolPro] Error refreshing resources for settings:', err));
   setupSettingsAccordions();
   setupDataExport();
   setupClearData();
   updateSettingsModalForRole();
   const modal = document.getElementById('settingsModal');
-  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  closeDropdownMenus();
   showSharedModalOverlay();
   if (modal) {
     modal.style.display = 'block';
@@ -2496,6 +2618,523 @@ function ensureDataStorageSettingsSection() {
   populateDataStorageSelectors();
   if (!wasNew) return;
   section.dataset.accordionReady = '';
+}
+
+// ============================================================
+// ALERTS AND REMINDERS
+// ============================================================
+
+function generateAlertReminderId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `alert-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function ensureAlertsRemindersSettingsSection() {
+  const modalContent = document.querySelector('#settingsModal .settings-modal-content');
+  if (!modalContent) return;
+
+  let section = document.getElementById('alertsRemindersSettings') || findSettingsSectionByTitle('Alerts and Reminders');
+  const wasNew = !section;
+  if (!section) {
+    section = document.createElement('section');
+    section.className = 'settings-section settings-group alerts-reminders-section';
+    section.id = 'alertsRemindersSettings';
+    const dataStorageSection = findSettingsSectionByTitle('Data Storage');
+    const scrollBody = modalContent.querySelector(':scope > .settings-modal-scroll');
+    if (dataStorageSection) dataStorageSection.insertAdjacentElement('beforebegin', section);
+    else if (scrollBody) scrollBody.appendChild(section);
+    else modalContent.appendChild(section);
+  }
+
+  section.id = 'alertsRemindersSettings';
+  section.classList.add('alerts-reminders-section');
+  if (section.dataset.alertsRemindersReady === 'true') {
+    setupAlertsRemindersUI();
+    renderAlertsReminderLists();
+    return;
+  }
+
+  section.innerHTML = `
+    <h3>Alerts and Reminders</h3>
+    <p class="section-subtitle">Create reminders that appear on a full-screen yellow popup after users log in.</p>
+    <div class="alerts-reminders-form">
+      <h4>Display Settings</h4>
+      <div class="settings-row alerts-reminders-grid">
+        <div class="settings-field">
+          <label for="alertReminderStartDate">Start Date</label>
+          <input type="date" id="alertReminderStartDate">
+        </div>
+        <div class="settings-field">
+          <label for="alertReminderEndDate">End Date</label>
+          <input type="date" id="alertReminderEndDate">
+        </div>
+        <div class="settings-field">
+          <label for="alertReminderStartTime">Start Time</label>
+          <input type="time" id="alertReminderStartTime">
+        </div>
+        <div class="settings-field">
+          <label for="alertReminderEndTime">End Time</label>
+          <input type="time" id="alertReminderEndTime">
+        </div>
+        <div class="settings-field">
+          <label for="alertReminderRepeat">Repeat</label>
+          <select id="alertReminderRepeat" class="training-filter-select">
+            <option value="Hourly">Hourly</option>
+            <option value="Daily" selected>Daily</option>
+            <option value="Weekly">Weekly</option>
+            <option value="Biweekly">Biweekly</option>
+            <option value="Monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
+      <div class="alerts-editor-toolbar" aria-label="Reminder formatting">
+        <button type="button" data-alert-cmd="bold" aria-label="Bold"><strong>B</strong></button>
+        <button type="button" data-alert-cmd="italic" aria-label="Italic"><em>I</em></button>
+        <button type="button" data-alert-cmd="underline" aria-label="Underline"><u>U</u></button>
+        <button type="button" data-alert-cmd="insertOrderedList" aria-label="Ordered list">1.</button>
+        <button type="button" data-alert-cmd="insertUnorderedList" aria-label="Unordered list">•</button>
+        <button type="button" data-alert-cmd="indent" aria-label="Indent">→</button>
+        <button type="button" data-alert-cmd="outdent" aria-label="Unindent">←</button>
+      </div>
+      <div id="alertsReminderEditor" class="alerts-reminder-editor" contenteditable="true" role="textbox" aria-label="Reminder text"></div>
+      <div class="alerts-reminders-actions">
+        <button type="button" class="submit-btn button-shadow" id="alertReminderSaveBtn">Deploy Reminder</button>
+        <button type="button" class="submit-btn" id="alertReminderClearBtn">Clear</button>
+      </div>
+      <p class="form-message" id="alertsReminderMessage"></p>
+    </div>
+    <div class="alerts-reminders-list-section">
+      <h4>Currently Deployed Alerts and Reminders</h4>
+      <div id="activeAlertsRemindersList" class="alerts-reminders-list"></div>
+    </div>
+    <div class="alerts-reminders-list-section">
+      <h4>History</h4>
+      <div id="alertsRemindersHistoryList" class="alerts-reminders-list"></div>
+    </div>
+  `;
+  section.dataset.alertsRemindersReady = 'true';
+  if (wasNew) section.dataset.accordionReady = '';
+  setupAlertsRemindersUI();
+  renderAlertsReminderLists();
+}
+
+function sanitizeReminderHtml(rawHtml) {
+  const allowedTags = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'OL', 'UL', 'LI', 'DIV', 'P', 'BR', 'SPAN']);
+  const template = document.createElement('template');
+  template.innerHTML = String(rawHtml || '');
+
+  const cleanNode = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || '');
+    if (node.nodeType !== Node.ELEMENT_NODE) return document.createDocumentFragment();
+    const tag = node.tagName;
+    const fragment = document.createDocumentFragment();
+    Array.from(node.childNodes).forEach((child) => fragment.appendChild(cleanNode(child)));
+    if (!allowedTags.has(tag)) return fragment;
+    const clean = document.createElement(tag.toLowerCase());
+    clean.appendChild(fragment);
+    return clean;
+  };
+
+  const output = document.createElement('div');
+  Array.from(template.content.childNodes).forEach((node) => output.appendChild(cleanNode(node)));
+  return output.innerHTML.trim();
+}
+
+function stripReminderText(html) {
+  const div = document.createElement('div');
+  div.innerHTML = sanitizeReminderHtml(html);
+  return (div.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizeAlertReminder(item = {}) {
+  return {
+    id: String(item.id || generateAlertReminderId()),
+    startDate: String(item.startDate || ''),
+    endDate: String(item.endDate || ''),
+    startTime: String(item.startTime || ''),
+    endTime: String(item.endTime || ''),
+    repeat: ['Hourly', 'Daily', 'Weekly', 'Biweekly', 'Monthly'].includes(item.repeat) ? item.repeat : 'Daily',
+    html: sanitizeReminderHtml(item.html || item.messageHtml || item.text || ''),
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
+    deletedAt: item.deletedAt || '',
+    redeployedAt: item.redeployedAt || '',
+  };
+}
+
+function normalizeAlertsRemindersData(data = {}) {
+  return {
+    active: Array.isArray(data.active) ? data.active.map(normalizeAlertReminder).filter((item) => item.html) : [],
+    history: Array.isArray(data.history) ? data.history.map(normalizeAlertReminder).filter((item) => item.html) : [],
+  };
+}
+
+async function loadAlertsRemindersSettings() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'alertsReminders'));
+    alertsRemindersData = normalizeAlertsRemindersData(snap.exists() ? snap.data() : {});
+  } catch (err) {
+    console.error('[PoolPro] Error loading alerts and reminders:', err);
+    alertsRemindersData = { active: [], history: [] };
+  }
+  alertsRemindersLoaded = true;
+  renderAlertsReminderLists();
+}
+
+async function saveAlertsRemindersSettings() {
+  await setDoc(doc(db, 'settings', 'alertsReminders'), {
+    ...alertsRemindersData,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+function setAlertsReminderMessage(text, isError = false) {
+  const msg = document.getElementById('alertsReminderMessage');
+  if (!msg) return;
+  msg.textContent = text || '';
+  msg.classList.toggle('error', !!text && isError);
+  msg.classList.toggle('success', !!text && !isError);
+}
+
+function clearAlertsReminderForm() {
+  alertsReminderEditing = { id: '', source: '' };
+  ['alertReminderStartDate', 'alertReminderEndDate', 'alertReminderStartTime', 'alertReminderEndTime'].forEach((id) => {
+    const input = document.getElementById(id);
+    if (input) input.value = '';
+  });
+  const repeat = document.getElementById('alertReminderRepeat');
+  if (repeat) repeat.value = 'Daily';
+  const editor = document.getElementById('alertsReminderEditor');
+  if (editor) editor.innerHTML = '';
+  const saveBtn = document.getElementById('alertReminderSaveBtn');
+  if (saveBtn) saveBtn.textContent = 'Deploy Reminder';
+  setAlertsReminderMessage('');
+}
+
+function populateAlertsReminderForm(reminder, source = 'active') {
+  const normalized = normalizeAlertReminder(reminder);
+  alertsReminderEditing = { id: normalized.id, source };
+  const values = {
+    alertReminderStartDate: normalized.startDate,
+    alertReminderEndDate: normalized.endDate,
+    alertReminderStartTime: normalized.startTime,
+    alertReminderEndTime: normalized.endTime,
+    alertReminderRepeat: normalized.repeat,
+  };
+  Object.entries(values).forEach(([id, value]) => {
+    const input = document.getElementById(id);
+    if (input) input.value = value;
+  });
+  const editor = document.getElementById('alertsReminderEditor');
+  if (editor) editor.innerHTML = normalized.html;
+  const saveBtn = document.getElementById('alertReminderSaveBtn');
+  if (saveBtn) saveBtn.textContent = source === 'active' ? 'Update Reminder' : 'Redeploy Reminder';
+  setAlertsReminderMessage(source === 'active' ? 'Editing deployed reminder.' : 'History item loaded. Deploy to redeploy it.');
+}
+
+function getAlertsReminderFormValues() {
+  const editor = document.getElementById('alertsReminderEditor');
+  return {
+    startDate: document.getElementById('alertReminderStartDate')?.value || '',
+    endDate: document.getElementById('alertReminderEndDate')?.value || '',
+    startTime: document.getElementById('alertReminderStartTime')?.value || '',
+    endTime: document.getElementById('alertReminderEndTime')?.value || '',
+    repeat: document.getElementById('alertReminderRepeat')?.value || 'Daily',
+    html: sanitizeReminderHtml(editor?.innerHTML || ''),
+  };
+}
+
+function parseDateOnly(value) {
+  const [year, month, day] = String(value || '').split('-').map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+function validateAlertsReminder(values) {
+  if (!values.startDate || !values.endDate) return 'Start and end dates are required.';
+  if (!values.startTime || !values.endTime) return 'Start and end times are required.';
+  const startDate = parseDateOnly(values.startDate);
+  const endDate = parseDateOnly(values.endDate);
+  if (!startDate || !endDate || endDate < startDate) return 'End date must be on or after the start date.';
+  if (!stripReminderText(values.html)) return 'Reminder text is required.';
+  return '';
+}
+
+async function handleSaveAlertReminder() {
+  const values = getAlertsReminderFormValues();
+  const validationError = validateAlertsReminder(values);
+  if (validationError) {
+    setAlertsReminderMessage(validationError, true);
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const existing = alertsReminderEditing.source === 'active'
+    ? alertsRemindersData.active.find((item) => item.id === alertsReminderEditing.id)
+    : null;
+  const reminder = normalizeAlertReminder({
+    ...(existing || {}),
+    ...values,
+    id: existing?.id || generateAlertReminderId(),
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    redeployedAt: alertsReminderEditing.source === 'history' ? now : existing?.redeployedAt || '',
+  });
+
+  if (existing) {
+    alertsRemindersData.active = alertsRemindersData.active.map((item) => item.id === reminder.id ? reminder : item);
+  } else {
+    alertsRemindersData.active = [reminder, ...alertsRemindersData.active.filter((item) => item.id !== reminder.id)];
+  }
+
+  try {
+    await saveAlertsRemindersSettings();
+    renderAlertsReminderLists();
+    populateAlertsReminderForm(reminder, 'active');
+    setAlertsReminderMessage('Reminder deployed.');
+  } catch (err) {
+    console.error('[PoolPro] Error saving alert reminder:', err);
+    setAlertsReminderMessage('Unable to save this reminder right now.', true);
+  }
+}
+
+function renderReminderListItem(reminder, source) {
+  const item = document.createElement('div');
+  item.className = 'alerts-reminder-list-item';
+  item.dataset.alertReminderId = reminder.id;
+  item.dataset.alertReminderSource = source;
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'alerts-reminder-delete';
+  deleteBtn.textContent = '×';
+  deleteBtn.setAttribute('aria-label', 'Delete reminder');
+  deleteBtn.hidden = source !== 'active';
+  item.appendChild(deleteBtn);
+
+  const loadBtn = document.createElement('button');
+  loadBtn.type = 'button';
+  loadBtn.className = 'alerts-reminder-load';
+  const preview = stripReminderText(reminder.html) || 'Untitled reminder';
+  loadBtn.innerHTML = `
+    <span class="alerts-reminder-list-title">${escapeHtml(preview)}</span>
+    <span class="alerts-reminder-list-meta">${escapeHtml(reminder.startDate)} ${escapeHtml(reminder.startTime)} - ${escapeHtml(reminder.endDate)} ${escapeHtml(reminder.endTime)} • ${escapeHtml(reminder.repeat)}</span>
+  `;
+  item.appendChild(loadBtn);
+  return item;
+}
+
+function renderAlertsReminderLists() {
+  const activeList = document.getElementById('activeAlertsRemindersList');
+  const historyList = document.getElementById('alertsRemindersHistoryList');
+  if (activeList) {
+    activeList.innerHTML = '';
+    if (!alertsRemindersData.active.length) {
+      activeList.innerHTML = '<p class="alerts-reminders-empty">No alerts or reminders are currently deployed.</p>';
+    } else {
+      alertsRemindersData.active.forEach((item) => activeList.appendChild(renderReminderListItem(item, 'active')));
+    }
+  }
+  if (historyList) {
+    historyList.innerHTML = '';
+    if (!alertsRemindersData.history.length) {
+      historyList.innerHTML = '<p class="alerts-reminders-empty">No alert or reminder history yet.</p>';
+    } else {
+      alertsRemindersData.history.forEach((item) => historyList.appendChild(renderReminderListItem(item, 'history')));
+    }
+  }
+}
+
+function setupAlertsRemindersUI() {
+  const section = document.getElementById('alertsRemindersSettings');
+  if (!section || section.dataset.alertsRemindersBound === 'true') return;
+  section.dataset.alertsRemindersBound = 'true';
+
+  section.addEventListener('click', async (event) => {
+    const toolbarBtn = event.target.closest('[data-alert-cmd]');
+    if (toolbarBtn) {
+      event.preventDefault();
+      document.getElementById('alertsReminderEditor')?.focus();
+      document.execCommand(toolbarBtn.dataset.alertCmd, false, null);
+      return;
+    }
+
+    if (event.target.closest('#alertReminderSaveBtn')) {
+      event.preventDefault();
+      await handleSaveAlertReminder();
+      return;
+    }
+
+    if (event.target.closest('#alertReminderClearBtn')) {
+      event.preventDefault();
+      clearAlertsReminderForm();
+      return;
+    }
+
+    const deleteBtn = event.target.closest('.alerts-reminder-delete');
+    if (deleteBtn && !deleteBtn.hidden) {
+      event.preventDefault();
+      const item = deleteBtn.closest('.alerts-reminder-list-item');
+      if (item?.dataset.alertReminderId) await deleteAlertReminder(item.dataset.alertReminderId);
+      return;
+    }
+
+    const loadBtn = event.target.closest('.alerts-reminder-load');
+    if (loadBtn) {
+      event.preventDefault();
+      const item = loadBtn.closest('.alerts-reminder-list-item');
+      const source = item?.dataset.alertReminderSource || 'active';
+      const list = source === 'history' ? alertsRemindersData.history : alertsRemindersData.active;
+      const reminder = list.find((entry) => entry.id === item?.dataset.alertReminderId);
+      if (reminder) populateAlertsReminderForm(reminder, source);
+    }
+  });
+}
+
+function showPoolProConfirmation({ title = 'Confirm Action', message = '', confirmText = 'Confirm' } = {}) {
+  return new Promise((resolve) => {
+    let modal = document.getElementById('poolproConfirmModal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'poolproConfirmModal';
+      modal.className = 'poolpro-confirm-modal';
+      document.body.appendChild(modal);
+    }
+    modal.innerHTML = `
+      <div class="poolpro-confirm-card">
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(message)}</p>
+        <div class="poolpro-confirm-actions">
+          <button type="button" class="submit-btn" data-confirm-cancel>Cancel</button>
+          <button type="button" class="submit-btn danger-button" data-confirm-ok>${escapeHtml(confirmText)}</button>
+        </div>
+      </div>
+    `;
+    const handleBackdropClick = (event) => {
+      if (event.target === modal) close(false);
+    };
+    const close = (result) => {
+      modal.classList.remove('visible');
+      modal.removeEventListener('click', handleBackdropClick);
+      setTimeout(() => {
+        modal.style.display = 'none';
+        resolve(result);
+      }, 180);
+    };
+    modal.querySelector('[data-confirm-cancel]')?.addEventListener('click', () => close(false), { once: true });
+    modal.querySelector('[data-confirm-ok]')?.addEventListener('click', () => close(true), { once: true });
+    modal.addEventListener('click', handleBackdropClick);
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('visible'));
+  });
+}
+
+async function deleteAlertReminder(id) {
+  const reminder = alertsRemindersData.active.find((item) => item.id === id);
+  if (!reminder) return;
+  const confirmed = await showPoolProConfirmation({
+    title: 'Delete Reminder',
+    message: 'Delete this deployed alert or reminder? It will move to history.',
+    confirmText: 'Delete',
+  });
+  if (!confirmed) return;
+
+  const deletedReminder = normalizeAlertReminder({
+    ...reminder,
+    deletedAt: new Date().toISOString(),
+  });
+  alertsRemindersData.active = alertsRemindersData.active.filter((item) => item.id !== id);
+  alertsRemindersData.history = [deletedReminder, ...alertsRemindersData.history.filter((item) => item.id !== id)];
+
+  try {
+    await saveAlertsRemindersSettings();
+    renderAlertsReminderLists();
+    if (alertsReminderEditing.id === id) clearAlertsReminderForm();
+    setAlertsReminderMessage('Reminder deleted and moved to history.');
+  } catch (err) {
+    console.error('[PoolPro] Error deleting alert reminder:', err);
+    setAlertsReminderMessage('Unable to delete this reminder right now.', true);
+  }
+}
+
+function isTimeWithinReminderWindow(now, startTime, endTime) {
+  const [startH, startM] = String(startTime || '').split(':').map(Number);
+  const [endH, endM] = String(endTime || '').split(':').map(Number);
+  if (!Number.isFinite(startH) || !Number.isFinite(endH)) return false;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = startH * 60 + (Number.isFinite(startM) ? startM : 0);
+  const endMinutes = endH * 60 + (Number.isFinite(endM) ? endM : 0);
+  if (startMinutes <= endMinutes) return nowMinutes >= startMinutes && nowMinutes <= endMinutes;
+  return nowMinutes >= startMinutes || nowMinutes <= endMinutes;
+}
+
+function isAlertReminderDueNow(reminder, now = new Date()) {
+  const startDate = parseDateOnly(reminder.startDate);
+  const endDate = parseDateOnly(reminder.endDate);
+  if (!startDate || !endDate) return false;
+  endDate.setHours(23, 59, 59, 999);
+  if (now < startDate || now > endDate) return false;
+  if (!isTimeWithinReminderWindow(now, reminder.startTime, reminder.endTime)) return false;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayDiff = Math.floor((today - startDate) / (24 * 60 * 60 * 1000));
+  if (dayDiff < 0) return false;
+  if (reminder.repeat === 'Weekly') return dayDiff % 7 === 0;
+  if (reminder.repeat === 'Biweekly') return dayDiff % 14 === 0;
+  if (reminder.repeat === 'Monthly') return now.getDate() === startDate.getDate();
+  return true;
+}
+
+function canDisplayLoginAlertReminders() {
+  return !!auth.currentUser?.emailVerified || hasFreshSupervisorToken() || hasActivePoolProSession();
+}
+
+function getAlertReminderShownKey(reminder, now = new Date()) {
+  const dateKey = formatDateInputValue(now);
+  const repeatKey = reminder.repeat === 'Hourly'
+    ? `${dateKey}:${String(now.getHours()).padStart(2, '0')}`
+    : dateKey;
+  return `poolproAlertReminderShown:${reminder.id}:${repeatKey}`;
+}
+
+function maybeShowActiveAlertRemindersOnPageLoad() {
+  if (!alertsRemindersLoaded || alertsReminderPopupChecked || !canDisplayLoginAlertReminders()) return;
+  alertsReminderPopupChecked = true;
+  const now = new Date();
+  const due = alertsRemindersData.active.filter((item) => {
+    if (!isAlertReminderDueNow(item, now)) return false;
+    const key = getAlertReminderShownKey(item, now);
+    if (sessionStorage.getItem(key) === 'true') return false;
+    sessionStorage.setItem(key, 'true');
+    return true;
+  });
+  if (due.length) showActiveAlertReminderPopup(due);
+}
+
+function showActiveAlertReminderPopup(reminders) {
+  let modal = document.getElementById('poolproAlertReminderPopup');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'poolproAlertReminderPopup';
+    modal.className = 'poolpro-alert-popup';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = `
+    <div class="poolpro-alert-popup-card">
+      <button type="button" class="poolpro-alert-popup-close" aria-label="Close">&times;</button>
+      <div class="poolpro-alert-popup-content">
+        ${reminders.map((item) => `<article class="poolpro-alert-popup-item">${sanitizeReminderHtml(item.html)}</article>`).join('')}
+      </div>
+    </div>
+  `;
+  const close = () => {
+    modal.classList.remove('visible');
+    setTimeout(() => {
+      if (!modal.classList.contains('visible')) modal.style.display = 'none';
+    }, 220);
+  };
+  modal.querySelector('.poolpro-alert-popup-close')?.addEventListener('click', close);
+  modal.style.display = 'flex';
+  requestAnimationFrame(() => modal.classList.add('visible'));
 }
 
 // ============================================================
@@ -6080,6 +6719,9 @@ const chemControllerPhotoDataUrlMap = new Map();
 const desInspectionPhotoDataUrlMap = new Map();
 const RESOURCE_FILTER_ALL_VALUE = 'all';
 const RESOURCE_ALL_FACILITIES_VALUE = 'All';
+const RESOURCE_TYPE_FILE = 'file';
+const RESOURCE_TYPE_LINK = 'link';
+const RESOURCE_TYPE_ESIGN_PDF = 'esign-pdf';
 const FIRESTORE_RESOURCE_STORAGE = 'firestoreChunks';
 const FIRESTORE_DUTY_PHOTO_STORAGE = 'firestoreDutyPhoto';
 const FIRESTORE_DES_PRE_INSPECTION_PHOTO_STORAGE = 'firestoreDesPreInspectionPhoto';
@@ -6089,6 +6731,12 @@ const RESOURCE_FIRESTORE_MAX_FILE_SIZE = 20 * 1024 * 1024;
 const RESOURCE_STORAGE_UPLOAD_TIMEOUT_MS = 12000;
 const RESOURCE_STORAGE_URL_TIMEOUT_MS = 10000;
 const RESOURCE_STORAGE_BLOCKED_SESSION_KEY = 'poolproResourceStorageBlocked';
+const PDFJS_VERSION = '3.11.174';
+const PDFJS_SCRIPT_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`;
+const PDFJS_WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+let resourcePdfJsPromise = null;
+let resourceESignRenderToken = 0;
+let currentResourceESignObjectUrl = '';
 
 function getResourceStorage() {
   return getStorage(getApp());
@@ -6112,6 +6760,7 @@ function ensureResourcesSettingsSection() {
       <label for="resourceSourceTypeSelect" class="settings-field-label">Resource Type</label>
       <select id="resourceSourceTypeSelect" class="training-filter-select" aria-label="Resource type">
         <option value="file">File Upload</option>
+        <option value="esign-pdf">E-Sign PDF</option>
         <option value="link">Website Link</option>
       </select>
     </div>
@@ -6211,11 +6860,15 @@ function populateResourceForm(item) {
   const normalized = normalizeResourceRecord(item || {});
   resourceEditingId = normalized.id || '';
   pendingResourceFile = null;
-  setResourceSourceType(normalized.resourceType === 'link' ? 'link' : 'file');
+  setResourceSourceType(isResourceESignPdf(normalized)
+    ? RESOURCE_TYPE_ESIGN_PDF
+    : normalized.resourceType === RESOURCE_TYPE_LINK
+      ? RESOURCE_TYPE_LINK
+      : RESOURCE_TYPE_FILE);
   const fileInput = document.getElementById('resourceFileInput');
   if (fileInput) fileInput.value = '';
   const linkInput = document.getElementById('resourceLinkInput');
-  if (linkInput) linkInput.value = normalized.resourceType === 'link' ? (normalized.fileUrl || '') : '';
+  if (linkInput) linkInput.value = normalized.resourceType === RESOURCE_TYPE_LINK ? (normalized.fileUrl || '') : '';
   const nameInput = document.getElementById('resourceDocumentNameInput');
   const descriptionInput = document.getElementById('resourceDescriptionInput');
   const poolInput = document.getElementById('resourcePoolInput');
@@ -6312,6 +6965,16 @@ function isResourceAllFacilities(value) {
 function normalizeResourcePoolValue(value) {
   const trimmed = (value || '').toString().trim();
   return isResourceAllFacilities(trimmed) ? RESOURCE_ALL_FACILITIES_VALUE : trimmed;
+}
+
+function isResourceESignPdf(item = {}) {
+  return (item?.resourceType || item?.type || '').toString().trim() === RESOURCE_TYPE_ESIGN_PDF;
+}
+
+function isPdfResourceFile(fileLike = {}) {
+  const type = (fileLike?.type || fileLike?.contentType || '').toString().toLowerCase();
+  const name = (fileLike?.name || fileLike?.fileName || '').toString().toLowerCase();
+  return type === 'application/pdf' || name.endsWith('.pdf');
 }
 
 function getAllMarkets() {
@@ -6469,17 +7132,32 @@ function normalizeResourceLink(rawValue) {
 }
 
 function setResourceSourceType(type) {
-  resourceSourceType = type === 'link' ? 'link' : 'file';
+  resourceSourceType = type === RESOURCE_TYPE_LINK
+    ? RESOURCE_TYPE_LINK
+    : type === RESOURCE_TYPE_ESIGN_PDF
+      ? RESOURCE_TYPE_ESIGN_PDF
+      : RESOURCE_TYPE_FILE;
   const sourceSelect = document.getElementById('resourceSourceTypeSelect');
   const fileInput = document.getElementById('resourceFileInput');
   const linkInput = document.getElementById('resourceLinkInput');
   const fileLabel = document.getElementById('resourceFileLabel');
 
   if (sourceSelect) sourceSelect.value = resourceSourceType;
-  if (fileLabel) fileLabel.textContent = resourceSourceType === 'link' ? 'Resource Link' : 'Resource File';
-  fileInput?.classList.toggle('hidden', resourceSourceType === 'link');
-  linkInput?.classList.toggle('hidden', resourceSourceType !== 'link');
-  if (resourceSourceType === 'link') {
+  if (fileLabel) {
+    fileLabel.textContent = resourceSourceType === RESOURCE_TYPE_LINK
+      ? 'Resource Link'
+      : resourceSourceType === RESOURCE_TYPE_ESIGN_PDF
+        ? 'E-Sign PDF'
+        : 'Resource File';
+  }
+  if (fileInput) {
+    fileInput.classList.toggle('hidden', resourceSourceType === RESOURCE_TYPE_LINK);
+    fileInput.accept = resourceSourceType === RESOURCE_TYPE_ESIGN_PDF
+      ? '.pdf,application/pdf'
+      : '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.jpg,.jpeg,.png,.mp4,.mov,.webm,.avi,.mkv,.m4v';
+  }
+  linkInput?.classList.toggle('hidden', resourceSourceType !== RESOURCE_TYPE_LINK);
+  if (resourceSourceType === RESOURCE_TYPE_LINK) {
     pendingResourceFile = null;
     if (fileInput) fileInput.value = '';
   } else if (linkInput) {
@@ -6498,7 +7176,10 @@ function buildResourceRowCells(item, includeActions = false) {
   const nameText = item.documentName || item.fileName || 'Untitled document';
   let nameHtml;
   if (item.fileUrl) {
-    if (item.fileUrl.startsWith('data:')) {
+    if (isResourceESignPdf(item)) {
+      resourceDataUrlMap.set(item.id, item.fileUrl);
+      nameHtml = `<a href="#" class="resource-doc-link resource-esign-link" data-resource-key="${item.id}" rel="noopener">${nameText}</a>`;
+    } else if (item.fileUrl.startsWith('data:')) {
       resourceDataUrlMap.set(item.id, item.fileUrl);
       nameHtml = `<a href="#" class="resource-doc-link" data-resource-key="${item.id}" rel="noopener">${nameText}</a>`;
     } else if (item.storageType === FIRESTORE_RESOURCE_STORAGE || item.fileUrl.startsWith(`${FIRESTORE_RESOURCE_STORAGE}:`)) {
@@ -6614,14 +7295,391 @@ function timeoutAfter(ms, label) {
 
 function openResourceDataUrl(dataUrl) {
   if (!dataUrl || !dataUrl.startsWith('data:')) throw new Error('Invalid resource data.');
-  const [header, b64] = dataUrl.split(',');
-  const mime = header.split(':')[1].split(';')[0];
-  const bytes = Uint8Array.from(atob(b64 || ''), c => c.charCodeAt(0));
-  const blob = new Blob([bytes], { type: mime });
+  const blob = dataUrlToBlob(dataUrl);
   const blobUrl = URL.createObjectURL(blob);
   const win = window.open(blobUrl, '_blank');
   if (!win) URL.revokeObjectURL(blobUrl);
   else setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+}
+
+function dataUrlToBlob(dataUrl) {
+  const [header = '', b64 = ''] = String(dataUrl || '').split(',');
+  const mime = header.split(':')[1]?.split(';')[0] || 'application/octet-stream';
+  const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+  return new Blob([bytes], { type: mime });
+}
+
+async function getResourceBlob(resource, resolvedUrl) {
+  const url = resolvedUrl || resource?.fileUrl || '';
+  if (!url) throw new Error('Resource file was not found.');
+  if (url.startsWith('data:')) return dataUrlToBlob(url);
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Resource file could not be downloaded.');
+  return response.blob();
+}
+
+function loadResourcePdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  if (resourcePdfJsPromise) return resourcePdfJsPromise;
+
+  resourcePdfJsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = PDFJS_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => {
+      if (!window.pdfjsLib) {
+        reject(new Error('PDF viewer could not be initialized.'));
+        return;
+      }
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
+      resolve(window.pdfjsLib);
+    };
+    script.onerror = () => reject(new Error('PDF viewer could not be loaded.'));
+    document.head.appendChild(script);
+  });
+
+  return resourcePdfJsPromise;
+}
+
+function getResourceESignModal() {
+  let modal = document.getElementById('resourceESignModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'resourceESignModal';
+  modal.className = 'resource-esign-modal';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML = `
+    <div class="resource-esign-dialog" role="dialog" aria-modal="true" aria-labelledby="resourceESignTitle">
+      <div class="resource-esign-header">
+        <div>
+          <h2 id="resourceESignTitle">E-Sign PDF</h2>
+          <p id="resourceESignSubtitle">Review the full document before signing.</p>
+        </div>
+        <button type="button" class="resource-esign-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="resource-esign-body">
+        <div class="resource-esign-pdf-scroll" id="resourceESignPdfScroll">
+          <div class="resource-esign-pages" id="resourceESignPages"></div>
+        </div>
+        <form class="resource-esign-actions" id="resourceESignForm">
+          <div class="resource-esign-field">
+            <label for="resourceESignSignatureInput">Type your name as it appears on your account</label>
+            <input id="resourceESignSignatureInput" type="text" autocomplete="name" />
+            <div class="resource-esign-hint" id="resourceESignSignatureHint"></div>
+          </div>
+          <label class="resource-esign-checkbox">
+            <input id="resourceESignCheckbox" type="checkbox" disabled />
+            <span>I understand this policy.</span>
+          </label>
+          <div class="resource-esign-gate" id="resourceESignGateMessage">Scroll until the top of the last page is visible to enable acknowledgment.</div>
+          <div class="resource-esign-button-row">
+            <button type="button" class="agreement-btn" id="resourceESignDownloadBtn" disabled>Download PDF</button>
+            <button type="button" class="agreement-btn" id="resourceESignCancelBtn">Cancel</button>
+            <button type="submit" class="agreement-btn primary" id="resourceESignSubmitBtn" disabled>Sign Document</button>
+          </div>
+          <div class="resource-esign-message" id="resourceESignMessage" aria-live="polite"></div>
+        </form>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeResourceESignModal();
+  });
+  modal.querySelector('.resource-esign-close')?.addEventListener('click', closeResourceESignModal);
+  modal.querySelector('#resourceESignCancelBtn')?.addEventListener('click', closeResourceESignModal);
+  modal.querySelector('#resourceESignForm')?.addEventListener('submit', handleResourceESignSubmit);
+  modal.querySelector('#resourceESignSignatureInput')?.addEventListener('input', () => syncResourceESignSubmitState(modal));
+  modal.querySelector('#resourceESignCheckbox')?.addEventListener('change', () => syncResourceESignSubmitState(modal));
+  modal.querySelector('#resourceESignPdfScroll')?.addEventListener('scroll', () => requestAnimationFrame(() => updateResourceESignScrollGate(modal)));
+  modal.querySelector('#resourceESignDownloadBtn')?.addEventListener('click', () => downloadCurrentResourceESignPdf());
+
+  return modal;
+}
+
+function setResourceESignMessage(modal, text, isError = false) {
+  const message = modal?.querySelector('#resourceESignMessage');
+  if (!message) return;
+  message.textContent = text || '';
+  message.classList.toggle('success', !!text && !isError);
+}
+
+function getResourceESignContext() {
+  const record = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  const normalized = normalizeEmployeeRecord(record || {});
+  const agreementContext = getCurrentAgreementContext();
+  const recordName = [normalized.firstName, normalized.lastName].filter(Boolean).join(' ').trim();
+  const agreementName = !String(agreementContext?.displayName || '').includes('@')
+    ? String(agreementContext?.displayName || '').trim()
+    : '';
+  const displayName = recordName || agreementName;
+  const email = normalized.email || agreementContext?.email || auth.currentUser?.email || '';
+  const username = normalized.username || agreementContext?.username || '';
+  const employeeId = normalized.employeeId || normalized.id || agreementContext?.employeeId || email || username || '';
+
+  return {
+    firstName: normalized.firstName || agreementContext?.firstName || '',
+    lastName: normalized.lastName || agreementContext?.lastName || '',
+    displayName,
+    email,
+    username,
+    employeeId,
+    role: agreementContext?.role || '',
+  };
+}
+
+function normalizeESignText(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+function getResourceESignSignatureId(context) {
+  const raw = context.email || context.username || context.employeeId || 'unknown-user';
+  return String(raw).trim().toLowerCase()
+    .replace(/[\/\\#?[\]]/g, '_')
+    .replace(/[^a-z0-9._@-]/g, '_')
+    .slice(0, 140) || 'unknown-user';
+}
+
+function resetResourceESignModal(modal, resource) {
+  const title = modal.querySelector('#resourceESignTitle');
+  const subtitle = modal.querySelector('#resourceESignSubtitle');
+  const pages = modal.querySelector('#resourceESignPages');
+  const scroll = modal.querySelector('#resourceESignPdfScroll');
+  const checkbox = modal.querySelector('#resourceESignCheckbox');
+  const signatureInput = modal.querySelector('#resourceESignSignatureInput');
+  const signatureHint = modal.querySelector('#resourceESignSignatureHint');
+  const gate = modal.querySelector('#resourceESignGateMessage');
+  const downloadBtn = modal.querySelector('#resourceESignDownloadBtn');
+  const submitBtn = modal.querySelector('#resourceESignSubmitBtn');
+  const context = getResourceESignContext();
+
+  modal.dataset.resourceId = resource?.id || '';
+  modal.dataset.scrollUnlocked = 'false';
+  if (title) title.textContent = resource?.documentName || resource?.fileName || 'E-Sign PDF';
+  if (subtitle) subtitle.textContent = 'Review the full document before signing.';
+  if (pages) pages.innerHTML = '<div class="resource-esign-loading">Loading PDF...</div>';
+  if (scroll) scroll.scrollTop = 0;
+  if (checkbox) {
+    checkbox.checked = false;
+    checkbox.disabled = true;
+  }
+  if (signatureInput) signatureInput.value = '';
+  if (signatureHint) {
+    signatureHint.textContent = context.displayName
+      ? `Signature must match the name on your account: ${context.displayName}`
+      : 'Use your full account name as your electronic signature.';
+  }
+  if (gate) {
+    gate.textContent = 'Scroll until the top of the last page is visible to enable acknowledgment.';
+    gate.classList.remove('ready');
+  }
+  if (downloadBtn) downloadBtn.disabled = true;
+  if (submitBtn) submitBtn.disabled = true;
+  setResourceESignMessage(modal, '');
+}
+
+function syncResourceESignSubmitState(modal) {
+  const checkbox = modal?.querySelector('#resourceESignCheckbox');
+  const signatureInput = modal?.querySelector('#resourceESignSignatureInput');
+  const submitBtn = modal?.querySelector('#resourceESignSubmitBtn');
+  if (!submitBtn || !checkbox || !signatureInput) return;
+  submitBtn.disabled = !(modal.dataset.scrollUnlocked === 'true' && checkbox.checked && signatureInput.value.trim());
+}
+
+function updateResourceESignScrollGate(modal) {
+  if (!modal || modal.dataset.scrollUnlocked === 'true') return;
+  const scroll = modal.querySelector('#resourceESignPdfScroll');
+  const lastPage = modal.querySelector('.resource-esign-page[data-last-page="true"]');
+  if (!scroll || !lastPage) return;
+  const scrollRect = scroll.getBoundingClientRect();
+  const lastRect = lastPage.getBoundingClientRect();
+  const topBorderVisible = lastRect.top >= scrollRect.top && lastRect.top <= scrollRect.bottom;
+  if (!topBorderVisible) return;
+
+  modal.dataset.scrollUnlocked = 'true';
+  const checkbox = modal.querySelector('#resourceESignCheckbox');
+  const gate = modal.querySelector('#resourceESignGateMessage');
+  if (checkbox) checkbox.disabled = false;
+  if (gate) {
+    gate.textContent = 'Acknowledgment enabled.';
+    gate.classList.add('ready');
+  }
+  syncResourceESignSubmitState(modal);
+}
+
+async function renderResourceESignPdf(modal, blob, token) {
+  const pages = modal.querySelector('#resourceESignPages');
+  if (!pages) return;
+  const pdfjsLib = await loadResourcePdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
+  if (token !== resourceESignRenderToken) return;
+  pages.innerHTML = '';
+
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    if (token !== resourceESignRenderToken) return;
+    const page = await pdf.getPage(pageNumber);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const availableWidth = Math.max(280, (pages.clientWidth || 760) - 28);
+    const scale = Math.min(2, availableWidth / baseViewport.width);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.floor(viewport.width * ratio);
+    canvas.height = Math.floor(viewport.height * ratio);
+    canvas.style.width = `${Math.floor(viewport.width)}px`;
+    canvas.style.height = `${Math.floor(viewport.height)}px`;
+    const context = canvas.getContext('2d');
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    const pageWrap = document.createElement('div');
+    pageWrap.className = 'resource-esign-page';
+    pageWrap.dataset.pageNumber = String(pageNumber);
+    if (pageNumber === pdf.numPages) pageWrap.dataset.lastPage = 'true';
+    const pageLabel = document.createElement('div');
+    pageLabel.className = 'resource-esign-page-label';
+    pageLabel.textContent = `Page ${pageNumber} of ${pdf.numPages}`;
+    pageWrap.append(pageLabel, canvas);
+    pages.appendChild(pageWrap);
+
+    await page.render({ canvasContext: context, viewport }).promise;
+  }
+
+  requestAnimationFrame(() => updateResourceESignScrollGate(modal));
+}
+
+function getResourceDownloadName(resource = {}) {
+  const rawName = resource.fileName || resource.documentName || 'PoolPro_E-Sign_Document.pdf';
+  return rawName.toLowerCase().endsWith('.pdf') ? rawName : `${rawName}.pdf`;
+}
+
+function downloadCurrentResourceESignPdf() {
+  const modal = document.getElementById('resourceESignModal');
+  const resource = resourcesData.find((item) => item.id === modal?.dataset.resourceId) || {};
+  if (!currentResourceESignObjectUrl) return;
+  const link = document.createElement('a');
+  link.href = currentResourceESignObjectUrl;
+  link.download = getResourceDownloadName(resource);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function openResourceESignModal(resource, resolvedUrl) {
+  const modal = getResourceESignModal();
+  const token = resourceESignRenderToken + 1;
+  resourceESignRenderToken = token;
+  resetResourceESignModal(modal, resource);
+  modal.style.display = 'flex';
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('resource-esign-open');
+  requestAnimationFrame(() => modal.classList.add('visible'));
+
+  if (currentResourceESignObjectUrl) {
+    URL.revokeObjectURL(currentResourceESignObjectUrl);
+    currentResourceESignObjectUrl = '';
+  }
+
+  try {
+    const blob = await getResourceBlob(resource, resolvedUrl);
+    const pdfBlob = blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+    if (token !== resourceESignRenderToken) return;
+    currentResourceESignObjectUrl = URL.createObjectURL(pdfBlob);
+    const downloadBtn = modal.querySelector('#resourceESignDownloadBtn');
+    if (downloadBtn) downloadBtn.disabled = false;
+    await renderResourceESignPdf(modal, pdfBlob, token);
+  } catch (err) {
+    console.error('[PoolPro] Unable to render E-Sign PDF:', err);
+    const pages = modal.querySelector('#resourceESignPages');
+    if (pages) pages.innerHTML = '<div class="resource-esign-loading error">Unable to load this PDF for signing.</div>';
+    setResourceESignMessage(modal, err?.message || 'Unable to load this PDF for signing.', true);
+  }
+}
+
+function closeResourceESignModal() {
+  const modal = document.getElementById('resourceESignModal');
+  if (!modal) return;
+  resourceESignRenderToken += 1;
+  modal.classList.remove('visible');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('resource-esign-open');
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) modal.style.display = 'none';
+  }, 220);
+  if (currentResourceESignObjectUrl) {
+    URL.revokeObjectURL(currentResourceESignObjectUrl);
+    currentResourceESignObjectUrl = '';
+  }
+}
+
+async function handleResourceESignSubmit(event) {
+  event.preventDefault();
+  const modal = document.getElementById('resourceESignModal');
+  const resource = resourcesData.find((item) => item.id === modal?.dataset.resourceId);
+  const checkbox = modal?.querySelector('#resourceESignCheckbox');
+  const signatureInput = modal?.querySelector('#resourceESignSignatureInput');
+  const signatureName = signatureInput?.value.trim() || '';
+  const context = getResourceESignContext();
+  if (!modal || !resource) return;
+  if (modal.dataset.scrollUnlocked !== 'true') {
+    setResourceESignMessage(modal, 'Scroll to the top of the last page before acknowledging this policy.', true);
+    return;
+  }
+  if (!checkbox?.checked) {
+    setResourceESignMessage(modal, 'Check the acknowledgment box to sign this document.', true);
+    return;
+  }
+  if (!signatureName) {
+    setResourceESignMessage(modal, 'Type your account name to sign this document.', true);
+    return;
+  }
+  if (context.displayName && normalizeESignText(signatureName) !== normalizeESignText(context.displayName)) {
+    setResourceESignMessage(modal, `Your signature must match "${context.displayName}".`, true);
+    return;
+  }
+
+  const submitBtn = modal.querySelector('#resourceESignSubmitBtn');
+  try {
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+    }
+    setResourceESignMessage(modal, 'Saving your signed acknowledgment...');
+    await setDoc(doc(db, 'resourcesDocuments', resource.id, 'eSignatures', getResourceESignSignatureId(context)), {
+      resourceId: resource.id,
+      resourceName: resource.documentName || resource.fileName || '',
+      resourceFileName: resource.fileName || '',
+      resourceUploadDate: resource.uploadDate || '',
+      signatureName,
+      displayName: context.displayName || '',
+      firstName: context.firstName || '',
+      lastName: context.lastName || '',
+      email: context.email || '',
+      username: context.username || '',
+      employeeId: context.employeeId || '',
+      role: context.role || '',
+      acceptanceMethod: 'typed-signature-checkbox',
+      acknowledged: true,
+      signedAt: serverTimestamp(),
+      signedAtIso: new Date().toISOString(),
+      signedPath: window.location.pathname,
+      signedUrl: window.location.href,
+      userAgent: navigator.userAgent,
+    }, { merge: true });
+    setResourceESignMessage(modal, 'Signed acknowledgment saved.', false);
+    setTimeout(closeResourceESignModal, 650);
+  } catch (err) {
+    console.error('[PoolPro] Unable to save E-Sign signature:', err);
+    setResourceESignMessage(modal, err?.message || 'Unable to save your signature. Please try again.', true);
+  } finally {
+    if (submitBtn) {
+      submitBtn.textContent = 'Sign Document';
+      syncResourceESignSubmitState(modal);
+    }
+  }
 }
 
 function isFirebaseStorageCorsError(err) {
@@ -6858,7 +7916,11 @@ function setupResourcesSettingsUI() {
     const description = document.getElementById('resourceDescriptionInput')?.value.trim() || '';
     const pool = poolInput.value || '';
     const market = getPoolMarket(pool);
-    const mode = sourceSelect.value === 'link' ? 'link' : 'file';
+    const mode = sourceSelect.value === RESOURCE_TYPE_LINK
+      ? RESOURCE_TYPE_LINK
+      : sourceSelect.value === RESOURCE_TYPE_ESIGN_PDF
+        ? RESOURCE_TYPE_ESIGN_PDF
+        : RESOURCE_TYPE_FILE;
     const normalizedLink = normalizeResourceLink(linkInput.value);
 
     if (!documentName || !description || !pool) {
@@ -6869,13 +7931,22 @@ function setupResourcesSettingsUI() {
     const existing = resourceEditingId
       ? resourcesData.find((item) => item.id === resourceEditingId)
       : null;
-    const switchingLinkToFile = existing?.resourceType === 'link' && mode === 'file';
-    if (mode === 'file' && (!existing || switchingLinkToFile) && !pendingResourceFile) {
+    const switchingLinkToFile = existing?.resourceType === RESOURCE_TYPE_LINK && mode !== RESOURCE_TYPE_LINK;
+    const existingIsCompatibleESignPdf = mode === RESOURCE_TYPE_ESIGN_PDF && existing && isPdfResourceFile(existing);
+    if (mode !== RESOURCE_TYPE_LINK && (!existing || switchingLinkToFile) && !pendingResourceFile) {
       alert('Choose a file before adding a resource.');
       return;
     }
-    if (mode === 'link' && !normalizedLink) {
+    if (mode === RESOURCE_TYPE_LINK && !normalizedLink) {
       alert('Enter a valid website link before adding a resource.');
+      return;
+    }
+    if (mode === RESOURCE_TYPE_ESIGN_PDF && pendingResourceFile && !isPdfResourceFile(pendingResourceFile)) {
+      alert('E-Sign PDF resources must use a PDF file.');
+      return;
+    }
+    if (mode === RESOURCE_TYPE_ESIGN_PDF && !pendingResourceFile && !existingIsCompatibleESignPdf) {
+      alert('Choose a PDF file before saving an E-Sign PDF resource.');
       return;
     }
 
@@ -6897,7 +7968,7 @@ function setupResourcesSettingsUI() {
         dataUrlPrefix: existing.dataUrlPrefix,
       } : null;
 
-      if (mode === 'link') {
+      if (mode === RESOURCE_TYPE_LINK) {
         if (existing) await deleteResourceBackingFile(existing);
         fileMeta = {
           fileUrl: normalizedLink,
@@ -6924,7 +7995,7 @@ function setupResourcesSettingsUI() {
       }
 
       const uploadTimestampMs = Date.now();
-      const isNewResourceValue = mode === 'link'
+      const isNewResourceValue = mode === RESOURCE_TYPE_LINK
         ? normalizedLink !== existing?.fileUrl
         : !!pendingResourceFile || !existing;
       const uploadDate = isNewResourceValue
@@ -7862,8 +8933,12 @@ document.addEventListener('click', (event) => {
     if (url.origin !== window.location.origin) return;
     event.preventDefault();
     url.searchParams.set('_reload', String(Date.now()));
-    document.querySelectorAll('.dropdown-menu.show').forEach((menu) => menu.classList.remove('show'));
-    window.location.href = url.pathname + url.search + url.hash;
+    closeDropdownMenus();
+    document.body.classList.add('page-exiting');
+    showPageLoadingOverlay();
+    setTimeout(() => {
+      window.location.href = url.pathname + url.search + url.hash;
+    }, 140);
   } catch (_) {
     // Ignore malformed URLs
   }
@@ -7913,6 +8988,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ensureStandardSettingsSections();
   ensureDataStorageSettingsSection();
   ensureResourcesSettingsSection();
+  ensureAlertsRemindersSettingsSection();
   ensureSettingsModalScrollBody();
   resetOrphanedSharedModalOverlay();
   setupAccountManagement();
@@ -7969,6 +9045,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     window.setupDropdownVisibility();
     enforceDesPreInspectionAccess();
+    maybeShowActiveAlertRemindersOnPageLoad();
   });
 
   normalizeSharedHeaderCopy();
@@ -7995,6 +9072,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Employee management
   await loadSecuritySettings();
+  await loadAlertsRemindersSettings();
   await loadEmployees();
   ensureRolesPermissionsSettingsSection();
   await loadResourcesDocuments();
@@ -8005,6 +9083,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupEmployeeFilters();
   setupSecuritySettingsUI();
   applySecuritySessionTimeout();
+  maybeShowActiveAlertRemindersOnPageLoad();
 
   // Market section edit/save toggle
   setupMarketEditSave();
@@ -8290,9 +9369,53 @@ function createInspectionReportCell(sub, type) {
   return cell;
 }
 
-function findLatestReportForPool(submissions, poolName) {
+function getCurrentManagerialInspectionPeriod(now = new Date()) {
+  const start = new Date(now);
+  const daysSinceFriday = (start.getDay() - 5 + 7) % 7;
+  start.setDate(start.getDate() - daysSinceFriday);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  end.setMilliseconds(end.getMilliseconds() - 1);
+  return { start, end };
+}
+
+function getCurrentDesInspectionPeriod(now = new Date()) {
+  const start = new Date(now.getFullYear(), now.getMonth(), 24, 0, 0, 0, 0);
+  if (now.getDate() < 24) start.setMonth(start.getMonth() - 1);
+  const end = new Date(start);
+  end.setMonth(start.getMonth() + 1);
+  end.setMilliseconds(end.getMilliseconds() - 1);
+  return { start, end };
+}
+
+function formatInspectionPeriodDate(date) {
+  return date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: 'numeric' });
+}
+
+function isReportInPeriod(report, period) {
+  const date = toDateObject(report?.timestamp);
+  return !!date && date >= period.start && date <= period.end;
+}
+
+function renderInspectionDateFilter(container, managerialPeriod, desPeriod) {
+  const filter = document.createElement('div');
+  filter.className = 'dashboard-date-filter dashboard-inspection-date-filter';
+  filter.innerHTML = `
+    <span class="filter-by-label">Date Filter:</span>
+    <span class="dashboard-date-filter-chip">
+      Managerial: ${escapeHtml(formatInspectionPeriodDate(managerialPeriod.start))} - ${escapeHtml(formatInspectionPeriodDate(managerialPeriod.end))}
+    </span>
+    <span class="dashboard-date-filter-chip">
+      DES: ${escapeHtml(formatInspectionPeriodDate(desPeriod.start))} - ${escapeHtml(formatInspectionPeriodDate(desPeriod.end))}
+    </span>
+  `;
+  container.appendChild(filter);
+}
+
+function findLatestReportForPool(submissions, poolName, period = null) {
   return submissions
-    .filter((sub) => sub.pool === poolName)
+    .filter((sub) => sub.pool === poolName && (!period || isReportInPeriod(sub, period)))
     .sort((a, b) => (toDateObject(b.timestamp)?.getTime?.() || 0) - (toDateObject(a.timestamp)?.getTime?.() || 0))[0] || null;
 }
 
@@ -8311,6 +9434,9 @@ function renderInspectionReports() {
   container.innerHTML = '';
 
   renderDashboardFilterBar(container, renderInspectionReports, { includeDate: false });
+  const managerialPeriod = getCurrentManagerialInspectionPeriod();
+  const desPeriod = getCurrentDesInspectionPeriod();
+  renderInspectionDateFilter(container, managerialPeriod, desPeriod);
 
   const marketMap = getDashboardMarketMap({ docs: false });
   const marketsToShow = getVisibleDashboardMarkets(marketMap);
@@ -8321,8 +9447,8 @@ function renderInspectionReports() {
 
   const renderRowsForPools = (poolNames, tbody) => {
     poolNames.forEach((poolName) => {
-      const managerial = findLatestReportForPool(allManagerialReports, poolName);
-      const des = findLatestReportForPool(allDesPreInspections, poolName);
+      const managerial = findLatestReportForPool(allManagerialReports, poolName, managerialPeriod);
+      const des = findLatestReportForPool(allDesPreInspections, poolName, desPeriod);
       const tr = document.createElement('tr');
       tr.classList.toggle('dashboard-stale-report-row', isInspectionReportRowStale(managerial, des));
       const facilityCell = document.createElement('td');
@@ -9224,21 +10350,24 @@ function renderMetricsLineChart(container, {
   `).join('');
 
   card.insertAdjacentHTML('beforeend', `
-    <div class="emp-graph-wrap">
-      <svg viewBox="0 0 ${width} ${height}" class="emp-line-graph" role="img" aria-label="${escapeHtml(title || 'Metrics graph')}">
-        ${yTicks}
-        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
-        <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
-        <path d="${linePath}" class="emp-graph-line"/>
-        ${bestFitPath ? `<path d="${bestFitPath}" class="emp-graph-bestfit"/>` : ''}
-        ${circles}
-        ${xTicks}
-        <text x="${width / 2}" y="${height - 8}" text-anchor="middle" class="emp-graph-label">Time</text>
-        <text x="18" y="${height / 2}" text-anchor="middle" transform="rotate(-90 18 ${height / 2})" class="emp-graph-label">${escapeHtml(yLabel || '')}</text>
-      </svg>
+    <div class="dashboard-metrics-scroll-shell">
+      <div class="emp-graph-wrap">
+        <svg viewBox="0 0 ${width} ${height}" class="emp-line-graph" role="img" aria-label="${escapeHtml(title || 'Metrics graph')}">
+          ${yTicks}
+          <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
+          <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
+          <path d="${linePath}" class="emp-graph-line"/>
+          ${bestFitPath ? `<path d="${bestFitPath}" class="emp-graph-bestfit"/>` : ''}
+          ${circles}
+          ${xTicks}
+          <text x="${width / 2}" y="${height - 8}" text-anchor="middle" class="emp-graph-label">Time</text>
+          <text x="18" y="${height / 2}" text-anchor="middle" transform="rotate(-90 18 ${height / 2})" class="emp-graph-label">${escapeHtml(yLabel || '')}</text>
+        </svg>
+      </div>
     </div>
   `);
   container.appendChild(card);
+  bindHorizontalScrollShadow(card.querySelector('.emp-graph-wrap'));
 }
 
 function renderMetricsScatterChart(container, {
@@ -9288,19 +10417,22 @@ function renderMetricsScatterChart(container, {
     `).join('');
 
   card.insertAdjacentHTML('beforeend', `
-    <div class="emp-graph-wrap">
-      <svg viewBox="0 0 ${width} ${height}" class="emp-line-graph" role="img" aria-label="${escapeHtml(title || 'Metrics scatter graph')}">
-        ${yTicks}
-        <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
-        <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
-        ${circles}
-        ${xTicks}
-        <text x="${width / 2}" y="${height - 8}" text-anchor="middle" class="emp-graph-label">${escapeHtml(xLabel || '')}</text>
-        <text x="18" y="${height / 2}" text-anchor="middle" transform="rotate(-90 18 ${height / 2})" class="emp-graph-label">${escapeHtml(yLabel || '')}</text>
-      </svg>
+    <div class="dashboard-metrics-scroll-shell">
+      <div class="emp-graph-wrap">
+        <svg viewBox="0 0 ${width} ${height}" class="emp-line-graph" role="img" aria-label="${escapeHtml(title || 'Metrics scatter graph')}">
+          ${yTicks}
+          <line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
+          <line x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}" class="emp-graph-axis"/>
+          ${circles}
+          ${xTicks}
+          <text x="${width / 2}" y="${height - 8}" text-anchor="middle" class="emp-graph-label">${escapeHtml(xLabel || '')}</text>
+          <text x="18" y="${height / 2}" text-anchor="middle" transform="rotate(-90 18 ${height / 2})" class="emp-graph-label">${escapeHtml(yLabel || '')}</text>
+        </svg>
+      </div>
     </div>
   `);
   container.appendChild(card);
+  bindHorizontalScrollShadow(card.querySelector('.emp-graph-wrap'));
 }
 
 function renderDashboardMetrics() {

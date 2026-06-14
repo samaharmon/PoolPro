@@ -116,6 +116,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Typed E-Sign PDF acknowledgments for uploaded resources
+    match /resourcesDocuments/{documentId}/eSignatures/{signatureId} {
+      allow read, write: if true;
+    }
+
     // Signed user agreement acknowledgments
     match /userAgreements/{agreementId} {
       allow read, write: if true;
