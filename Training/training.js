@@ -7,6 +7,7 @@
 
 const STORAGE_KEY = 'chemlogTrainingSessions_v1';
 const LOGIN_KEY = 'chemlogTrainingSupervisorLoggedIn';
+const SUPERVISOR_SESSION_VERIFICATION_VERSION = 1;
 
 // Local cache of training sessions (localStorage)
 let trainingSessions = [];
@@ -492,8 +493,20 @@ function observeResponsiveTables() {
 function hasFreshSupervisorSession() {
   try {
     const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
-    if (token?.expires && Date.now() < Number(token.expires)) return true;
+    const verified =
+      token?.emailVerified === true &&
+      Number(token?.verificationVersion || 0) >= SUPERVISOR_SESSION_VERIFICATION_VERSION;
+    if (token?.expires && Date.now() < Number(token.expires) && verified) return true;
     if (token?.expires && Date.now() >= Number(token.expires)) {
+      localStorage.setItem(LOGIN_KEY, 'false');
+      localStorage.removeItem('loginToken');
+      localStorage.removeItem('ChemLogSupervisor');
+      localStorage.removeItem('trainingSupervisorLoggedIn');
+      localStorage.removeItem('training_supervisor_logged_in_v1');
+      localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
+      if (localStorage.getItem('chemlogRole') === 'supervisor') localStorage.removeItem('chemlogRole');
+    }
+    if (token?.expires && !verified) {
       localStorage.setItem(LOGIN_KEY, 'false');
       localStorage.removeItem('loginToken');
       localStorage.removeItem('ChemLogSupervisor');

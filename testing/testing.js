@@ -13,6 +13,18 @@ import {
 
 let employeesData = [];
 
+const CPR_RAPID_ASSESSMENT_ROWS = [
+  { text: 'Rescuer ensured the scene was safe and put on gloves.', points: 2 },
+  { text: 'Rescuer checked for verbal and physical responsiveness.', points: 1 },
+  { text: 'Rescuer simultaneously checked for pulse and breathing for 5\u201310 s.', points: 3, autoFail: true },
+  { text: 'Rescuer pointed and shouted for bystanders to call 911 as well as retrieve an AED and BVM.', points: 5, autoFail: true },
+  { text: 'If the victim drowned, rescuer begins CPR by correctly sealing the mask and opening the airway to the appropriate position, providing 2 ventilations.', points: 3, autoFail: true },
+];
+
+function cloneRows(rows) {
+  return rows.map((row) => ({ ...row }));
+}
+
 // ============================================================
 // RUBRIC DEFINITIONS
 // Point values and pass thresholds sourced from original Word rubrics.
@@ -68,6 +80,21 @@ const RUBRICS = [
   },
 
   {
+    key: 'rapidAssessment',
+    title: 'Rapid Assessment',
+    rescuerLabel: 'Rescuer',
+    passScore: 14,
+    sections: [
+      {
+        title: 'Rapid Assessment',
+        subheading: 'Requirements and Questions',
+        checkboxHeader: 'Correctly Demonstrated (X)',
+        rows: cloneRows(CPR_RAPID_ASSESSMENT_ROWS),
+      }
+    ]
+  },
+
+  {
     key: 'cprTest',
     title: 'CPR Test Rubric',
     rescuerLabel: 'Rescuer',
@@ -76,13 +103,7 @@ const RUBRICS = [
         title: 'Rapid Assessment',
         subheading: 'Requirements and Questions',
         checkboxHeader: 'Correctly Demonstrated (X)',
-        rows: [
-          { text: 'Rescuer ensured the scene was safe and put on gloves.', points: 2 },
-          { text: 'Rescuer checked for verbal and physical responsiveness.', points: 1 },
-          { text: 'Rescuer simultaneously checked for pulse and breathing for 5\u201310 s.', points: 3, autoFail: true },
-          { text: 'Rescuer pointed and shouted for bystanders to call 911 as well as retrieve an AED and BVM.', points: 5, autoFail: true },
-          { text: 'If the victim drowned, rescuer begins CPR by correctly sealing the mask and opening the airway to the appropriate position, providing 2 ventilations.', points: 3, autoFail: true },
-        ]
+        rows: cloneRows(CPR_RAPID_ASSESSMENT_ROWS),
       },
       {
         title: 'Basic Life Support Techniques',
@@ -275,7 +296,7 @@ function renderRubric(rubric) {
   const fields = document.createElement('div');
   fields.className = 'test-header-fields';
   fields.innerHTML = `
-    <div class="test-header-field">
+    <div class="test-header-field test-rescuer-picker-field">
       <label>${escHtml(rubric.rescuerLabel)}:</label>
       <input
         type="text"
@@ -285,10 +306,12 @@ function renderRubric(rubric) {
         placeholder="Type to find employee"
         autocomplete="off"
       />
+      <button type="button" class="test-rescuer-add-btn" id="testAddRescuerBtn">Add</button>
       <datalist id="testEmployeeList">
         ${buildEmployeeOptions()}
       </datalist>
     </div>
+    <div class="test-rescuer-list" id="testRescuerList"></div>
     <div class="test-header-field">
       <label>Date:</label>
       <input type="date" class="test-header-date" id="testDate" value="${todayStr()}" />
@@ -343,8 +366,20 @@ function renderRubric(rubric) {
   if (empInput) {
     const clearValidation = () => empInput.setCustomValidity('');
     empInput.addEventListener('input', clearValidation);
-    empInput.addEventListener('change', clearValidation);
+    empInput.addEventListener('change', () => {
+      clearValidation();
+      const selectedEmp = findEmployeeByName(empInput.value);
+      if (selectedEmp) addRescuer(fullName(selectedEmp));
+    });
+    empInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      addRescuer(empInput.value);
+    });
   }
+  document.getElementById('testAddRescuerBtn')?.addEventListener('click', () => {
+    addRescuer(document.getElementById('testEmployeeName')?.value || '');
+  });
 
   // Wire checkbox listeners for live score update
   container.querySelectorAll('.test-cb').forEach(cb => {
@@ -584,20 +619,136 @@ function updateScore(rubric) {
 }
 
 // ============================================================
+// RESCUER SELECTION
+// ============================================================
+
+function normalizeRescuerNameKey(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function syncRescuerEntry(input) {
+  if (!input) return null;
+  const name = input.value.trim();
+  const employee = findEmployeeByName(name);
+  if (employee) {
+    input.value = fullName(employee);
+    input.dataset.employeeId = String(employee.id || employee.email || '');
+    input.dataset.employeeName = fullName(employee);
+    input.dataset.unlisted = 'false';
+    input.classList.remove('test-unlisted-rescuer-input');
+    return employee;
+  }
+  input.dataset.employeeId = '';
+  input.dataset.employeeName = name;
+  input.dataset.unlisted = name ? 'true' : 'false';
+  input.classList.toggle('test-unlisted-rescuer-input', !!name);
+  return null;
+}
+
+function renumberRescuers() {
+  document.querySelectorAll('#testRescuerList .test-rescuer-entry').forEach((row, index) => {
+    const label = row.querySelector('label');
+    const input = row.querySelector('.test-rescuer-name-input');
+    if (label) label.textContent = `Rescuer ${index + 1}:`;
+    if (input) input.id = `testRescuer_${index + 1}`;
+    if (label && input) label.setAttribute('for', input.id);
+  });
+}
+
+function addRescuer(rawName) {
+  const name = String(rawName || '').trim();
+  const picker = document.getElementById('testEmployeeName');
+  const list = document.getElementById('testRescuerList');
+  if (!name || !list) return false;
+
+  const employee = findEmployeeByName(name);
+  const displayName = employee ? fullName(employee) : name;
+  const duplicate = Array.from(list.querySelectorAll('.test-rescuer-name-input'))
+    .some((input) => normalizeRescuerNameKey(input.value) === normalizeRescuerNameKey(displayName));
+  if (duplicate) {
+    if (picker) picker.value = '';
+    return false;
+  }
+
+  const row = document.createElement('div');
+  row.className = 'test-rescuer-entry';
+
+  const label = document.createElement('label');
+  label.textContent = 'Rescuer:';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'test-header-select test-rescuer-name-input';
+  input.value = displayName;
+  input.setAttribute('list', 'testEmployeeList');
+  input.autocomplete = 'off';
+  input.addEventListener('change', () => syncRescuerEntry(input));
+  input.addEventListener('input', () => input.setCustomValidity(''));
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'test-rescuer-remove-btn';
+  removeBtn.textContent = '\u00d7';
+  removeBtn.setAttribute('aria-label', `Remove ${displayName}`);
+  removeBtn.addEventListener('click', () => {
+    row.remove();
+    renumberRescuers();
+  });
+
+  row.append(label, input, removeBtn);
+  list.appendChild(row);
+  syncRescuerEntry(input);
+  renumberRescuers();
+  if (picker) picker.value = '';
+  return true;
+}
+
+function collectRescuers() {
+  const pendingName = document.getElementById('testEmployeeName')?.value?.trim();
+  if (pendingName) addRescuer(pendingName);
+
+  const seen = new Set();
+  return Array.from(document.querySelectorAll('#testRescuerList .test-rescuer-name-input'))
+    .map((input) => {
+      syncRescuerEntry(input);
+      const name = input.value.trim();
+      const key = normalizeRescuerNameKey(name);
+      if (!name || seen.has(key)) return null;
+      seen.add(key);
+      const employee = findEmployeeByName(name);
+      return {
+        name: employee ? fullName(employee) : name,
+        employee,
+        employeeId: employee ? String(employee.id || employee.email || '') : makeTypedRescuerId(name),
+        unlisted: !employee,
+      };
+    })
+    .filter(Boolean);
+}
+
+function makeTypedRescuerId(name) {
+  const key = normalizeRescuerNameKey(name)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return `typed:${key || 'unlisted-rescuer'}`;
+}
+
+// ============================================================
 // SUBMISSION
 // ============================================================
 
 async function handleSubmit(rubric) {
   const empInput = document.getElementById('testEmployeeName');
   const dateInput = document.getElementById('testDate');
-  const selectedEmp = findEmployeeByName(empInput?.value || '');
+  const rescuers = collectRescuers();
 
-  if (!selectedEmp) {
+  if (!rescuers.length) {
     if (empInput) {
-      empInput.setCustomValidity('Select a listed employee.');
+      empInput.setCustomValidity('Add at least one rescuer.');
       empInput.reportValidity();
     } else {
-      alert('Please select an employee.');
+      alert('Please add at least one rescuer.');
     }
     return;
   }
@@ -634,42 +785,64 @@ async function handleSubmit(rubric) {
   const passed = !autoFailed && score >= passScore;
   const questionResults = buildQuestionResults();
 
-  const empId = String(selectedEmp.id);
-  const empName = fullName(selectedEmp);
-  const poolName = selectedEmp.homePool || '';
+  const knownPoolName = rescuers.find((rescuer) => rescuer.employee?.homePool)?.employee.homePool || '';
+  const rescuerSnapshots = rescuers.map((rescuer, index) => ({
+    order: index + 1,
+    employeeId: rescuer.employeeId,
+    employeeName: rescuer.name,
+    name: rescuer.name,
+    poolName: rescuer.employee?.homePool || knownPoolName || '',
+    unlisted: !!rescuer.unlisted,
+  }));
+  const auditGroupId = `${rubric.key}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   const submitBtn = document.getElementById('testSubmitBtn');
   submitBtn.disabled = true;
   submitBtn.textContent = 'Saving…';
 
   try {
-    await addDoc(collection(db, 'testingResults'), {
-      employeeId: empId,
-      employeeName: empName,
-      poolName,
-      date: dateInput.value,
-      rubricKey: rubric.key,
-      rubricTitle: rubric.title,
-      scenario: scenario?.label ?? null,
-      score,
-      maxScore: maxScore ?? null,
-      passScore,
-      passed,
-      autoFailed,
-      questionResults,
-      timestamp: Timestamp.now(),
-    });
+    await Promise.all(rescuers.map((rescuer, index) => {
+      const poolName = rescuer.employee?.homePool || knownPoolName || '';
+      return addDoc(collection(db, 'testingResults'), {
+        auditGroupId,
+        rescuerIndex: index + 1,
+        employeeId: rescuer.employeeId,
+        employeeName: rescuer.name,
+        rescuerName: rescuer.name,
+        typedRescuerName: rescuer.unlisted ? rescuer.name : '',
+        unlistedRescuer: !!rescuer.unlisted,
+        poolName,
+        date: dateInput.value,
+        rubricKey: rubric.key,
+        rubricTitle: rubric.title,
+        scenario: scenario?.label ?? null,
+        score,
+        maxScore: maxScore ?? null,
+        passScore,
+        passed,
+        autoFailed,
+        questionResults,
+        rescuers: rescuerSnapshots,
+        timestamp: Timestamp.now(),
+      });
+    }));
 
     const perfSnap = await getDoc(doc(db, 'settings', 'employeePerformance'));
     const perfData = perfSnap.exists()
       ? perfSnap.data()
       : { training: {}, set: {} };
     if (!perfData.set) perfData.set = {};
-    if (!perfData.set[empId]) perfData.set[empId] = {};
-    perfData.set[empId][rubric.key] = passed ? 'Pass' : 'Fail';
+    rescuers
+      .filter((rescuer) => !rescuer.unlisted && rescuer.employeeId)
+      .forEach((rescuer) => {
+        const empId = String(rescuer.employeeId);
+        if (!perfData.set[empId]) perfData.set[empId] = {};
+        perfData.set[empId][rubric.key] = passed ? 'Pass' : 'Fail';
+      });
     await setDoc(doc(db, 'settings', 'employeePerformance'), perfData, { merge: false });
 
-    showToast(`Saved — ${empName}: ${passed ? 'PASS' : 'FAIL'}`);
+    const savedNames = rescuers.map((rescuer) => rescuer.name).join(', ');
+    showToast(`Saved — ${savedNames}: ${passed ? 'PASS' : 'FAIL'}`);
     resetForm();
   } catch (err) {
     console.error('[Testing] Error saving result:', err);

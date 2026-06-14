@@ -28,6 +28,7 @@ import {
 } from './firebase.js';
 import { requireUserAgreement } from './agreement.js';
 import { getApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+import { sendEmailVerification } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
 
 // ============================================================
@@ -65,7 +66,8 @@ let sanitationMarketFilter = 'all';
 const FEEDBACK_RESPONSES_ENABLED = true;
 const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
-const LIFEGUARD_SESSION_VERIFICATION_VERSION = 1;
+const LIFEGUARD_SESSION_VERIFICATION_VERSION = 2;
+const SUPERVISOR_SESSION_VERIFICATION_VERSION = 1;
 const CHEM_AUTO_CONTROLLER_STORAGE = 'firestoreChemControllerPhoto';
 const CHEM_CONTROLLER_CHUNK_SIZE = 350000;
 const CHEM_CONTROLLER_IMAGE_MAX_SIDE = 1280;
@@ -1090,7 +1092,10 @@ function writeLifeguardSessionToSessionStorage(session) {
 function hasFreshSupervisorToken() {
   try {
     const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
-    return !!(token?.expires && Date.now() < Number(token.expires));
+    const verified =
+      token?.emailVerified === true &&
+      Number(token?.verificationVersion || 0) >= SUPERVISOR_SESSION_VERIFICATION_VERSION;
+    return !!(token?.expires && Date.now() < Number(token.expires) && verified);
   } catch (_) {
     return false;
   }
@@ -1205,6 +1210,22 @@ async function enforceAgreementForCurrentUser() {
 // Firebase Auth sign-in bridge — used by home.js and training.js
 window.supervisorSignIn = async function (email, password) {
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  await userCredential.user?.reload?.();
+  if (!auth.currentUser?.emailVerified) {
+    const verifyUrl = new URL(window.location.href);
+    verifyUrl.search = '';
+    verifyUrl.hash = '';
+    verifyUrl.searchParams.set('accessMode', 'supervisor');
+    await sendEmailVerification(auth.currentUser, {
+      url: verifyUrl.toString(),
+      handleCodeInApp: false,
+    }).catch((verifyErr) => {
+      console.warn('[PoolPro] Could not send supervisor verification email:', verifyErr);
+    });
+    await signOut(auth).catch(() => {});
+    clearSupervisorLoginState();
+    throw new Error('Verify your email before opening PoolPro. A verification email has been sent if Firebase allowed it.');
+  }
   const signedInEmail = normalizeIdentityKey(userCredential.user?.email || email);
   try {
     const snap = await getDoc(doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID));
@@ -1224,7 +1245,13 @@ window.supervisorSignIn = async function (email, password) {
   }
   // Sync localStorage flags so isSupervisor() works synchronously
   const expires = Date.now() + SESSION_WINDOW_MS;
-  localStorage.setItem('loginToken', JSON.stringify({ username: email, expires }));
+  localStorage.setItem('loginToken', JSON.stringify({
+    username: email,
+    expires,
+    emailVerified: true,
+    verificationVersion: SUPERVISOR_SESSION_VERIFICATION_VERSION,
+    verifiedAt: new Date().toISOString(),
+  }));
   localStorage.setItem('ChemLogSupervisor', 'true');
   localStorage.setItem('trainingSupervisorLoggedIn', 'true');
   localStorage.setItem('training_supervisor_logged_in_v1', 'true');
@@ -5163,6 +5190,8 @@ function isOpaqueSubmissionDisplayName(value, record = {}) {
   const raw = String(value || '').trim();
   if (!raw) return true;
   const normalized = normalizeEmployeeLookupKey(raw);
+  if (['unknown', 'unnamed', 'n/a', 'na', 'null', 'undefined', '-', '—'].includes(normalized)) return true;
+  if (/^_+$/.test(raw)) return true;
   if (normalized.includes('@')) return true;
   if (getSubmissionIdentityKeys(record).includes(normalized)) return true;
   return !/\s/.test(raw) && /[0-9]/.test(raw) && /^[a-z0-9_-]{10,}$/i.test(raw);
@@ -5204,7 +5233,7 @@ function getSubmissionRespondentName(record = {}) {
     employee?.lastName,
   ].map((value) => String(value || '').trim()).filter(Boolean).join(' ');
   const storedName = getStoredSubmissionName(source);
-  return recordName
+  return (!isOpaqueSubmissionDisplayName(recordName, source) ? recordName : '')
     || employeeName
     || storedName
     || '—';
@@ -7921,13 +7950,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
       // Enforce fresh email auth every 5 hours.
-      let token = null;
-      try {
-        token = JSON.parse(localStorage.getItem('loginToken') || 'null');
-      } catch (_) {
-        token = null;
-      }
-      const stillFresh = !!(token && token.expires && Date.now() < Number(token.expires));
+      const stillFresh = hasFreshSupervisorToken();
       if (!stillFresh) {
         signOut(auth).catch(() => {});
         localStorage.removeItem('loginToken');

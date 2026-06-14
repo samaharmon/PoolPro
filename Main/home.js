@@ -29,7 +29,8 @@ const ROLE_STORAGE_KEY = 'chemlogRole';
 const VERIFY_CONTEXT_KEY = 'poolproPendingLifeguardVerification';
 const VERIFY_WINDOW_MS = 5 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
-const LIFEGUARD_SESSION_VERIFICATION_VERSION = 1;
+const LIFEGUARD_SESSION_VERIFICATION_VERSION = 2;
+const SUPERVISOR_SESSION_VERIFICATION_VERSION = 1;
 const VERIFY_EMAIL_RESEND_MS = 60 * 1000;
 const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
@@ -134,6 +135,7 @@ let employeeDocSnapshot = [];
 let homePoolOptions = [];
 let homeRolesPermissionsData = HOME_ROLES_PERMISSIONS_EMPTY;
 let pendingVerification = null;
+let profileCompletionContext = null;
 let verifyCooldownUntil = 0;
 let verifyCooldownTimer = null;
 let verifyStatusPoller = null;
@@ -597,6 +599,104 @@ function buildEmployeeFromAccount(account) {
   });
 }
 
+function mergeEmployeeProfiles(...sources) {
+  return normalizeEmployeeRecord(sources.reduce((merged, source) => {
+    const normalized = normalizeEmployeeRecord(source || {});
+    Object.entries(normalized).forEach(([key, value]) => {
+      const cleanValue = String(value ?? '').trim();
+      if (cleanValue) merged[key] = value;
+    });
+    return merged;
+  }, {}));
+}
+
+function findEmployeeForAccount(account, username = '') {
+  const keys = [
+    account?.employeeEmail,
+    account?.authEmail,
+    account?.email,
+    account?.id,
+    account?.username,
+    username,
+  ].map(normalizeIdentityKey).filter(Boolean);
+  return employeesCache.find((entry) => {
+    const employee = normalizeEmployeeRecord(entry);
+    return [
+      employee.email,
+      employee.id,
+      employee.username,
+    ].map(normalizeIdentityKey).some((key) => key && keys.includes(key));
+  }) || null;
+}
+
+function getMissingEmployeeProfileFields(employee) {
+  const normalized = normalizeEmployeeRecord(employee || {});
+  const required = [
+    ['username', normalized.username],
+    ['first name', normalized.firstName],
+    ['last name', normalized.lastName],
+    ['email', normalized.email],
+    ['phone number', normalized.phone],
+    ['home facility', normalized.homePool],
+  ];
+  return required.filter(([, value]) => !String(value || '').trim()).map(([label]) => label);
+}
+
+function restoreCreateAccountMode() {
+  createUsernameInput?.removeAttribute('disabled');
+  createEmailInput?.removeAttribute('disabled');
+  [createPasswordInput, createConfirmPasswordInput].forEach((input) => {
+    input?.closest('.form-group')?.classList.remove('hidden');
+    if (input) {
+      input.disabled = false;
+      input.required = false;
+    }
+  });
+  if (backToLoginBtn) backToLoginBtn.textContent = 'Back to Sign In';
+}
+
+function configureProfileCompletionForm({ username, account, employee, target, accessMode }) {
+  profileCompletionContext = {
+    username: normalizeUsername(username || account?.username || employee?.username || ''),
+    account,
+    target: sanitizeTarget(target || getDestinationPath()),
+    accessMode: normalizeAccessMode(accessMode || currentRole),
+  };
+  const merged = mergeEmployeeProfiles(buildEmployeeFromAccount(account), employee, {
+    username: profileCompletionContext.username,
+  });
+
+  if (createUsernameInput) {
+    createUsernameInput.value = profileCompletionContext.username || merged.username || '';
+    createUsernameInput.disabled = true;
+  }
+  if (createFirstNameInput) createFirstNameInput.value = merged.firstName || '';
+  if (createLastNameInput) createLastNameInput.value = merged.lastName || '';
+  if (createEmailInput) {
+    createEmailInput.value = merged.email || getAuthEmail(account) || '';
+    createEmailInput.disabled = true;
+  }
+  if (createPhoneInput) createPhoneInput.value = merged.phone || '';
+  if (createPoolInput) createPoolInput.value = merged.homePool || '';
+  [createPasswordInput, createConfirmPasswordInput].forEach((input) => {
+    input?.closest('.form-group')?.classList.add('hidden');
+    if (input) {
+      input.value = '';
+      input.disabled = true;
+    }
+  });
+  if (backToLoginBtn) backToLoginBtn.textContent = 'Return to Login';
+}
+
+function openProfileCompletionView(context) {
+  configureProfileCompletionForm(context);
+  setModalView('create');
+  setMessage(
+    createMessageEl,
+    'Complete your account information before opening PoolPro.'
+  );
+}
+
 function savePendingVerificationContext(context) {
   try {
     localStorage.setItem(VERIFY_CONTEXT_KEY, JSON.stringify(context));
@@ -819,7 +919,9 @@ function setCreateAccountSubmitting(isSubmitting) {
   createAccountSubmitting = isSubmitting;
   if (!createSubmitBtn) return;
   createSubmitBtn.disabled = isSubmitting;
-  createSubmitBtn.textContent = isSubmitting ? 'Creating...' : 'Save Info';
+  createSubmitBtn.textContent = isSubmitting
+    ? (profileCompletionContext ? 'Saving...' : 'Creating...')
+    : 'Save Info';
 }
 
 function setLoginSubmitting(isSubmitting) {
@@ -851,6 +953,8 @@ function resetVerificationState() {
 }
 
 function resetForms() {
+  profileCompletionContext = null;
+  restoreCreateAccountMode();
   form?.reset();
   createAccountForm?.reset();
   verifyForm?.reset();
@@ -859,6 +963,10 @@ function resetForms() {
 }
 
 function setModalView(view) {
+  if (view !== 'create' && profileCompletionContext) {
+    profileCompletionContext = null;
+    restoreCreateAccountMode();
+  }
   currentView = view;
   form?.classList.toggle('hidden', view !== 'login');
   createAccountForm?.classList.toggle('hidden', view !== 'create');
@@ -868,7 +976,7 @@ function setModalView(view) {
 
   if (modalTitle) {
     modalTitle.textContent = view === 'create'
-      ? 'Create Account'
+      ? (profileCompletionContext ? 'Complete Account Info' : 'Create Account')
       : view === 'verify'
         ? 'Verify Identity'
         : view === 'reset'
@@ -893,7 +1001,10 @@ function setModalView(view) {
     setMessage(resetMessageEl, '');
   }
 
-  if (view === 'create') createUsernameInput?.focus();
+  if (view === 'create') {
+    if (!profileCompletionContext) restoreCreateAccountMode();
+    (profileCompletionContext ? createFirstNameInput : createUsernameInput)?.focus();
+  }
   if (view === 'verify') verifyResendBtn?.focus();
   if (view === 'login') usernameInput?.focus();
 }
@@ -1032,8 +1143,12 @@ function getStoredLifeguardSession() {
 function hasFreshSupervisorSession() {
   try {
     const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
-    if (token?.expires && Date.now() < Number(token.expires)) return true;
+    const verified =
+      token?.emailVerified === true &&
+      Number(token?.verificationVersion || 0) >= SUPERVISOR_SESSION_VERIFICATION_VERSION;
+    if (token?.expires && Date.now() < Number(token.expires) && verified) return true;
     if (token?.expires && Date.now() >= Number(token.expires)) clearSupervisorSession();
+    if (token?.expires && !verified) clearSupervisorSession();
   } catch (_) {
     return false;
   }
@@ -1153,6 +1268,8 @@ function closeModal() {
     modal.style.display = 'none';
   }, 200);
   pendingTarget = null;
+  profileCompletionContext = null;
+  restoreCreateAccountMode();
   resetVerificationState();
   clearPendingVerificationContext();
 }
@@ -1346,6 +1463,30 @@ async function saveSignupRecords(accountRef, accountData, employeeRecord) {
   await assignSignupRolePermissions(employeeRecord, accountData?.role);
 }
 
+async function ensureEmployeeProfileForAccess({ username, account, target, accessMode }) {
+  if (!employeesCache.length) await loadEmployees();
+  const existingEmployee = findEmployeeForAccount(account, username);
+  const mergedEmployee = mergeEmployeeProfiles(
+    buildEmployeeFromAccount(account),
+    existingEmployee,
+    { username }
+  );
+  const missing = getMissingEmployeeProfileFields(mergedEmployee);
+
+  if (missing.length) {
+    openProfileCompletionView({ username, account, employee: mergedEmployee, target, accessMode });
+    setMessage(
+      createMessageEl,
+      `Complete your ${missing.join(', ')} before opening PoolPro.`,
+      true
+    );
+    return null;
+  }
+
+  await upsertEmployeeRecord(mergedEmployee);
+  return mergedEmployee;
+}
+
 function showSignupVerification(username, accountData, message, accessMode = 'lifeguard') {
   const normalizedAccessMode = normalizeAccessMode(accessMode);
   persistAccessMode(normalizedAccessMode);
@@ -1419,6 +1560,13 @@ async function finalizeLifeguardAccess({ username, account, target, method, acce
   await requireVerifiedCurrentUserForAccount(account);
   const normalizedAccessMode = normalizeAccessMode(accessMode);
   await assertAccessModeAllowed(normalizedAccessMode, getIdentityKeysForAccount(account, username));
+  const employeeForAccess = await ensureEmployeeProfileForAccess({
+    username,
+    account,
+    target,
+    accessMode: normalizedAccessMode,
+  });
+  if (!employeeForAccess) return { requiresProfileCompletion: true };
   stopVerifyStatusPoller();
   clearPendingVerificationContext();
 
@@ -1433,7 +1581,7 @@ async function finalizeLifeguardAccess({ username, account, target, method, acce
   }
 
   markDeviceVerified(account.employeeEmail || account.authEmail || '');
-  persistLifeguardSession(buildEmployeeFromAccount(account), username, normalizedAccessMode);
+  persistLifeguardSession(employeeForAccess, username, normalizedAccessMode);
   resetVerificationState();
   closeModal();
 
@@ -1444,8 +1592,9 @@ async function finalizeLifeguardAccess({ username, account, target, method, acce
   });
   if (!accepted) return;
 
-  await maybeShowLifeguardCleanlinessReminder(normalizedAccessMode, account?.homePool);
+  await maybeShowLifeguardCleanlinessReminder(normalizedAccessMode, employeeForAccess?.homePool || account?.homePool);
   window.location.href = target || getDestinationPath();
+  return { requiresProfileCompletion: false };
 }
 
 async function requirePasswordLoginAfterVerification(message) {
@@ -1582,7 +1731,13 @@ function markSupervisorLoggedIn(email, accessMode = 'supervisor') {
     localStorage.setItem('training_supervisor_logged_in_v1', 'true');
     localStorage.setItem('ChemLogSupervisor', 'true');
     const expires = Date.now() + VERIFY_WINDOW_MS;
-    localStorage.setItem('loginToken', JSON.stringify({ username: email || 'supervisor', expires }));
+    localStorage.setItem('loginToken', JSON.stringify({
+      username: email || 'supervisor',
+      expires,
+      emailVerified: true,
+      verificationVersion: SUPERVISOR_SESSION_VERIFICATION_VERSION,
+      verifiedAt: new Date().toISOString(),
+    }));
     localStorage.setItem(ROLE_STORAGE_KEY, 'supervisor');
     localStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalizedAccessMode);
     sessionStorage.setItem(ACCESS_MODE_STORAGE_KEY, normalizedAccessMode);
@@ -1601,6 +1756,23 @@ async function authenticateSupervisor(email, password, accessMode = 'supervisor'
 
   try {
     await signInWithEmailAndPassword(auth, e, p);
+    await auth.currentUser?.reload();
+    if (!auth.currentUser?.emailVerified) {
+      const verifyUrl = new URL(window.location.href);
+      verifyUrl.search = '';
+      verifyUrl.hash = '';
+      verifyUrl.searchParams.set('accessMode', normalizeAccessMode(accessMode));
+      verifyUrl.searchParams.set('target', getDestinationPath());
+      await sendEmailVerification(auth.currentUser, {
+        url: verifyUrl.toString(),
+        handleCodeInApp: false,
+      }).catch((verifyErr) => {
+        console.warn('Could not send supervisor verification email:', verifyErr);
+      });
+      await signOut(auth).catch(() => {});
+      clearSupervisorSession();
+      throw new Error('Verify your email before opening PoolPro. A verification email has been sent if Firebase allowed it.');
+    }
     await assertAccessModeAllowed(accessMode, getIdentityKeysForSupervisor(e));
     markSupervisorLoggedIn(e, accessMode);
     await clearLoginFailures('supervisor', e);
@@ -1697,14 +1869,14 @@ async function authenticateLifeguard(usernameRaw, passwordRaw, accessMode = 'lif
     return { requiresVerification: true };
   }
 
-  await finalizeLifeguardAccess({
+  const finalizeResult = await finalizeLifeguardAccess({
     username,
     account,
     target: getDestinationPath(),
     method: 'password-login',
     accessMode,
   });
-  return { requiresVerification: false };
+  return { requiresVerification: false, requiresProfileCompletion: !!finalizeResult?.requiresProfileCompletion };
 }
 
 async function authenticateForCurrentRole(identifier, password) {
@@ -1871,6 +2043,67 @@ async function handleSubmit(event) {
   }
 }
 
+async function handleProfileCompletionSubmit() {
+  if (!profileCompletionContext) return false;
+
+  const username = profileCompletionContext.username;
+  const account = profileCompletionContext.account || {};
+  const firstName = createFirstNameInput?.value.trim() || '';
+  const lastName = createLastNameInput?.value.trim() || '';
+  const email = (createEmailInput?.value.trim() || getAuthEmail(account) || '').toLowerCase();
+  const phone = normalizePhoneDigits(createPhoneInput?.value);
+  const homePool = createPoolInput?.value || '';
+  const role = account?.role || getSignupRoleForCurrentAccessMode();
+
+  if (!username || !firstName || !lastName || !email || !phone || !homePool) {
+    setMessage(createMessageEl, 'Please complete every field in the account form.', true);
+    return true;
+  }
+  if (!email.includes('@')) {
+    setMessage(createMessageEl, 'Please enter a valid email address.', true);
+    return true;
+  }
+
+  const { employeeRecord, accountData } = buildSignupRecords({
+    username,
+    firstName,
+    lastName,
+    email,
+    phone,
+    homePool,
+    role,
+  });
+  const preservedRole = account?.role || accountData.role;
+  const updatedAccount = {
+    ...account,
+    ...accountData,
+    role: preservedRole,
+    profileCompletedAt: new Date().toISOString(),
+  };
+  const completedEmployeeRecord = {
+    ...employeeRecord,
+    role: preservedRole,
+  };
+
+  await Promise.all([
+    setDoc(doc(db, 'lifeguardAccounts', username), updatedAccount, { merge: true }),
+    upsertEmployeeRecord(completedEmployeeRecord),
+  ]);
+  profileCompletionContext.account = updatedAccount;
+  const resumeContext = { ...profileCompletionContext, account: updatedAccount };
+  profileCompletionContext = null;
+  restoreCreateAccountMode();
+
+  await finalizeLifeguardAccess({
+    username,
+    account: updatedAccount,
+    target: resumeContext.target,
+    method: 'profile-completion',
+    accessMode: resumeContext.accessMode,
+  });
+  return true;
+}
+
 async function handleCreateAccountSubmit(event) {
   event.preventDefault();
   if (createAccountSubmitting) return;
@@ -1878,6 +2111,8 @@ async function handleCreateAccountSubmit(event) {
   setMessage(createMessageEl, '');
 
   try {
+    if (await handleProfileCompletionSubmit()) return;
+
     const username = normalizeUsername(createUsernameInput?.value);
     const firstName = createFirstNameInput?.value.trim() || '';
     const lastName = createLastNameInput?.value.trim() || '';

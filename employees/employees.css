@@ -637,7 +637,7 @@ body.dark-mode .emp-line-graph {
 
 .emp-set-table th:nth-child(n+2),
 .emp-set-table td:nth-child(n+2) {
-  width: 20.5%;
+  width: 16.4%;
 }
 
 .emp-set-cell {
@@ -699,6 +699,116 @@ body.dark-mode .emp-result-select:disabled {
 
 body.dark-mode .emp-retrain-label {
   color: #aaa;
+}
+
+.emp-unlisted-rescuer-row td:first-child {
+  color: #b30000;
+}
+
+.emp-unlisted-rescuer-name {
+  border: none;
+  background: transparent;
+  color: #b30000;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.emp-unlisted-rescuer-name:hover {
+  color: #7f0000;
+}
+
+body.dark-mode .emp-unlisted-rescuer-row td:first-child,
+body.dark-mode .emp-unlisted-rescuer-name {
+  color: #ff7777;
+}
+
+.emp-assignment-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.62);
+}
+
+.emp-assignment-modal.hidden {
+  display: none !important;
+}
+
+.emp-assignment-card {
+  width: min(460px, 100%);
+  background: #fff;
+  border: 2px solid #69140e;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  padding: 22px;
+}
+
+.emp-assignment-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.emp-assignment-header h3 {
+  margin: 0;
+  color: #69140e;
+}
+
+.emp-assignment-close {
+  border: none;
+  background: transparent;
+  color: #69140e;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emp-assignment-copy {
+  margin: 0 0 16px;
+  color: #555;
+  line-height: 1.4;
+}
+
+.emp-assignment-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 700;
+  color: #333;
+}
+
+.emp-assignment-card select {
+  width: 100%;
+}
+
+.emp-assignment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+body.dark-mode .emp-assignment-card {
+  background: #2a2a2a;
+  border-color: #8b1a14;
+}
+
+body.dark-mode .emp-assignment-header h3,
+body.dark-mode .emp-assignment-close {
+  color: #ff8080;
+}
+
+body.dark-mode .emp-assignment-copy,
+body.dark-mode .emp-assignment-label {
+  color: #ddd;
 }
 
 /* ============================================================

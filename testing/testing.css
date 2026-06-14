@@ -171,6 +171,10 @@ body.dark-mode .test-rubric-title {
   gap: 10px;
 }
 
+.test-rescuer-picker-field {
+  align-items: stretch;
+}
+
 .test-header-field label {
   font-size: 13px;
   font-weight: bold;
@@ -200,6 +204,64 @@ body.dark-mode .test-header-date {
   background: #3a3a3a;
   color: #ddd;
   border-bottom-color: #69140e;
+}
+
+.test-rescuer-add-btn,
+.test-rescuer-remove-btn {
+  border: 1px solid #69140e;
+  background: #69140e;
+  color: #fff;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.test-rescuer-add-btn {
+  padding: 0 12px;
+}
+
+.test-rescuer-remove-btn {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.test-rescuer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.test-rescuer-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.test-rescuer-entry label {
+  font-size: 13px;
+  font-weight: bold;
+  color: #555;
+  min-width: 68px;
+  text-align: right;
+}
+
+.test-rescuer-name-input.test-unlisted-rescuer-input {
+  color: #b30000;
+  border-bottom-color: #b30000;
+}
+
+body.dark-mode .test-rescuer-entry label {
+  color: #aaa;
+}
+
+body.dark-mode .test-rescuer-add-btn,
+body.dark-mode .test-rescuer-remove-btn {
+  border-color: #ff8080;
+  background: #8b1a14;
 }
 
 /* ============================================================

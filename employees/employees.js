@@ -8,6 +8,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from '../firebase.js';
+import {
+  sendEmailVerification,
+} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
 
 // ============================================================
 // State
@@ -18,6 +21,8 @@ let trainingSessions = []; // [{id, trainingType, date, market, attendees: [{emp
 let poolsData = [];        // [{id, name, markets: []}]
 let testingResults = [];   // [{ rubricKey, date, employeeId, poolName, questionResults[] }]
 let questionTypeMap = {};  // { [rubricKey]: { [questionNumber]: "Topic label" } }
+let typedRescuerAssignment = null;
+let pageInitialized = false;
 
 // performanceData shape:
 // { training: { empId: { hrOrientation, onSiteOrientation, juneInService, julyInService } },
@@ -63,6 +68,7 @@ const TRAINING_COLS = [
 // SET column definitions
 const SET_COLS = [
   { key: 'dropTest',         label: 'Drop Test' },
+  { key: 'rapidAssessment',  label: 'Rapid Assessment' },
   { key: 'cprTest',          label: 'CPR Test' },
   { key: 'rescueBreathing',  label: 'Rescue Breathing Test' },
   { key: 'performanceAudit', label: 'Performance Audit' },
@@ -70,6 +76,7 @@ const SET_COLS = [
 
 const RUBRIC_LABELS = {
   dropTest: 'Drop Test',
+  rapidAssessment: 'Rapid Assessment',
   cprTest: 'CPR Test',
   rescueBreathing: 'Rescue Breathing Test',
   performanceAudit: 'Performance Audit',
@@ -79,12 +86,28 @@ const RUBRIC_LABELS = {
 // Auth gate
 // ============================================================
 
-onAuthStateChanged(auth, (user) => {
-  if (user) {
-    showPage();
-    init();
-  } else {
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
     showAuthGate();
+    return;
+  }
+
+  await user.reload().catch(() => {});
+  if (!auth.currentUser?.emailVerified) {
+    await signOut(auth).catch(() => {});
+    showAuthGate();
+    const errEl = document.getElementById('empAuthError');
+    if (errEl) {
+      errEl.textContent = 'Verify your email before opening Performance Tracking.';
+      errEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  showPage();
+  if (!pageInitialized) {
+    pageInitialized = true;
+    init();
   }
 });
 
@@ -107,6 +130,18 @@ document.getElementById('empAuthLoginBtn')?.addEventListener('click', async () =
   errEl.classList.add('hidden');
   try {
     await signInWithEmailAndPassword(auth, email, password);
+    await auth.currentUser?.reload();
+    if (!auth.currentUser?.emailVerified) {
+      await sendEmailVerification(auth.currentUser, {
+        url: window.location.href,
+        handleCodeInApp: false,
+      }).catch((verifyErr) => {
+        console.warn('[Employees] Could not send verification email:', verifyErr);
+      });
+      await signOut(auth).catch(() => {});
+      errEl.textContent = 'Verify your email before opening Performance Tracking. A verification email has been sent if Firebase allowed it.';
+      errEl.classList.remove('hidden');
+    }
   } catch (err) {
     errEl.textContent = 'Invalid credentials. Please try again.';
     errEl.classList.remove('hidden');
@@ -179,7 +214,7 @@ async function loadEmployees() {
     const snap = await getDoc(doc(db, 'settings', 'employees'));
     if (snap.exists()) {
       const data = snap.data();
-      employeesData = Array.isArray(data.employees) ? data.employees : [];
+      employeesData = Array.isArray(data.employees) ? data.employees.map(normalizeEmployeeRecord) : [];
     }
   } catch (err) {
     console.error('[Employees] Error loading employees:', err);
@@ -273,11 +308,90 @@ function buildMarketList() {
     const m = poolToMarket[emp.homePool] || 'Other';
     markets.add(m);
   });
-  marketList = Array.from(markets).filter((m) => m !== 'Other').sort();
+  testingResults.forEach((result) => {
+    if (isUnlistedRescuerResult(result)) markets.add(getResultMarket(result));
+  });
+  marketList = Array.from(markets).sort();
 }
 
 function getEmployeeMarket(emp) {
   return poolToMarket[emp.homePool] || 'Other';
+}
+
+function normalizeEmployeeRecord(rawEmployee) {
+  const employee = rawEmployee || {};
+  const legacyId = (employee.id ?? employee.employeeId ?? '').toString().trim();
+  const emailSource = employee.email ?? (legacyId.includes('@') ? legacyId : '');
+  const email = emailSource.toString().trim().toLowerCase();
+  return {
+    ...employee,
+    id: email || legacyId,
+    employeeId: (employee.employeeId ?? legacyId).toString().trim(),
+    email,
+    username: (employee.username ?? '').toString().trim().toLowerCase(),
+    firstName: (employee.firstName ?? '').toString().trim(),
+    lastName: (employee.lastName ?? '').toString().trim(),
+    homePool: (employee.homePool ?? '').toString().trim(),
+    phone: (employee.phone ?? '').toString().replace(/\D/g, ''),
+  };
+}
+
+function normalizeIdentityKey(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizeNameKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getResultPoolName(result) {
+  const emp = getEmployeeById(result?.employeeId);
+  return String(result?.poolName || emp?.homePool || '').trim();
+}
+
+function getResultMarket(result) {
+  const emp = getEmployeeById(result?.employeeId);
+  if (emp) return getEmployeeMarket(emp);
+  const poolName = getResultPoolName(result);
+  return poolToMarket[poolName] || 'Other';
+}
+
+function getAvailableMarkets() {
+  const markets = new Set();
+  employeesData.forEach((employee) => markets.add(getEmployeeMarket(employee)));
+  testingResults.forEach((result) => {
+    if (Object.prototype.hasOwnProperty.call(RUBRIC_LABELS, result.rubricKey)) {
+      markets.add(getResultMarket(result));
+    }
+  });
+  return [...markets].filter(Boolean).sort();
+}
+
+function getAvailablePools() {
+  const pools = new Set();
+  employeesData.forEach((employee) => {
+    if (employee.homePool) pools.add(employee.homePool);
+  });
+  testingResults.forEach((result) => {
+    const pool = getResultPoolName(result);
+    if (pool) pools.add(pool);
+  });
+  return [...pools].sort();
+}
+
+function getTypedRescuerName(result = {}) {
+  if (result.resolvedFromTypedRescuerName && !result.unlistedRescuer) return '';
+  return String(
+    result.typedRescuerName
+      || (result.unlistedRescuer ? (result.rescuerName || result.employeeName) : '')
+      || ''
+  ).trim();
+}
+
+function isUnlistedRescuerResult(result = {}) {
+  const typedName = getTypedRescuerName(result);
+  if (!typedName) return false;
+  return !getEmployeeById(result.employeeId);
 }
 
 // ============================================================
@@ -325,10 +439,8 @@ function countUnchecked(empId) {
 // ============================================================
 
 function populateFilterDropdowns() {
-  const markets = [...new Set(employeesData.map(e => getEmployeeMarket(e)))]
-    .filter((m) => m !== 'Other')
-    .sort();
-  const allPools = [...new Set(employeesData.map(e => e.homePool).filter(Boolean))].sort();
+  const markets = getAvailableMarkets();
+  const allPools = getAvailablePools();
 
   const setOptions = (id, values) => {
     const sel = document.getElementById(id);
@@ -373,9 +485,14 @@ function populateOverallPoolFilter() {
   poolSel.innerHTML = '<option value="all">All Pools</option>';
   if (overallFilters.market === 'all') return;
   const pools = [...new Set(
-    employeesData
-      .filter(e => getEmployeeMarket(e) === overallFilters.market)
-      .map(e => e.homePool).filter(Boolean)
+    [
+      ...employeesData
+        .filter(e => getEmployeeMarket(e) === overallFilters.market)
+        .map(e => e.homePool),
+      ...testingResults
+        .filter((result) => getResultMarket(result) === overallFilters.market)
+        .map((result) => getResultPoolName(result)),
+    ].filter(Boolean)
   )].sort();
   pools.forEach(p => {
     const opt = document.createElement('option');
@@ -390,9 +507,14 @@ function populateMetricsPoolFilter() {
   if (!poolSel) return;
   poolSel.innerHTML = '<option value="all">All Pools</option>';
   const pools = [...new Set(
-    employeesData
-      .filter((e) => metricsFilters.market === 'all' || getEmployeeMarket(e) === metricsFilters.market)
-      .map((e) => e.homePool).filter(Boolean)
+    [
+      ...employeesData
+        .filter((e) => metricsFilters.market === 'all' || getEmployeeMarket(e) === metricsFilters.market)
+        .map((e) => e.homePool),
+      ...testingResults
+        .filter((result) => metricsFilters.market === 'all' || getResultMarket(result) === metricsFilters.market)
+        .map((result) => getResultPoolName(result)),
+    ].filter(Boolean)
   )].sort();
   pools.forEach((p) => {
     const opt = document.createElement('option');
@@ -407,9 +529,14 @@ function populateGraphPoolFilter() {
   if (!poolSel) return;
   poolSel.innerHTML = '<option value="all">All Pools</option>';
   const pools = [...new Set(
-    employeesData
-      .filter((e) => graphFilters.market === 'all' || getEmployeeMarket(e) === graphFilters.market)
-      .map((e) => e.homePool).filter(Boolean)
+    [
+      ...employeesData
+        .filter((e) => graphFilters.market === 'all' || getEmployeeMarket(e) === graphFilters.market)
+        .map((e) => e.homePool),
+      ...testingResults
+        .filter((result) => graphFilters.market === 'all' || getResultMarket(result) === graphFilters.market)
+        .map((result) => getResultPoolName(result)),
+    ].filter(Boolean)
   )].sort();
   pools.forEach((p) => {
     const opt = document.createElement('option');
@@ -862,11 +989,13 @@ function renderSetTables() {
       employees = employees.filter(e => e.homePool === setFilters.pool);
     }
 
-    if (employees.length === 0) return;
+    const unlistedRescuers = getUnlistedRescuersForSet(market, setFilters.pool);
+
+    if (employees.length === 0 && unlistedRescuers.length === 0) return;
 
     employees = [...employees].sort((a, b) => fullName(a).localeCompare(fullName(b)));
 
-    const section = buildSetMarketSection(market, employees);
+    const section = buildSetMarketSection(market, employees, unlistedRescuers);
     container.appendChild(section);
   });
 
@@ -875,7 +1004,58 @@ function renderSetTables() {
   }
 }
 
-function buildSetMarketSection(market, employees) {
+function getResultTimeValue(result) {
+  const date = parseResultDate(result);
+  if (date) return date.getTime();
+  return 0;
+}
+
+function getUnlistedRescuersForSet(market, pool) {
+  const grouped = new Map();
+  testingResults
+    .filter((result) => Object.prototype.hasOwnProperty.call(RUBRIC_LABELS, result.rubricKey))
+    .filter((result) => isUnlistedRescuerResult(result))
+    .filter((result) => {
+      const resultMarket = getResultMarket(result);
+      const resultPool = getResultPoolName(result);
+      if (market !== 'all' && resultMarket !== market) return false;
+      if (pool !== 'all' && resultPool !== pool) return false;
+      return true;
+    })
+    .forEach((result) => {
+      const typedName = getTypedRescuerName(result);
+      const nameKey = normalizeNameKey(typedName);
+      if (!nameKey) return;
+      const resultPool = getResultPoolName(result);
+      const groupKey = `${getResultMarket(result)}|${resultPool}|${nameKey}`;
+      if (!grouped.has(groupKey)) {
+        grouped.set(groupKey, {
+          id: result.employeeId || `typed:${nameKey.replace(/[^a-z0-9]+/g, '-')}`,
+          isUnlistedRescuer: true,
+          typedName,
+          firstName: typedName,
+          lastName: '',
+          homePool: resultPool,
+          setResults: {},
+          resultIds: [],
+          latestByRubric: {},
+        });
+      }
+      const item = grouped.get(groupKey);
+      if (!item.homePool && resultPool) item.homePool = resultPool;
+      item.resultIds.push(result.id);
+      const existing = item.latestByRubric[result.rubricKey];
+      if (!existing || getResultTimeValue(result) >= getResultTimeValue(existing)) {
+        item.latestByRubric[result.rubricKey] = result;
+        item.setResults[result.rubricKey] = result.passed ? 'Pass' : 'Fail';
+      }
+    });
+
+  return [...grouped.values()]
+    .sort((a, b) => fullName(a).localeCompare(fullName(b)));
+}
+
+function buildSetMarketSection(market, employees, unlistedRescuers = []) {
   const section = document.createElement('div');
   section.className = 'emp-market-section';
   section.dataset.market = market;
@@ -925,6 +1105,10 @@ function buildSetMarketSection(market, employees) {
     const row = buildSetRow(emp);
     tbody.appendChild(row);
   });
+  unlistedRescuers.forEach((rescuer) => {
+    const row = buildSetRow(rescuer);
+    tbody.appendChild(row);
+  });
   table.appendChild(tbody);
 
   tableSection.appendChild(table);
@@ -945,12 +1129,14 @@ function buildSetMarketSection(market, employees) {
     onEdit: () => {
       tableSection.classList.remove('overlay-disabled');
       tableSection.querySelectorAll('select, input').forEach(el => {
+        if (el.dataset.readonly === 'true') return;
         el.disabled = false;
       });
     },
     onSave: async () => {
       // Read current SET data into performanceData.set
       tbody.querySelectorAll('tr').forEach(row => {
+        if (row.dataset.unlistedRescuer === 'true') return;
         const empId = row.dataset.empId;
         if (!empId) return;
         const saved = {};
@@ -986,20 +1172,32 @@ function buildSetMarketSection(market, employees) {
 function buildSetRow(emp) {
   const tr = document.createElement('tr');
   tr.dataset.empId = String(emp.id);
+  if (emp.isUnlistedRescuer) {
+    tr.dataset.unlistedRescuer = 'true';
+    tr.classList.add('emp-unlisted-rescuer-row');
+  }
 
   // Name cell with tooltip
   const nameTd = document.createElement('td');
   nameTd.className = 'emp-name-cell';
-  const nameSpan = document.createElement('span');
-  nameSpan.className = 'emp-name-text';
+  const nameSpan = emp.isUnlistedRescuer
+    ? document.createElement('button')
+    : document.createElement('span');
+  nameSpan.className = emp.isUnlistedRescuer
+    ? 'emp-name-text emp-unlisted-rescuer-name'
+    : 'emp-name-text';
   nameSpan.textContent = fullName(emp);
+  if (emp.isUnlistedRescuer) {
+    nameSpan.type = 'button';
+    nameSpan.addEventListener('click', () => openTypedRescuerAssignmentModal(emp));
+  }
 
   const tooltip = document.createElement('div');
   tooltip.className = 'emp-name-tooltip';
   tooltip.innerHTML = `
-    <strong>${fullName(emp)}</strong><br>
-    ID: ${emp.id || '—'}<br>
-    Home Pool: ${emp.homePool || '—'}
+    <strong>${escapeHtml(fullName(emp))}</strong><br>
+    ID: ${escapeHtml(emp.isUnlistedRescuer ? 'Unlisted typed name' : (emp.id || '—'))}<br>
+    Home Pool: ${escapeHtml(emp.homePool || '—')}${emp.isUnlistedRescuer ? '<br>Click to assign this name to an employee.' : ''}
   `;
 
   nameTd.appendChild(nameSpan);
@@ -1007,7 +1205,7 @@ function buildSetRow(emp) {
   tr.appendChild(nameTd);
 
   // SET cells
-  const saved = performanceData.set[String(emp.id)] || {};
+  const saved = emp.isUnlistedRescuer ? (emp.setResults || {}) : (performanceData.set[String(emp.id)] || {});
   SET_COLS.forEach(col => {
     const td = document.createElement('td');
     td.className = 'emp-set-cell';
@@ -1020,6 +1218,7 @@ function buildSetRow(emp) {
     const sel = document.createElement('select');
     sel.className = 'emp-result-select';
     sel.disabled = true;
+    if (emp.isUnlistedRescuer) sel.dataset.readonly = 'true';
     ['', 'Pass', 'Fail'].forEach(val => {
       const opt = document.createElement('option');
       opt.value = val;
@@ -1041,6 +1240,7 @@ function buildSetRow(emp) {
     retrainCb.type = 'checkbox';
     retrainCb.className = 'market-filter-checkbox emp-retrain-cb';
     retrainCb.disabled = true;
+    if (emp.isUnlistedRescuer) retrainCb.dataset.readonly = 'true';
     retrainCb.checked = !!saved[col.key + 'Retrained'];
 
     const retrainText = document.createElement('span');
@@ -1283,13 +1483,22 @@ function fmtDate(date) {
 }
 
 function getEmployeeById(empId) {
-  return employeesData.find((e) => String(e.id) === String(empId)) || null;
+  const key = normalizeIdentityKey(empId);
+  if (!key) return null;
+  return employeesData.find((entry) => {
+    const employee = normalizeEmployeeRecord(entry);
+    return [
+      employee.id,
+      employee.email,
+      employee.employeeId,
+      employee.username,
+    ].map(normalizeIdentityKey).some((candidate) => candidate && candidate === key);
+  }) || null;
 }
 
 function resultMatchesMarketPool(result, market, pool) {
-  const emp = getEmployeeById(result.employeeId);
-  const resultPool = result.poolName || emp?.homePool || '';
-  const resultMarket = emp ? getEmployeeMarket(emp) : (poolToMarket[resultPool] || 'Other');
+  const resultPool = getResultPoolName(result);
+  const resultMarket = getResultMarket(result);
   if (market !== 'all' && resultMarket !== market) return false;
   if (pool !== 'all' && resultPool !== pool) return false;
   return true;
@@ -1631,11 +1840,198 @@ function renderPerformanceGraph() {
 }
 
 // ============================================================
+// Unlisted rescuer assignment
+// ============================================================
+
+function ensureTypedRescuerAssignmentModal() {
+  let modal = document.getElementById('typedRescuerAssignmentModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'typedRescuerAssignmentModal';
+  modal.className = 'emp-assignment-modal hidden';
+  modal.innerHTML = `
+    <div class="emp-assignment-card" role="dialog" aria-modal="true" aria-labelledby="typedRescuerAssignmentTitle">
+      <div class="emp-assignment-header">
+        <h3 id="typedRescuerAssignmentTitle">Assign Rescuer</h3>
+        <button type="button" class="emp-assignment-close" id="typedRescuerAssignmentClose" aria-label="Close">&times;</button>
+      </div>
+      <p class="emp-assignment-copy" id="typedRescuerAssignmentCopy"></p>
+      <label class="emp-assignment-label" for="typedRescuerEmployeeSelect">Employee</label>
+      <select id="typedRescuerEmployeeSelect" class="training-filter-select"></select>
+      <p class="emp-auth-error hidden" id="typedRescuerAssignmentError"></p>
+      <div class="emp-assignment-actions">
+        <button type="button" class="submit-btn" id="typedRescuerAssignBtn">Assign</button>
+        <button type="button" class="submit-btn secondary-btn" id="typedRescuerCancelBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.querySelector('#typedRescuerAssignmentClose')?.addEventListener('click', closeTypedRescuerAssignmentModal);
+  modal.querySelector('#typedRescuerCancelBtn')?.addEventListener('click', closeTypedRescuerAssignmentModal);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeTypedRescuerAssignmentModal();
+  });
+  modal.querySelector('#typedRescuerAssignBtn')?.addEventListener('click', assignTypedRescuerToEmployee);
+  return modal;
+}
+
+function openTypedRescuerAssignmentModal(rescuer) {
+  typedRescuerAssignment = rescuer;
+  const modal = ensureTypedRescuerAssignmentModal();
+  const copy = modal.querySelector('#typedRescuerAssignmentCopy');
+  const select = modal.querySelector('#typedRescuerEmployeeSelect');
+  const error = modal.querySelector('#typedRescuerAssignmentError');
+  if (copy) {
+    copy.textContent = `Assign "${fullName(rescuer)}" to an employee. Matching audit results will move to that employee.`;
+  }
+  if (error) {
+    error.textContent = '';
+    error.classList.add('hidden');
+  }
+  if (select) {
+    select.innerHTML = '<option value="">Select employee</option>';
+    [...employeesData]
+      .sort((a, b) => fullName(a).localeCompare(fullName(b)))
+      .forEach((employee) => {
+        const option = document.createElement('option');
+        option.value = String(employee.id || employee.email || employee.employeeId || '');
+        option.textContent = `${fullName(employee)}${employee.email ? ` (${employee.email})` : ''}`;
+        select.appendChild(option);
+      });
+  }
+  modal.classList.remove('hidden');
+  select?.focus();
+}
+
+function closeTypedRescuerAssignmentModal() {
+  typedRescuerAssignment = null;
+  document.getElementById('typedRescuerAssignmentModal')?.classList.add('hidden');
+}
+
+function isMatchingTypedRescuerResult(result, rescuer) {
+  if (!isUnlistedRescuerResult(result)) return false;
+  if (Array.isArray(rescuer?.resultIds) && rescuer.resultIds.length) {
+    return rescuer.resultIds.includes(result.id);
+  }
+  return normalizeNameKey(getTypedRescuerName(result)) === normalizeNameKey(fullName(rescuer));
+}
+
+function updateResultRescuerSnapshots(result, typedName, employee) {
+  const employeeId = String(employee.id || employee.email || employee.employeeId || '');
+  const employeeName = fullName(employee);
+  const poolName = employee.homePool || result.poolName || '';
+  if (!Array.isArray(result.rescuers)) return result.rescuers;
+  return result.rescuers.map((rescuer) => {
+    const rescuerName = String(rescuer.typedRescuerName || rescuer.name || rescuer.employeeName || '').trim();
+    if (normalizeNameKey(rescuerName) !== normalizeNameKey(typedName)) return rescuer;
+    return {
+      ...rescuer,
+      employeeId,
+      employeeName,
+      name: employeeName,
+      poolName,
+      unlisted: false,
+      resolvedFromTypedName: typedName,
+    };
+  });
+}
+
+async function assignTypedRescuerToEmployee() {
+  const modal = ensureTypedRescuerAssignmentModal();
+  const select = modal.querySelector('#typedRescuerEmployeeSelect');
+  const error = modal.querySelector('#typedRescuerAssignmentError');
+  const assignBtn = modal.querySelector('#typedRescuerAssignBtn');
+  const selectedEmployee = getEmployeeById(select?.value || '');
+
+  if (!typedRescuerAssignment || !selectedEmployee) {
+    if (error) {
+      error.textContent = 'Select an employee.';
+      error.classList.remove('hidden');
+    }
+    return;
+  }
+
+  const typedName = fullName(typedRescuerAssignment);
+  const matches = testingResults.filter((result) => isMatchingTypedRescuerResult(result, typedRescuerAssignment));
+  if (!matches.length) {
+    if (error) {
+      error.textContent = 'No matching typed rescuer results were found.';
+      error.classList.remove('hidden');
+    }
+    return;
+  }
+
+  const employeeId = String(selectedEmployee.id || selectedEmployee.email || selectedEmployee.employeeId || '');
+  const employeeName = fullName(selectedEmployee);
+  if (assignBtn) {
+    assignBtn.disabled = true;
+    assignBtn.textContent = 'Assigning...';
+  }
+
+  try {
+    await Promise.all(matches.map(async (result) => {
+      const updated = {
+        ...result,
+        employeeId,
+        employeeName,
+        rescuerName: employeeName,
+        poolName: selectedEmployee.homePool || result.poolName || '',
+        unlistedRescuer: false,
+        typedRescuerName: '',
+        resolvedFromTypedRescuerName: typedName,
+        resolvedAt: new Date().toISOString(),
+        rescuers: updateResultRescuerSnapshots(result, typedName, selectedEmployee),
+      };
+      const { id, ...stored } = updated;
+      await setDoc(doc(db, 'testingResults', id), stored, { merge: true });
+      Object.assign(result, updated);
+    }));
+
+    if (!performanceData.set) performanceData.set = {};
+    if (!performanceData.set[employeeId]) performanceData.set[employeeId] = {};
+    matches
+      .filter((result) => Object.prototype.hasOwnProperty.call(RUBRIC_LABELS, result.rubricKey))
+      .sort((a, b) => getResultTimeValue(a) - getResultTimeValue(b))
+      .forEach((result) => {
+        performanceData.set[employeeId][result.rubricKey] = result.passed ? 'Pass' : 'Fail';
+      });
+    await savePerformanceData();
+    closeTypedRescuerAssignmentModal();
+    renderAll();
+  } catch (err) {
+    console.error('[Employees] Error assigning typed rescuer:', err);
+    if (error) {
+      error.textContent = 'Unable to assign this rescuer right now.';
+      error.classList.remove('hidden');
+    }
+  } finally {
+    if (assignBtn) {
+      assignBtn.disabled = false;
+      assignBtn.textContent = 'Assign';
+    }
+  }
+}
+
+// ============================================================
 // Utilities
 // ============================================================
 
+function isPlaceholderNamePart(value) {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  const normalized = text.toLowerCase();
+  if (['unknown', 'unnamed', 'n/a', 'na', 'null', 'undefined', '-', '—'].includes(normalized)) return true;
+  return /^_+$/.test(text);
+}
+
 function fullName(emp) {
-  return [emp.firstName, emp.lastName].filter(Boolean).join(' ') || '(unnamed)';
+  if (emp?.typedName) return String(emp.typedName).trim();
+  const name = [emp?.firstName, emp?.lastName]
+    .filter((part) => !isPlaceholderNamePart(part))
+    .join(' ')
+    .trim();
+  return name || emp?.email || emp?.id || '(unnamed)';
 }
 
 function escapeHtml(str) {
