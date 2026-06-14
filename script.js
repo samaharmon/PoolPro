@@ -137,19 +137,62 @@ document.body.classList.add('dark-mode');
 function ensureDropdownMenuOverlay() {
   if (!document.body) return null;
   let overlay = document.getElementById('dropdownMenuOverlay');
-  if (overlay) return overlay;
-  overlay = document.createElement('div');
-  overlay.id = 'dropdownMenuOverlay';
-  overlay.className = 'dropdown-menu-overlay';
-  overlay.setAttribute('aria-hidden', 'true');
-  overlay.addEventListener('click', closeDropdownMenus);
-  document.body.appendChild(overlay);
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'dropdownMenuOverlay';
+    overlay.className = 'dropdown-menu-overlay';
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.addEventListener('click', closeDropdownMenus);
+    document.body.appendChild(overlay);
+  }
+  mountDropdownMenuOverlay(overlay);
   return overlay;
+}
+
+function isUsableDropdownOverlayHost(element) {
+  if (!element) return false;
+  const style = window.getComputedStyle(element);
+  return style.display !== 'none'
+    && style.visibility !== 'hidden'
+    && element.getClientRects().length > 0;
+}
+
+function getDropdownOverlayHost() {
+  const selectors = [
+    '#supervisorDashboard.show > .container',
+    '#empPageContent:not(.hidden) > .container',
+    '#testPageContent > .container',
+    '#mainForm > .container',
+    'main.training-main',
+    'main.home-main',
+    'body > .container',
+  ];
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (isUsableDropdownOverlayHost(element)) return element;
+  }
+  return Array.from(document.querySelectorAll('main, body > .container, .container'))
+    .find(isUsableDropdownOverlayHost) || document.body;
+}
+
+function mountDropdownMenuOverlay(overlay) {
+  const host = getDropdownOverlayHost();
+  if (!host) return;
+  if (overlay.parentElement === host) {
+    host.classList.add('dropdown-overlay-host');
+    return;
+  }
+  document.querySelectorAll('.dropdown-overlay-host').forEach((element) => {
+    if (element !== host) element.classList.remove('dropdown-overlay-host');
+  });
+  host.classList.add('dropdown-overlay-host');
+  host.appendChild(overlay);
 }
 
 function syncDropdownMenuOverlay() {
   const overlay = ensureDropdownMenuOverlay();
   if (!overlay) return;
+  mountDropdownMenuOverlay(overlay);
   const hasOpenMenu = !!document.querySelector('.dropdown-menu.show');
   overlay.classList.toggle('visible', hasOpenMenu);
   overlay.setAttribute('aria-hidden', hasOpenMenu ? 'false' : 'true');
