@@ -369,27 +369,6 @@ body.dark-mode .page-content-title {
     transition-delay: 0s;
 }
 
-.dropdown-menu-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    display: block;
-    background-color: rgba(0, 0, 0, 0.28);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-}
-
-.dropdown-overlay-host {
-    position: relative;
-    z-index: 0;
-}
-
-.dropdown-menu-overlay.visible {
-    opacity: 1;
-    pointer-events: auto;
-}
-
 .dropdown-item {
     display: block;
     padding: 10px 15px;

@@ -134,88 +134,9 @@ document.body.classList.add('dark-mode');
 // MENU / DROPDOWN
 // ============================================================
 
-function ensureDropdownMenuOverlay() {
-  if (!document.body) return null;
-  let overlay = document.getElementById('dropdownMenuOverlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'dropdownMenuOverlay';
-    overlay.className = 'dropdown-menu-overlay';
-    overlay.setAttribute('aria-hidden', 'true');
-    overlay.addEventListener('click', closeDropdownMenus);
-    document.body.appendChild(overlay);
-  }
-  mountDropdownMenuOverlay(overlay);
-  return overlay;
-}
-
-function isUsableDropdownOverlayHost(element) {
-  if (!element) return false;
-  const style = window.getComputedStyle(element);
-  return style.display !== 'none'
-    && style.visibility !== 'hidden'
-    && element.getClientRects().length > 0;
-}
-
-function getDropdownOverlayHost() {
-  const selectors = [
-    '#supervisorDashboard.show > .container',
-    '#empPageContent:not(.hidden) > .container',
-    '#testPageContent > .container',
-    '#mainForm > .container',
-    'main.training-main',
-    'main.home-main',
-    'body > .container',
-  ];
-  for (const selector of selectors) {
-    const element = document.querySelector(selector);
-    if (isUsableDropdownOverlayHost(element)) return element;
-  }
-  return Array.from(document.querySelectorAll('main, body > .container, .container'))
-    .find(isUsableDropdownOverlayHost) || document.body;
-}
-
-function mountDropdownMenuOverlay(overlay) {
-  const host = getDropdownOverlayHost();
-  if (!host) return;
-  if (overlay.parentElement === host) {
-    host.classList.add('dropdown-overlay-host');
-    return;
-  }
-  document.querySelectorAll('.dropdown-overlay-host').forEach((element) => {
-    if (element !== host) element.classList.remove('dropdown-overlay-host');
-  });
-  host.classList.add('dropdown-overlay-host');
-  host.appendChild(overlay);
-}
-
-function syncDropdownMenuOverlay() {
-  const overlay = ensureDropdownMenuOverlay();
-  if (!overlay) return;
-  mountDropdownMenuOverlay(overlay);
-  const hasOpenMenu = !!document.querySelector('.dropdown-menu.show');
-  overlay.classList.toggle('visible', hasOpenMenu);
-  overlay.setAttribute('aria-hidden', hasOpenMenu ? 'false' : 'true');
-}
-
 function closeDropdownMenus() {
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
   document.querySelectorAll('.menu-btn.open').forEach(btn => btn.classList.remove('open'));
-  syncDropdownMenuOverlay();
-}
-
-function observeDropdownMenus() {
-  if (!document.body || document.body.dataset.dropdownOverlayObserver === 'true') return;
-  document.body.dataset.dropdownOverlayObserver = 'true';
-  ensureDropdownMenuOverlay();
-  const observer = new MutationObserver(syncDropdownMenuOverlay);
-  observer.observe(document.body, {
-    subtree: true,
-    childList: true,
-    attributes: true,
-    attributeFilter: ['class'],
-  });
-  syncDropdownMenuOverlay();
 }
 
 window.toggleMenu = function (btn) {
@@ -229,7 +150,6 @@ window.toggleMenu = function (btn) {
   document.querySelectorAll('.menu-btn.open').forEach(button => button.classList.remove('open'));
   if (!isOpen) menu.classList.add('show');
   btn.classList.toggle('open', !isOpen);
-  syncDropdownMenuOverlay();
 };
 
 // Close dropdown when clicking outside any menu container
@@ -238,9 +158,6 @@ document.addEventListener('click', (e) => {
     closeDropdownMenus();
   }
 });
-
-window.addEventListener('DOMContentLoaded', observeDropdownMenus);
-if (document.body) observeDropdownMenus();
 
 // Open inline/chunked resources as blob URLs (direct data: links are blocked in modern browsers)
 document.addEventListener('click', async (e) => {
