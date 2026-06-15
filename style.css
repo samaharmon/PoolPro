@@ -137,13 +137,18 @@ body.dark-mode .page-content-title {
     color: white;
     padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 16px;
     position: relative;
-    z-index: 20;
+    z-index: 1250;
     box-shadow: 0 8px 10px rgba(0, 0, 0, 0.3);
     min-height: calc(130px + env(safe-area-inset-top, 0px));
     display: flex;
     align-items: center;
     border-top: 2px solid #fff;
     border-bottom: 2px solid #fff;
+}
+
+.app-header {
+    position: relative;
+    z-index: 1250;
 }
 
 .header-content {
@@ -234,7 +239,7 @@ body.dark-mode .page-content-title {
     pointer-events: none;
     transform: translateY(-8px);
     transition: opacity 0.36s ease, transform 0.36s ease, visibility 0s linear 0.36s;
-    z-index: 1100;
+    z-index: 1300;
     padding-top: calc(8px + env(safe-area-inset-top, 0px));
     padding-right: 8px;
     padding-bottom: 8px;
@@ -283,6 +288,27 @@ body.dark-mode .page-content-title {
     position: relative;
     overflow: visible;
     z-index: 1200;
+}
+
+.menu-content-overlay {
+    position: fixed;
+    top: var(--menu-overlay-top, 0);
+    right: 0;
+    bottom: var(--menu-overlay-bottom, 0);
+    left: 0;
+    z-index: 1150;
+    background: rgba(255, 255, 255, 0.16);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+
+.menu-content-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
 }
 
 .supervisor-login-btn:hover {

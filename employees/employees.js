@@ -164,12 +164,18 @@ window.toggleMenu = function (btn) {
   const isOpen = menu.classList.contains('show');
   menu.classList.toggle('show', !isOpen);
   document.querySelectorAll('.menu-btn').forEach(b => b.classList.toggle('open', !isOpen));
+  if (!isOpen) {
+    window.poolProShowMenuContentOverlay?.(btn);
+  } else {
+    window.poolProHideMenuContentOverlay?.();
+  }
 };
 
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.menu-container')) {
     document.querySelectorAll('.dropdown-menu').forEach(m => m.classList.remove('show'));
     document.querySelectorAll('.menu-btn').forEach(b => b.classList.remove('open'));
+    window.poolProHideMenuContentOverlay?.();
   }
 });
 

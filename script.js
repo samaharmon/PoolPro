@@ -135,9 +135,86 @@ document.body.classList.add('dark-mode');
 // MENU / DROPDOWN
 // ============================================================
 
+function ensureMenuContentOverlay() {
+  if (!document.body) return null;
+  let overlay = document.getElementById('poolproMenuContentOverlay');
+  if (overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'poolproMenuContentOverlay';
+  overlay.className = 'menu-content-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.addEventListener('click', closeDropdownMenus);
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function getOpenDropdownMenu() {
+  return document.querySelector('.dropdown-menu.show');
+}
+
+function getMenuOverlayHeader(anchor) {
+  return anchor?.closest?.('.floating-header.visible, .floating-header, .header, .app-header, header') ||
+    getOpenDropdownMenu()?.closest('.floating-header.visible, .floating-header, .header, .app-header, header') ||
+    document.querySelector('.floating-header.visible') ||
+    document.querySelector('.header, .app-header, header');
+}
+
+function getMenuOverlayFooter() {
+  return document.querySelector('.footer, footer');
+}
+
+function updateMenuContentOverlayBounds(anchor) {
+  const overlay = ensureMenuContentOverlay();
+  if (!overlay) return;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const header = getMenuOverlayHeader(anchor);
+  const footer = getMenuOverlayFooter();
+  let top = 0;
+  let bottom = 0;
+
+  if (header) {
+    const rect = header.getBoundingClientRect();
+    if (rect.bottom > 0 && rect.top < viewportHeight) {
+      top = Math.max(0, Math.min(viewportHeight, rect.bottom));
+    }
+  }
+
+  if (footer) {
+    const rect = footer.getBoundingClientRect();
+    if (rect.top < viewportHeight && rect.bottom > 0) {
+      bottom = Math.max(0, viewportHeight - Math.max(0, rect.top));
+    }
+  }
+
+  if (top + bottom > viewportHeight) bottom = Math.max(0, viewportHeight - top);
+  overlay.style.setProperty('--menu-overlay-top', `${Math.round(top)}px`);
+  overlay.style.setProperty('--menu-overlay-bottom', `${Math.round(bottom)}px`);
+}
+
+function showMenuContentOverlay(anchor) {
+  const overlay = ensureMenuContentOverlay();
+  if (!overlay) return;
+  updateMenuContentOverlayBounds(anchor);
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.classList.add('visible');
+}
+
+function hideMenuContentOverlay() {
+  const overlay = document.getElementById('poolproMenuContentOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+}
+
+function syncMenuContentOverlay(anchor) {
+  if (getOpenDropdownMenu()) showMenuContentOverlay(anchor || getOpenDropdownMenu());
+  else hideMenuContentOverlay();
+}
+
 function closeDropdownMenus() {
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
   document.querySelectorAll('.menu-btn.open').forEach(btn => btn.classList.remove('open'));
+  hideMenuContentOverlay();
 }
 
 window.toggleMenu = function (btn) {
@@ -151,6 +228,7 @@ window.toggleMenu = function (btn) {
   document.querySelectorAll('.menu-btn.open').forEach(button => button.classList.remove('open'));
   if (!isOpen) menu.classList.add('show');
   btn.classList.toggle('open', !isOpen);
+  syncMenuContentOverlay(!isOpen ? btn : null);
 };
 
 // Close dropdown when clicking outside any menu container
@@ -159,6 +237,19 @@ document.addEventListener('click', (e) => {
     closeDropdownMenus();
   }
 });
+
+window.addEventListener('resize', () => {
+  if (getOpenDropdownMenu()) updateMenuContentOverlayBounds(getOpenDropdownMenu());
+}, { passive: true });
+
+window.addEventListener('scroll', () => {
+  if (getOpenDropdownMenu()) updateMenuContentOverlayBounds(getOpenDropdownMenu());
+}, { passive: true });
+
+window.poolProCloseDropdownMenus = closeDropdownMenus;
+window.poolProShowMenuContentOverlay = showMenuContentOverlay;
+window.poolProHideMenuContentOverlay = hideMenuContentOverlay;
+window.poolProSyncMenuContentOverlay = syncMenuContentOverlay;
 
 // Open inline/chunked resources as blob URLs (direct data: links are blocked in modern browsers)
 document.addEventListener('click', async (e) => {
@@ -414,7 +505,7 @@ function createFloatingHeader(sourceHeader) {
     const rect = sourceHeader.getBoundingClientRect();
     const visible = sourceHeader.offsetParent !== null && rect.bottom <= 0;
     if (visible && !floating.classList.contains('visible')) {
-      sourceHeader.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+      closeDropdownMenus();
     }
     floating.classList.toggle('visible', visible);
   };
@@ -1096,7 +1187,7 @@ function activateDashboardTab(which) {
 }
 
 window.goToDashboard = function () {
-  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  closeDropdownMenus();
   if (!canAccessPoolChemistryDashboard()) {
     alert('You do not have permission to view the Pool Chemistry Dashboard.');
     return;
@@ -1120,7 +1211,7 @@ window.goToDashboard = function () {
 // ============================================================
 
 window.logout = async function () {
-  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  closeDropdownMenus();
   try {
     await signOut(auth);
   } catch (_) { /* ignore */ }
@@ -1358,7 +1449,7 @@ window.supervisorSignIn = async function (email, password) {
 // ============================================================
 
 window.goToEditor = function () {
-  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  closeDropdownMenus();
   if (!hasPermission('rulesEditor')) {
     alert('You do not have permission to view the Rules Editor.');
     return;
@@ -1380,7 +1471,7 @@ window.goToEditor = function () {
 // ============================================================
 
 window.goToTrainingSetup = function () {
-  document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  closeDropdownMenus();
   if (!hasPermission('trainingSetup')) {
     alert('You do not have permission to view Training Setup.');
     return;
