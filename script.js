@@ -1874,6 +1874,19 @@ function normalizeIdentityKey(value) {
   return (value || '').toString().trim().toLowerCase();
 }
 
+function timestampToMillis(value) {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
 function normalizeAccessMode(value) {
   const mode = (value || '').toString().trim().toLowerCase();
   return ['attendant', 'lifeguard', 'manager', 'supervisor'].includes(mode) ? mode : '';
