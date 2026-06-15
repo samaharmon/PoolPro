@@ -4428,6 +4428,7 @@ let dashboardSupplyFilters = { market: 'all', pool: 'all' };
 const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a trickle'];
 const BLEACH_FEEDER_STATUS_OPTIONS = ['Not applicable', 'Off', '0 or L', '1', '1.5', '1.75', '2', '2.25', '2.5', '3', '4', '5', '6', '7', '8', '9', '10'];
 const POOL_CLOSURE_OPTIONS = ['Open', 'Weather', 'Contamination', 'Chemical Imbalance', 'System Malfunction', 'Other'];
+const WEEKLY_BACKWASH_COMPLETION_OPTIONS = ['No', 'Yes'];
 const POOL_CLOSURE_TODOS = {
   Weather: ['Close and tie shut all umbrellas, then remove any equipment that may be damaged by the storm.'],
   Contamination: ['Do not make any changes until instructed by a supervisor.'],
@@ -4659,6 +4660,20 @@ function formatDateInputValue(date) {
   return `${year}-${month}-${day}`;
 }
 
+function getOperationalWeekStart(date = new Date()) {
+  const weekStart = date instanceof Date ? new Date(date) : new Date(date);
+  if (Number.isNaN(weekStart.getTime())) return null;
+  weekStart.setHours(0, 0, 0, 0);
+  const daysSinceMonday = (weekStart.getDay() + 6) % 7;
+  weekStart.setDate(weekStart.getDate() - daysSinceMonday);
+  return weekStart;
+}
+
+function getOperationalWeekKey(date = new Date()) {
+  const weekStart = getOperationalWeekStart(date);
+  return weekStart ? formatDateInputValue(weekStart) : '';
+}
+
 function toDateObject(value) {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -4694,6 +4709,24 @@ function getLogRespondentName(log) {
   return log ? getSubmissionRespondentName(log) : '—';
 }
 
+function getWeeklyBackwashRecordWeekKey(data = {}) {
+  const explicitWeek = (data.weeklyBackwashWeek || data.weeklyBackwashWeekKey || '').toString().trim();
+  if (explicitWeek) return explicitWeek;
+  const recordDate = toDateObject(data.weeklyBackwashTimestamp || data.timestamp || data.updatedAt || data.createdAt);
+  return recordDate ? getOperationalWeekKey(recordDate) : '';
+}
+
+function normalizeWeeklyBackwashStatus(data = {}) {
+  const status = (data.weeklyBackwashStatus || data.backwashStatus || '').toString().trim();
+  return status === 'Yes' || status === 'No' ? status : '';
+}
+
+function getEffectiveWeeklyBackwashStatus(data = {}) {
+  const status = normalizeWeeklyBackwashStatus(data);
+  if (status !== 'Yes') return status;
+  return getWeeklyBackwashRecordWeekKey(data) === getOperationalWeekKey() ? 'Yes' : 'No';
+}
+
 function normalizeOperationalStatusRecord(rawDoc, idOverride = '') {
   const data = rawDoc || {};
   const poolIndex = Number(data.poolIndex ?? data.poolIdx ?? 0);
@@ -4711,6 +4744,8 @@ function normalizeOperationalStatusRecord(rawDoc, idOverride = '') {
     bleachStatus: (data.bleachStatus || '').toString().trim(),
     closureStatus,
     closureReason: closureReason || closureStatus,
+    weeklyBackwashStatus: normalizeWeeklyBackwashStatus(data),
+    weeklyBackwashWeek: getWeeklyBackwashRecordWeekKey(data),
     firstName: (data.firstName || '').toString().trim(),
     lastName: (data.lastName || '').toString().trim(),
     employeeId: (data.employeeId || '').toString().trim(),
@@ -4737,6 +4772,11 @@ function refreshOperationalStatusLatestMap() {
     if (log.closureStatus || log.closureReason) {
       const key = operationalStatusKey(log.facilityName, log.poolIndex, 'closure');
       if (!next[key]) next[key] = log;
+    }
+    const effectiveBackwashStatus = getEffectiveWeeklyBackwashStatus(log);
+    if (effectiveBackwashStatus) {
+      const key = operationalStatusKey(log.facilityName, log.poolIndex, 'backwash');
+      if (!next[key]) next[key] = { ...log, weeklyBackwashStatus: effectiveBackwashStatus };
     }
   });
   operationalStatusLatestMap = next;
@@ -5389,7 +5429,7 @@ function renderChemistryPoolDetail(container, logs, poolDoc) {
       <th>Cl</th>
       <th>Fill Line/Hose</th>
       <th>Bleach Feeder Rate</th>
-      <th>Open/Closed</th>
+      <th>Facility Open/Closed</th>
     </tr></thead>
   `;
   const tbody = document.createElement('tbody');
@@ -5524,7 +5564,7 @@ function renderDashboard(logs) {
           <th>Cl</th>
           <th>Fill Line/Hose</th>
           <th>Bleach Feeder Rate</th>
-          <th>Open/Closed</th>
+          <th>Facility Open/Closed</th>
         </tr></thead>
       `;
       const tbody = document.createElement('tbody');
@@ -5659,9 +5699,10 @@ function renderDashboard(logs) {
 // OPERATIONAL STATUS LOG
 // ============================================================
 
-function buildOperationalOptionGroup({ name, options, selected, variant = '', onChange = null }) {
+function buildOperationalOptionGroup({ name, options, selected, variant = '', onChange = null, disabled = false }) {
   const group = document.createElement('div');
   group.className = `operational-switch-group${variant ? ` operational-switch-group--${variant}` : ''}`;
+  if (disabled) group.classList.add('operational-switch-group--disabled');
   options.forEach((option) => {
     const label = document.createElement('label');
     label.className = 'operational-switch-option';
@@ -5673,6 +5714,7 @@ function buildOperationalOptionGroup({ name, options, selected, variant = '', on
     input.name = name;
     input.value = option;
     input.checked = option === selected;
+    input.disabled = disabled;
     input.id = `${name}_${option.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
     if (typeof onChange === 'function') {
       input.addEventListener('change', () => {
@@ -5752,6 +5794,12 @@ function getOperationalSelectedFacility() {
   return poolsCache.find((pool) => pool.id === poolId) || null;
 }
 
+function canEditWeeklyBackwashCompletion() {
+  return isSupervisor() ||
+    getRoleKeyForAccessMode(getRequestedAccessMode()) === 'poolManager' ||
+    hasRoleMembershipForKeys(getCurrentIdentityKeys(), 'poolManager');
+}
+
 function renderOperationalStatusLog() {
   const cards = document.getElementById('operationalStatusCards');
   const submitBtn = document.getElementById('operationalStatusSubmit');
@@ -5773,11 +5821,14 @@ function renderOperationalStatusLog() {
   if (submitBtn) submitBtn.disabled = false;
   const facilityName = getPoolName(poolDoc);
   const poolCount = Math.max(1, Number(poolDoc.numPools || poolDoc.poolCount || 1));
+  const canEditBackwash = canEditWeeklyBackwashCompletion();
 
   for (let idx = 0; idx < poolCount; idx++) {
     const fillLog = getLatestOperationalStatus(facilityName, idx, 'fill');
     const bleachLog = getLatestOperationalStatus(facilityName, idx, 'bleach');
     const closureLog = getLatestOperationalStatus(facilityName, idx, 'closure');
+    const backwashLog = getLatestOperationalStatus(facilityName, idx, 'backwash');
+    const backwashStatus = backwashLog?.weeklyBackwashStatus || 'No';
     const poolLabel = getPoolSimpleLabel(poolDoc, idx);
 
     const card = document.createElement('section');
@@ -5816,11 +5867,30 @@ function renderOperationalStatusLog() {
       selected: bleachLog?.bleachStatus || 'Not applicable',
     }));
 
+    const backwashBlock = document.createElement('div');
+    backwashBlock.className = 'operational-control-block';
+    backwashBlock.innerHTML = `
+      <div class="operational-control-heading">
+        <span>Weekly Backwash Completion</span>
+        <small>Current: ${escapeHtml(backwashStatus)}</small>
+      </div>
+    `;
+    backwashBlock.appendChild(buildOperationalOptionGroup({
+      name: `operational_backwash_${idx}`,
+      options: WEEKLY_BACKWASH_COMPLETION_OPTIONS,
+      selected: backwashStatus,
+      variant: 'backwash',
+      disabled: !canEditBackwash,
+    }));
+    if (!canEditBackwash) {
+      backwashBlock.insertAdjacentHTML('beforeend', '<p class="operational-control-note">Managers and supervisors only.</p>');
+    }
+
     const closureBlock = document.createElement('div');
     closureBlock.className = 'operational-control-block';
     closureBlock.innerHTML = `
       <div class="operational-control-heading">
-        <span>Open / Closed</span>
+        <span>Facility Open / Closed</span>
         <small>Current: ${escapeHtml(getOperationalClosureSummary(closureLog))}</small>
       </div>
     `;
@@ -5838,6 +5908,7 @@ function renderOperationalStatusLog() {
 
     card.appendChild(fillBlock);
     card.appendChild(bleachBlock);
+    card.appendChild(backwashBlock);
     card.appendChild(closureBlock);
     cards.appendChild(card);
   }
@@ -5868,14 +5939,17 @@ async function saveOperationalStatusLog() {
     for (let idx = 0; idx < poolCount; idx++) {
       const fillStatus = document.querySelector(`input[name="operational_fill_${idx}"]:checked`)?.value || '';
       const bleachStatus = document.querySelector(`input[name="operational_bleach_${idx}"]:checked`)?.value || '';
+      const weeklyBackwashStatus = document.querySelector(`input[name="operational_backwash_${idx}"]:checked`)?.value || 'No';
       const closureReason = document.querySelector(`input[name="operational_closure_${idx}"]:checked`)?.value || 'Open';
       const latestFill = getLatestOperationalStatus(facilityName, idx, 'fill');
       const latestBleach = getLatestOperationalStatus(facilityName, idx, 'bleach');
+      const latestBackwash = getLatestOperationalStatus(facilityName, idx, 'backwash');
       const latestClosure = getLatestOperationalStatus(facilityName, idx, 'closure');
       const fillChanged = fillStatus && fillStatus !== (latestFill?.fillStatus || '');
       const bleachChanged = bleachStatus && bleachStatus !== (latestBleach?.bleachStatus || '');
+      const backwashChanged = canEditWeeklyBackwashCompletion() && weeklyBackwashStatus !== (latestBackwash?.weeklyBackwashStatus || 'No');
       const closureChanged = closureReason !== (latestClosure?.closureReason || '');
-      if (!fillChanged && !bleachChanged && !closureChanged) continue;
+      if (!fillChanged && !bleachChanged && !backwashChanged && !closureChanged) continue;
 
       const payload = {
         timestamp: Timestamp.now(),
@@ -5898,6 +5972,10 @@ async function saveOperationalStatusLog() {
       };
       if (fillChanged) payload.fillStatus = fillStatus;
       if (bleachChanged) payload.bleachStatus = bleachStatus;
+      if (backwashChanged) {
+        payload.weeklyBackwashStatus = weeklyBackwashStatus;
+        payload.weeklyBackwashWeek = getOperationalWeekKey();
+      }
       if (closureChanged) {
         payload.closureReason = closureReason;
         payload.closureStatus = closureReason === 'Open' ? 'Open' : 'Closed';
@@ -10853,12 +10931,12 @@ function renderOperationalDashboard() {
 
       const table = document.createElement('table');
       table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-operational-table';
-      table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
+      table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Weekly Backwash</th><th>Facility Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
       const tbody = document.createElement('tbody');
       const rows = getOperationalLogsForPoolOnDate(dashboardPoolFilter, poolIdx);
 
       if (!rows.length) {
-        tbody.innerHTML = '<tr><td colspan="7">No operational status entries match the selected filters.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8">No operational status entries match the selected filters.</td></tr>';
       } else {
         rows.forEach((log) => {
           const tr = document.createElement('tr');
@@ -10867,7 +10945,8 @@ function renderOperationalDashboard() {
             <td>${escapeHtml(log.poolLabel || `Pool ${Number(log.poolIndex || 0) + 1}`)}</td>
             <td>${escapeHtml(log.fillStatus || '—')}</td>
             <td>${escapeHtml(log.bleachStatus || '—')}</td>
-            <td>${escapeHtml(log.closureStatus || '—')}</td>
+            <td>${escapeHtml(log.weeklyBackwashStatus || '—')}</td>
+            <td>${escapeHtml((log.closureStatus || log.closureReason) ? getOperationalClosureSummary(log) : '—')}</td>
             <td>${escapeHtml(getLogRespondentName(log))}</td>
             <td>${escapeHtml(formatTimestampDisplay(log.timestamp))}</td>
           `;
@@ -10926,7 +11005,7 @@ function renderOperationalDashboard() {
 
       const table = document.createElement('table');
       table.className = 'data-table dashboard-pool-table dashboard-operational-table';
-      table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
+      table.innerHTML = '<thead><tr><th>Facility Name</th><th>Pool</th><th>Fill Line/Hose</th><th>Bleach Feeder Rate</th><th>Weekly Backwash</th><th>Facility Open/Closed</th><th>Respondent</th><th>Timestamp</th></tr></thead>';
       const tbody = document.createElement('tbody');
       let renderedRows = 0;
 
@@ -10934,14 +11013,20 @@ function renderOperationalDashboard() {
         const facilityName = getPoolName(poolDoc);
         const poolCount = Math.max(1, Number(poolDoc?.numPools || poolDoc?.poolCount || 1));
         if (poolIdx >= poolCount) return;
-        const latestLog = getOperationalLogsForPoolOnDate(facilityName, poolIdx)[0] || null;
+        const poolLogs = getOperationalLogsForPoolOnDate(facilityName, poolIdx);
+        const latestFillLog = poolLogs.find((log) => log.fillStatus);
+        const latestBleachLog = poolLogs.find((log) => log.bleachStatus);
+        const latestBackwashLog = poolLogs.find((log) => log.weeklyBackwashStatus);
+        const latestClosureLog = poolLogs.find((log) => log.closureStatus || log.closureReason);
+        const latestLog = poolLogs[0] || null;
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${escapeHtml(facilityName)}</td>
           <td>${escapeHtml(getFacilityPoolLabel(poolDoc, poolIdx))}</td>
-          <td>${escapeHtml(latestLog?.fillStatus || '—')}</td>
-          <td>${escapeHtml(latestLog?.bleachStatus || '—')}</td>
-          <td>${escapeHtml(getOperationalClosureSummary(latestLog))}</td>
+          <td>${escapeHtml(latestFillLog?.fillStatus || '—')}</td>
+          <td>${escapeHtml(latestBleachLog?.bleachStatus || '—')}</td>
+          <td>${escapeHtml(latestBackwashLog?.weeklyBackwashStatus || '—')}</td>
+          <td>${escapeHtml(latestClosureLog ? getOperationalClosureSummary(latestClosureLog) : '—')}</td>
           <td>${escapeHtml(latestLog ? getLogRespondentName(latestLog) : '—')}</td>
           <td>${escapeHtml(latestLog ? formatTimestampDisplay(latestLog.timestamp) : '—')}</td>
         `;
@@ -10951,7 +11036,7 @@ function renderOperationalDashboard() {
       });
 
       if (!renderedRows) {
-        tbody.innerHTML = '<tr><td colspan="7">No facilities have this pool.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8">No facilities have this pool.</td></tr>';
       }
 
       table.appendChild(tbody);
