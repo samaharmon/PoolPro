@@ -291,9 +291,9 @@ function injectDesLogbooksMenuLinks() {
 
     const link = document.createElement('a');
     link.href = isDesLogbooksPage ? 'des-logbooks.html' : `${prefix}des-logbooks/des-logbooks.html`;
-    link.className = `dropdown-item attendant-only${isDesLogbooksPage ? ' active-page' : ''}`;
+    link.className = `dropdown-item attendant-supervisor-only${isDesLogbooksPage ? ' active-page' : ''}`;
     link.dataset.nav = 'des-logbooks';
-    link.textContent = 'DES Logbooks';
+    link.textContent = 'DES Logbook Report';
     anchorLink.insertAdjacentElement('afterend', link);
   });
 }
@@ -1797,7 +1797,7 @@ const PERMISSION_DEFINITIONS = [
   { key: 'poolChemistryLog', label: 'Pool Chemistry Log' },
   { key: 'trainingSignup', label: 'Training Signup' },
   { key: 'cleanlinessReport', label: 'Cleanliness Report' },
-  { key: 'desLogbooks', label: 'DES Logbooks' },
+  { key: 'desLogbooks', label: 'DES Logbook Report' },
   { key: 'managerialReport', label: 'Managerial Report' },
   { key: 'operationalStatusLog', label: 'Operational Status Log' },
   { key: 'inventory', label: 'Inventory' },
@@ -2323,6 +2323,9 @@ window.setupDropdownVisibility = function () {
   document.querySelectorAll('.attendant-only').forEach((item) => {
     item.style.display = attendant && hasPermission(item.dataset.nav === 'des-logbooks' ? 'desLogbooks' : 'settings') ? '' : 'none';
   });
+  document.querySelectorAll('.attendant-supervisor-only').forEach((item) => {
+    item.style.display = (attendant || sup) && hasPermission(item.dataset.nav === 'des-logbooks' ? 'desLogbooks' : 'settings') ? '' : 'none';
+  });
   document.querySelectorAll('.dropdown-menu').forEach((m) => {
     m.classList.toggle('lifeguard-active', lifeguard);
     m.classList.toggle('attendant-active', attendant);
@@ -2631,24 +2634,24 @@ function ensureAlertsRemindersSettingsSection() {
   section.innerHTML = `
     <h3>Alerts and Reminders</h3>
     <p class="section-subtitle">Create reminders that appear on a full-screen yellow popup after users log in.</p>
-    <div class="alerts-reminders-form">
+    <div class="alerts-reminders-form sanitation-section">
       <h4>Display Settings</h4>
       <div class="settings-row alerts-reminders-grid">
         <div class="settings-field">
           <label for="alertReminderStartDate">Start Date</label>
-          <input type="date" id="alertReminderStartDate">
+          <input type="date" id="alertReminderStartDate" class="training-filter-select">
         </div>
         <div class="settings-field">
           <label for="alertReminderEndDate">End Date</label>
-          <input type="date" id="alertReminderEndDate">
+          <input type="date" id="alertReminderEndDate" class="training-filter-select">
         </div>
         <div class="settings-field">
           <label for="alertReminderStartTime">Start Time</label>
-          <input type="time" id="alertReminderStartTime">
+          <input type="time" id="alertReminderStartTime" class="training-filter-select">
         </div>
         <div class="settings-field">
           <label for="alertReminderEndTime">End Time</label>
-          <input type="time" id="alertReminderEndTime">
+          <input type="time" id="alertReminderEndTime" class="training-filter-select">
         </div>
         <div class="settings-field">
           <label for="alertReminderRepeat">Repeat</label>
@@ -4564,7 +4567,7 @@ function renderDashboardFilterBar(container, onChange, { includeDate = true } = 
   dateLabel.textContent = 'Date';
   const dateInput = document.createElement('input');
   dateInput.type = 'date';
-  dateInput.className = 'training-filter-select dashboard-date-filter';
+  dateInput.className = 'training-filter-select dashboard-date-input';
   dateInput.value = dashboardDateFilter || getTodayDateValue();
   dateInput.setAttribute('aria-label', 'Filter dashboard by date');
 

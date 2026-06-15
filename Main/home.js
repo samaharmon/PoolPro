@@ -54,7 +54,7 @@ const PERMISSION_DEFINITIONS = [
   { key: 'poolChemistryLog', label: 'Pool Chemistry Log' },
   { key: 'trainingSignup', label: 'Training Signup' },
   { key: 'cleanlinessReport', label: 'Cleanliness Report' },
-  { key: 'desLogbooks', label: 'DES Logbooks' },
+  { key: 'desLogbooks', label: 'DES Logbook Report' },
   { key: 'managerialReport', label: 'Managerial Report' },
   { key: 'operationalStatusLog', label: 'Operational Status Log' },
   { key: 'inventory', label: 'Inventory' },

@@ -37,7 +37,7 @@
             <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
             <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
-            <a href="des-logbooks.html" class="dropdown-item active-page attendant-only" data-nav="des-logbooks">DES Logbooks</a>
+            <a href="des-logbooks.html" class="dropdown-item active-page attendant-supervisor-only" data-nav="des-logbooks">DES Logbook Report</a>
             <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
             <a href="../Training/training.html" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
             <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
@@ -54,12 +54,13 @@
   </div>
 
   <div class="container">
-    <h2 class="page-content-title">DES Logbooks</h2>
+    <h2 class="page-content-title">DES Logbook Report</h2>
     <div class="form-container">
       <form id="desLogbooksForm" class="section">
         <div class="duties-section">
-          <h2 class="duties-section-title">Daily DES Logbooks Report</h2>
-          <p class="duties-section-desc">Submit an image of the current day's DES logbook page. Make sure that the date and the full page are clearly visible.</p>
+          <h2 class="duties-section-title">Daily DES Logbook Report</h2>
+          <p class="duties-section-desc">Submit pictures of each pool's DES logbooks for the current date. The entirety of each page must be clearly visible.</p>
+          <p class="duties-submitter-info" id="desLogbooksDateInfo"></p>
           <div class="duties-pool-row">
             <label for="dutiesPool">Pool Location</label>
             <select id="dutiesPool" required>
@@ -100,6 +101,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script type="module" src="../script.js"></script>
-  <script type="module" src="des-logbooks.js?v=20260607a"></script>
+  <script type="module" src="des-logbooks.js?v=20260614b"></script>
 </body>
 </html>

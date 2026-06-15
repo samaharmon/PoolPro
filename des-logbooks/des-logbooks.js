@@ -13,6 +13,7 @@ const slotCounters = {};
 
 document.addEventListener('DOMContentLoaded', () => {
   if (!enforceGateAttendantPage()) return;
+  initReportDateInfo();
   initSubmitterInfo();
   initPhotoGroups();
   window.addEventListener('poolpro:pools-ready', () => {
@@ -36,15 +37,37 @@ function getRequestedAccessMode() {
   }
 }
 
+function getTodayDateValue() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayDateDisplay() {
+  const [year, month, day] = getTodayDateValue().split('-').map(Number);
+  return new Date(year, month - 1, day, 12).toLocaleDateString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function initReportDateInfo() {
+  const infoEl = document.getElementById('desLogbooksDateInfo');
+  if (infoEl) infoEl.textContent = `Report date: ${getTodayDateDisplay()}`;
+}
+
 function enforceGateAttendantPage() {
-  if (getRequestedAccessMode() === 'attendant') return true;
+  if (['attendant', 'supervisor'].includes(getRequestedAccessMode())) return true;
   const container = document.querySelector('.container') || document.body;
   container.innerHTML = `
-    <h2 class="page-content-title">DES Logbooks</h2>
+    <h2 class="page-content-title">DES Logbook Report</h2>
     <div class="form-container">
       <div class="section">
         <h2>Access Required</h2>
-        <p>This page is available only from the Gate Attendants home screen option.</p>
+        <p>This page is available only to gate attendants and supervisors.</p>
       </div>
     </div>
   `;
@@ -136,7 +159,7 @@ function updateDESLogbooksFields(poolValue) {
   const desc = document.getElementById('desLogbooksDesc');
   if (!groupWrap || !badge || !desc) return;
 
-  desc.textContent = 'Submit image(s) of the current page of all DES logbooks for your facility. Make sure that the entire page is clearly visible in the photos.';
+  desc.textContent = 'Submit image(s) of the current page of all DES logbooks for your facility. Make sure that the current date and the entire page are clearly visible in every photo.';
   const poolDoc = getSelectedPoolDoc(poolValue);
   const poolName = normalizeFacilityName(poolDoc?.name || poolValue);
   let config = { min: 1, max: 2, badge: '1 required, 2 max', initialSlots: 1 };
@@ -347,7 +370,7 @@ function ensureUploadModal() {
   modal.className = 'duties-upload-progress-modal';
   modal.innerHTML = `
     <div class="duties-upload-progress-card">
-      <h2>Uploading DES Logbooks</h2>
+      <h2>Uploading DES Logbook Report</h2>
       <p class="duties-upload-progress-warning">Keep this page open until every photo finishes uploading.</p>
       <div class="duties-upload-progress-track" aria-hidden="true">
         <div class="duties-upload-progress-bar" id="dutiesUploadProgressBar"></div>
@@ -531,6 +554,7 @@ async function submitDesLogbooksForm(event) {
       respondentName: submitter.respondentName,
       employeeId: submitter.employeeId || submitter.submitterEmail || '',
       username: submitter.username || '',
+      reportDate: getTodayDateValue(),
       photos: { desLogbooks: photos },
       timestamp: serverTimestamp(),
     });
