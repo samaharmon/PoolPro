@@ -2736,6 +2736,13 @@ const ALERT_REMINDER_CANCEL_FORM_OPTIONS = [
     timeFields: ['timestamp', 'submittedAt', 'createdAt'],
   },
   {
+    key: 'desLogbooks',
+    label: 'DES Logbook Form',
+    collection: 'desLogbookSubmissions',
+    facilityFields: ['pool', 'facilityName', 'poolLocation', 'poolName'],
+    timeFields: ['timestamp', 'reportDate', 'submittedAt', 'createdAt'],
+  },
+  {
     key: 'managerialReport',
     label: 'Managerial Report',
     collection: 'managerialReports',
@@ -2862,7 +2869,7 @@ function ensureAlertsRemindersSettingsSection() {
       <h4>Completion Cancellation</h4>
       <div class="settings-row alerts-reminders-grid alerts-reminders-cancel-grid">
         <div class="settings-field settings-field-full">
-          <label for="alertReminderCancelForm">Cancel alert for facilities where this form is completed</label>
+          <label for="alertReminderCancelForm">Cancel the alert for facilities where this form is completed:</label>
           <select id="alertReminderCancelForm" class="training-filter-select">
             ${getAlertReminderCancelFormOptionsMarkup()}
           </select>
