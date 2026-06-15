@@ -2762,6 +2762,7 @@ const ALERT_REMINDER_CANCEL_PERIOD_OPTIONS = [
   { key: 'half-day', label: 'Half-day' },
   { key: 'day', label: 'Day' },
   { key: 'week', label: 'Week' },
+  { key: 'two-weeks', label: '2 Weeks' },
   { key: 'month', label: 'Month' },
 ];
 
@@ -2868,6 +2869,10 @@ function ensureAlertsRemindersSettingsSection() {
       </fieldset>
       <h4>Completion Cancellation</h4>
       <div class="settings-row alerts-reminders-grid alerts-reminders-cancel-grid">
+        <label class="alerts-reminder-toggle settings-field-full">
+          <input type="checkbox" id="alertReminderContinueUntilComplete" class="market-filter-checkbox">
+          <span>Continue showing until the selected form is submitted</span>
+        </label>
         <div class="settings-field settings-field-full">
           <label for="alertReminderCancelForm">Cancel the alert for facilities where this form is completed:</label>
           <select id="alertReminderCancelForm" class="training-filter-select">
@@ -3017,6 +3022,7 @@ function normalizeAlertReminder(item = {}) {
     roles: normalizeAlertReminderRoles(item.roles),
     cancelFormKey: normalizeAlertCancelFormKey(item.cancelFormKey || item.cancelForm || ''),
     cancelPeriod: normalizeAlertCancelPeriod(item.cancelPeriod || 'day'),
+    continueUntilComplete: item.continueUntilComplete === true || item.stayVisibleUntilComplete === true,
     html: sanitizeReminderHtml(item.html || item.messageHtml || item.text || ''),
     createdAt: item.createdAt || new Date().toISOString(),
     updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
@@ -3073,6 +3079,8 @@ function clearAlertsReminderForm() {
   if (cancelForm) cancelForm.value = '';
   const cancelPeriod = document.getElementById('alertReminderCancelPeriod');
   if (cancelPeriod) cancelPeriod.value = 'day';
+  const continueUntilComplete = document.getElementById('alertReminderContinueUntilComplete');
+  if (continueUntilComplete) continueUntilComplete.checked = false;
   setAlertReminderRoleCheckboxes(ALERT_REMINDER_DEFAULT_ROLES);
   applyAlertReminderEditorFontSize('');
   const editor = document.getElementById('alertsReminderEditor');
@@ -3100,6 +3108,8 @@ function populateAlertsReminderForm(reminder, source = 'active') {
     if (input) input.value = value;
   });
   setAlertReminderRoleCheckboxes(normalized.roles);
+  const continueUntilComplete = document.getElementById('alertReminderContinueUntilComplete');
+  if (continueUntilComplete) continueUntilComplete.checked = !!normalized.continueUntilComplete;
   applyAlertReminderEditorFontSize(normalized.fontSize);
   const editor = document.getElementById('alertsReminderEditor');
   if (editor) editor.innerHTML = normalized.html;
@@ -3120,6 +3130,7 @@ function getAlertsReminderFormValues() {
     roles: getSelectedAlertReminderRoles(),
     cancelFormKey: normalizeAlertCancelFormKey(document.getElementById('alertReminderCancelForm')?.value || ''),
     cancelPeriod: normalizeAlertCancelPeriod(document.getElementById('alertReminderCancelPeriod')?.value || 'day'),
+    continueUntilComplete: document.getElementById('alertReminderContinueUntilComplete')?.checked === true,
     html: sanitizeReminderHtml(editor?.innerHTML || ''),
   };
 }
@@ -3137,6 +3148,9 @@ function validateAlertsReminder(values) {
   const endDate = parseDateOnly(values.endDate);
   if (!startDate || !endDate || endDate < startDate) return 'End date must be on or after the start date.';
   if (!Array.isArray(values.roles) || !values.roles.length) return 'Select at least one role.';
+  if (values.continueUntilComplete && !values.cancelFormKey) {
+    return 'Select a form before using the continue-until-submitted option.';
+  }
   if (!stripReminderText(values.html)) return 'Reminder text is required.';
   return '';
 }
@@ -3202,9 +3216,10 @@ function renderReminderListItem(reminder, source) {
   const cancelLabel = reminder.cancelFormKey
     ? ` • Cancels when ${getAlertCancelFormLabel(reminder.cancelFormKey)} is complete for the ${getAlertCancelPeriodLabel(reminder.cancelPeriod).toLowerCase()}`
     : '';
+  const continueLabel = reminder.continueUntilComplete ? ' • Continues until submitted' : '';
   loadBtn.innerHTML = `
     <span class="alerts-reminder-list-title">${escapeHtml(preview)}</span>
-    <span class="alerts-reminder-list-meta">${escapeHtml(reminder.startDate)} ${escapeHtml(reminder.startTime)} - ${escapeHtml(reminder.endDate)} ${escapeHtml(reminder.endTime)} • ${escapeHtml(reminder.repeat)} • ${escapeHtml(rolesLabel)}${escapeHtml(fontSizeLabel)}${escapeHtml(cancelLabel)}</span>
+    <span class="alerts-reminder-list-meta">${escapeHtml(reminder.startDate)} ${escapeHtml(reminder.startTime)} - ${escapeHtml(reminder.endDate)} ${escapeHtml(reminder.endTime)} • ${escapeHtml(reminder.repeat)} • ${escapeHtml(rolesLabel)}${escapeHtml(fontSizeLabel)}${escapeHtml(cancelLabel)}${escapeHtml(continueLabel)}</span>
   `;
   item.appendChild(loadBtn);
   return item;
@@ -3360,12 +3375,109 @@ function isTimeWithinReminderWindow(now, startTime, endTime) {
   return nowMinutes >= startMinutes || nowMinutes <= endMinutes;
 }
 
+function parseTimeParts(value) {
+  const [hours, minutes] = String(value || '').split(':').map(Number);
+  return {
+    hours: Number.isFinite(hours) ? hours : 0,
+    minutes: Number.isFinite(minutes) ? minutes : 0,
+  };
+}
+
+function setDateTimeFromTime(date, timeValue) {
+  const result = new Date(date);
+  const { hours, minutes } = parseTimeParts(timeValue);
+  result.setHours(hours, minutes, 0, 0);
+  return result;
+}
+
+function endOfDate(date) {
+  const result = new Date(date);
+  result.setHours(23, 59, 59, 999);
+  return result;
+}
+
+function addDays(date, days) {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function addMonthsClamped(date, months) {
+  const desiredDay = date.getDate();
+  const result = new Date(date.getFullYear(), date.getMonth() + months, 1, 0, 0, 0, 0);
+  const lastDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(desiredDay, lastDay));
+  return result;
+}
+
+function getMonthlyRepeatOccurrenceStart(startDate, now, startTime) {
+  const monthDiff = (now.getFullYear() - startDate.getFullYear()) * 12 + (now.getMonth() - startDate.getMonth());
+  let candidate = addMonthsClamped(startDate, Math.max(0, monthDiff));
+  if (candidate > new Date(now.getFullYear(), now.getMonth(), now.getDate())) {
+    candidate = addMonthsClamped(startDate, Math.max(0, monthDiff - 1));
+  }
+  return setDateTimeFromTime(candidate, startTime);
+}
+
+function getAlertReminderRepeatWindow(reminder, now = new Date()) {
+  const startDate = parseDateOnly(reminder.startDate);
+  const endDate = parseDateOnly(reminder.endDate);
+  if (!startDate || !endDate) return null;
+  const finalEnd = endOfDate(endDate);
+  if (now < startDate || now > finalEnd) return null;
+
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dayDiff = Math.floor((today - startDate) / (24 * 60 * 60 * 1000));
+  if (dayDiff < 0) return null;
+
+  let windowStart = null;
+  let windowEnd = null;
+  if (reminder.repeat === 'Hourly') {
+    const hourStart = new Date(now);
+    hourStart.setMinutes(0, 0, 0);
+    const scheduledStart = setDateTimeFromTime(today, reminder.startTime);
+    const scheduledEnd = setDateTimeFromTime(today, reminder.endTime);
+    windowEnd = new Date(hourStart);
+    windowEnd.setMinutes(59, 59, 999);
+    if (scheduledStart > scheduledEnd) {
+      if (!isTimeWithinReminderWindow(hourStart, reminder.startTime, reminder.endTime)) return null;
+      windowStart = hourStart;
+    } else {
+      if (hourStart > scheduledEnd || windowEnd < scheduledStart) return null;
+      windowStart = hourStart > scheduledStart ? hourStart : scheduledStart;
+    }
+  } else if (reminder.repeat === 'Weekly' || reminder.repeat === 'Biweekly') {
+    const intervalDays = reminder.repeat === 'Biweekly' ? 14 : 7;
+    const periodIndex = Math.floor(dayDiff / intervalDays);
+    const periodStartDate = addDays(startDate, periodIndex * intervalDays);
+    windowStart = setDateTimeFromTime(periodStartDate, reminder.startTime);
+    windowEnd = addDays(periodStartDate, intervalDays);
+    windowEnd.setMilliseconds(-1);
+  } else if (reminder.repeat === 'Monthly') {
+    windowStart = getMonthlyRepeatOccurrenceStart(startDate, now, reminder.startTime);
+    const nextOccurrence = addMonthsClamped(parseDateOnly(formatDateInputValue(windowStart)), 1);
+    windowEnd = new Date(nextOccurrence);
+    windowEnd.setMilliseconds(-1);
+  } else {
+    windowStart = setDateTimeFromTime(today, reminder.startTime);
+    windowEnd = endOfDate(today);
+  }
+
+  if (!windowStart || !windowEnd) return null;
+  if (windowEnd > finalEnd) windowEnd = finalEnd;
+  if (now < windowStart || now > windowEnd) return null;
+  return { start: windowStart, end: windowEnd };
+}
+
 function isAlertReminderDueNow(reminder, now = new Date()) {
   const startDate = parseDateOnly(reminder.startDate);
   const endDate = parseDateOnly(reminder.endDate);
   if (!startDate || !endDate) return false;
   endDate.setHours(23, 59, 59, 999);
   if (now < startDate || now > endDate) return false;
+  if (reminder.continueUntilComplete && reminder.cancelFormKey) {
+    return !!getAlertReminderRepeatWindow(reminder, now);
+  }
   if (!isTimeWithinReminderWindow(now, reminder.startTime, reminder.endTime)) return false;
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dayDiff = Math.floor((today - startDate) / (24 * 60 * 60 * 1000));
@@ -3439,7 +3551,7 @@ function getAlertSubmissionDate(record = {}, config = {}) {
   return null;
 }
 
-function getAlertCompletionWindow(period, now = new Date()) {
+function getAlertCompletionWindow(period, now = new Date(), reminder = {}) {
   const current = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
   const start = new Date(current);
   const end = new Date(current);
@@ -3463,6 +3575,18 @@ function getAlertCompletionWindow(period, now = new Date()) {
       end.setTime(start.getTime());
       end.setDate(start.getDate() + 6);
       end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case 'two-weeks': {
+      const anchor = parseDateOnly(reminder.startDate) || new Date(current.getFullYear(), current.getMonth(), current.getDate());
+      const today = new Date(current.getFullYear(), current.getMonth(), current.getDate());
+      const dayDiff = Math.max(0, Math.floor((today - anchor) / (24 * 60 * 60 * 1000)));
+      const periodStart = addDays(anchor, Math.floor(dayDiff / 14) * 14);
+      start.setTime(periodStart.getTime());
+      start.setHours(0, 0, 0, 0);
+      end.setTime(start.getTime());
+      end.setDate(start.getDate() + 14);
+      end.setMilliseconds(-1);
       break;
     }
     case 'month':
@@ -3492,7 +3616,7 @@ async function hasFacilitySubmissionForAlertReminder(reminder, now = new Date())
   if (!config) return false;
   const facilityKey = getCurrentAlertReminderFacilityKey();
   if (!facilityKey) return false;
-  const { start, end } = getAlertCompletionWindow(reminder.cancelPeriod, now);
+  const { start, end } = getAlertCompletionWindow(reminder.cancelPeriod, now, reminder);
   const cacheKey = [
     config.key,
     facilityKey,
