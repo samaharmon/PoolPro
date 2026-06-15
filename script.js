@@ -67,6 +67,7 @@ let alertsReminderEditing = {
 };
 let alertsRemindersLoaded = false;
 let alertsReminderPopupChecked = false;
+let alertReminderCompletionCache = new Map();
 let securityIdleTimer = null;
 let securityEventsBound = false;
 let agreementGatePromise = null;
@@ -1358,6 +1359,10 @@ window.supervisorSignIn = async function (email, password) {
 
 window.goToEditor = function () {
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  if (!hasPermission('rulesEditor')) {
+    alert('You do not have permission to view the Rules Editor.');
+    return;
+  }
   // Build a path that works from any subdirectory (chem/, training/, editor/, root)
   const parts = window.location.pathname.split('/').filter(Boolean);
   // Remove the filename (last element)
@@ -1376,6 +1381,10 @@ window.goToEditor = function () {
 
 window.goToTrainingSetup = function () {
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
+  if (!hasPermission('trainingSetup')) {
+    alert('You do not have permission to view Training Setup.');
+    return;
+  }
   // Employees (non-supervisors) cannot access training setup
   const isEmployee = !!sessionStorage.getItem('chemlogEmployeeId');
   if (isEmployee && !isSupervisor()) return;
@@ -1900,14 +1909,14 @@ function getRoleKeyForAccessMode(accessMode) {
 }
 
 function getRequestedAccessMode() {
+  if (hasFreshSupervisorToken()) return 'supervisor';
   try {
     const storedMode = normalizeAccessMode(
       sessionStorage.getItem(ACCESS_MODE_STORAGE_KEY) ||
       localStorage.getItem(ACCESS_MODE_STORAGE_KEY)
     );
-    if (storedMode) return storedMode;
+    if (storedMode && storedMode !== 'supervisor') return storedMode;
   } catch (_) { /* ignore */ }
-  if (hasFreshSupervisorToken()) return 'supervisor';
   return 'lifeguard';
 }
 
@@ -2216,16 +2225,7 @@ function isLifeguardSession() {
 }
 
 function isSupervisor() {
-  if (getRequestedAccessMode() !== 'supervisor') return false;
-  if (isDeveloperUser()) return true;
-  try {
-    const supervisorHint = localStorage.getItem('ChemLogSupervisor') === 'true' ||
-      localStorage.getItem('trainingSupervisorLoggedIn') === 'true' ||
-      localStorage.getItem('chemlogTrainingSupervisorLoggedIn') === 'true';
-    return supervisorHint && hasFreshSupervisorToken();
-  } catch (_) {
-    return false;
-  }
+  return hasFreshSupervisorToken();
 }
 
 const IMPORTANT_UPDATES_NOTICE_CONFIG = {
@@ -2606,6 +2606,98 @@ function generateAlertReminderId() {
   return `alert-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+const ALERT_REMINDER_ROLE_OPTIONS = [
+  { key: 'lifeguard', label: 'Lifeguard' },
+  { key: 'attendant', label: 'Gate Attendant' },
+  { key: 'poolManager', label: 'Pool Manager' },
+  { key: 'supervisor', label: 'Supervisor' },
+];
+const ALERT_REMINDER_DEFAULT_ROLES = ALERT_REMINDER_ROLE_OPTIONS.map(({ key }) => key);
+const ALERT_REMINDER_FONT_SIZE_OPTIONS = [
+  { value: '', label: 'Default' },
+  { value: '28', label: 'Small' },
+  { value: '36', label: 'Normal' },
+  { value: '44', label: 'Large' },
+  { value: '56', label: 'Extra Large' },
+  { value: '72', label: 'Huge' },
+];
+const ALERT_REMINDER_CANCEL_FORM_OPTIONS = [
+  { key: '', label: 'Do not cancel', collection: '', facilityFields: [], timeFields: [] },
+  {
+    key: 'cleanlinessReport',
+    label: 'Cleanliness Report',
+    collection: 'dutySubmissions',
+    facilityFields: ['pool', 'facilityName', 'poolName', 'homePool'],
+    timeFields: ['timestamp', 'submittedAt', 'createdAt'],
+  },
+  {
+    key: 'poolChemistryLog',
+    label: 'Pool Chemistry Log',
+    collection: 'poolSubmissions',
+    facilityFields: ['poolLocation', 'facilityName', 'pool', 'poolName'],
+    timeFields: ['timestamp', 'submittedAt', 'createdAt'],
+  },
+  {
+    key: 'desPreInspection',
+    label: 'DES Pre-Inspection',
+    collection: 'desPreInspections',
+    facilityFields: ['pool', 'facilityName', 'poolLocation', 'poolName'],
+    timeFields: ['timestamp', 'submittedAt', 'createdAt'],
+  },
+  {
+    key: 'managerialReport',
+    label: 'Managerial Report',
+    collection: 'managerialReports',
+    facilityFields: ['pool', 'facilityName', 'poolLocation', 'poolName', 'homePool'],
+    timeFields: ['timestamp', 'submittedAt', 'createdAt'],
+  },
+  {
+    key: 'trainingSignup',
+    label: 'Training Signup',
+    collection: 'trainingSignups',
+    facilityFields: ['homePool', 'pool', 'facilityName', 'poolLocation', 'poolName'],
+    timeFields: ['signedUpAt', 'timestamp', 'submittedAt', 'createdAt'],
+  },
+];
+const ALERT_REMINDER_CANCEL_PERIOD_OPTIONS = [
+  { key: 'hour', label: 'Hour' },
+  { key: 'half-day', label: 'Half-day' },
+  { key: 'day', label: 'Day' },
+  { key: 'week', label: 'Week' },
+  { key: 'month', label: 'Month' },
+];
+
+function getAlertReminderRoleOptionsMarkup(selectedRoles = ALERT_REMINDER_DEFAULT_ROLES) {
+  const selected = new Set(normalizeAlertReminderRoles(selectedRoles));
+  return ALERT_REMINDER_ROLE_OPTIONS.map(({ key, label }) => `
+    <label class="alerts-role-option">
+      <input type="checkbox" class="market-filter-checkbox alert-reminder-role-checkbox" value="${escapeHtml(key)}" ${selected.has(key) ? 'checked' : ''}>
+      <span>${escapeHtml(label)}</span>
+    </label>
+  `).join('');
+}
+
+function getAlertReminderFontSizeOptionsMarkup(selectedValue = '') {
+  const selected = normalizeAlertReminderFontSize(selectedValue);
+  return ALERT_REMINDER_FONT_SIZE_OPTIONS.map(({ value, label }) =>
+    `<option value="${escapeHtml(value)}" ${selected === value ? 'selected' : ''}>${escapeHtml(label)}</option>`
+  ).join('');
+}
+
+function getAlertReminderCancelFormOptionsMarkup(selectedValue = '') {
+  const selected = normalizeAlertCancelFormKey(selectedValue);
+  return ALERT_REMINDER_CANCEL_FORM_OPTIONS.map(({ key, label }) =>
+    `<option value="${escapeHtml(key)}" ${selected === key ? 'selected' : ''}>${escapeHtml(label)}</option>`
+  ).join('');
+}
+
+function getAlertReminderCancelPeriodOptionsMarkup(selectedValue = 'day') {
+  const selected = normalizeAlertCancelPeriod(selectedValue);
+  return ALERT_REMINDER_CANCEL_PERIOD_OPTIONS.map(({ key, label }) =>
+    `<option value="${escapeHtml(key)}" ${selected === key ? 'selected' : ''}>${escapeHtml(label)}</option>`
+  ).join('');
+}
+
 function ensureAlertsRemindersSettingsSection() {
   const modalContent = document.querySelector('#settingsModal .settings-modal-content');
   if (!modalContent) return;
@@ -2661,6 +2753,33 @@ function ensureAlertsRemindersSettingsSection() {
             <option value="Weekly">Weekly</option>
             <option value="Biweekly">Biweekly</option>
             <option value="Monthly">Monthly</option>
+          </select>
+        </div>
+        <div class="settings-field">
+          <label for="alertReminderFontSize">Font Size</label>
+          <select id="alertReminderFontSize" class="training-filter-select">
+            ${getAlertReminderFontSizeOptionsMarkup()}
+          </select>
+        </div>
+      </div>
+      <fieldset class="alerts-reminder-fieldset">
+        <legend>Roles</legend>
+        <div class="alerts-role-checkboxes" id="alertReminderRoles">
+          ${getAlertReminderRoleOptionsMarkup()}
+        </div>
+      </fieldset>
+      <h4>Completion Cancellation</h4>
+      <div class="settings-row alerts-reminders-grid alerts-reminders-cancel-grid">
+        <div class="settings-field settings-field-full">
+          <label for="alertReminderCancelForm">Cancel alert for facilities where this form is completed</label>
+          <select id="alertReminderCancelForm" class="training-filter-select">
+            ${getAlertReminderCancelFormOptionsMarkup()}
+          </select>
+        </div>
+        <div class="settings-field">
+          <label for="alertReminderCancelPeriod">Completion Period</label>
+          <select id="alertReminderCancelPeriod" class="training-filter-select">
+            ${getAlertReminderCancelPeriodOptionsMarkup()}
           </select>
         </div>
       </div>
@@ -2723,6 +2842,71 @@ function stripReminderText(html) {
   return (div.textContent || '').replace(/\s+/g, ' ').trim();
 }
 
+function normalizeAlertReminderRoles(roles) {
+  const valid = new Set(ALERT_REMINDER_ROLE_OPTIONS.map(({ key }) => key));
+  const normalized = Array.isArray(roles)
+    ? roles.map((role) => String(role || '').trim()).filter((role) => valid.has(role))
+    : [];
+  return normalized.length ? [...new Set(normalized)] : [...ALERT_REMINDER_DEFAULT_ROLES];
+}
+
+function normalizeAlertReminderFontSize(value) {
+  const clean = String(value || '').trim();
+  return ALERT_REMINDER_FONT_SIZE_OPTIONS.some((option) => option.value === clean) ? clean : '';
+}
+
+function normalizeAlertCancelFormKey(value) {
+  const clean = String(value || '').trim();
+  return ALERT_REMINDER_CANCEL_FORM_OPTIONS.some((option) => option.key === clean) ? clean : '';
+}
+
+function normalizeAlertCancelPeriod(value) {
+  const clean = String(value || '').trim();
+  return ALERT_REMINDER_CANCEL_PERIOD_OPTIONS.some((option) => option.key === clean) ? clean : 'day';
+}
+
+function getAlertReminderRoleLabels(roles) {
+  const normalized = normalizeAlertReminderRoles(roles);
+  return normalized.map((roleKey) =>
+    ALERT_REMINDER_ROLE_OPTIONS.find((option) => option.key === roleKey)?.label || roleKey
+  );
+}
+
+function getAlertCancelFormConfig(key) {
+  const normalized = normalizeAlertCancelFormKey(key);
+  return ALERT_REMINDER_CANCEL_FORM_OPTIONS.find((option) => option.key === normalized && option.collection) || null;
+}
+
+function getAlertCancelFormLabel(key) {
+  return ALERT_REMINDER_CANCEL_FORM_OPTIONS.find((option) => option.key === normalizeAlertCancelFormKey(key))?.label || '';
+}
+
+function getAlertCancelPeriodLabel(key) {
+  return ALERT_REMINDER_CANCEL_PERIOD_OPTIONS.find((option) => option.key === normalizeAlertCancelPeriod(key))?.label || 'Day';
+}
+
+function getSelectedAlertReminderRoles() {
+  const valid = new Set(ALERT_REMINDER_ROLE_OPTIONS.map(({ key }) => key));
+  return [...new Set(Array.from(document.querySelectorAll('.alert-reminder-role-checkbox:checked'))
+    .map((checkbox) => String(checkbox.value || '').trim())
+    .filter((role) => valid.has(role)))];
+}
+
+function setAlertReminderRoleCheckboxes(roles) {
+  const selected = new Set(normalizeAlertReminderRoles(roles));
+  document.querySelectorAll('.alert-reminder-role-checkbox').forEach((checkbox) => {
+    checkbox.checked = selected.has(checkbox.value);
+  });
+}
+
+function applyAlertReminderEditorFontSize(value) {
+  const editor = document.getElementById('alertsReminderEditor');
+  if (!editor) return;
+  const fontSize = normalizeAlertReminderFontSize(value);
+  editor.style.fontSize = fontSize ? `${fontSize}px` : '';
+  editor.dataset.fontSize = fontSize;
+}
+
 function normalizeAlertReminder(item = {}) {
   return {
     id: String(item.id || generateAlertReminderId()),
@@ -2731,6 +2915,10 @@ function normalizeAlertReminder(item = {}) {
     startTime: String(item.startTime || ''),
     endTime: String(item.endTime || ''),
     repeat: ['Hourly', 'Daily', 'Weekly', 'Biweekly', 'Monthly'].includes(item.repeat) ? item.repeat : 'Daily',
+    fontSize: normalizeAlertReminderFontSize(item.fontSize),
+    roles: normalizeAlertReminderRoles(item.roles),
+    cancelFormKey: normalizeAlertCancelFormKey(item.cancelFormKey || item.cancelForm || ''),
+    cancelPeriod: normalizeAlertCancelPeriod(item.cancelPeriod || 'day'),
     html: sanitizeReminderHtml(item.html || item.messageHtml || item.text || ''),
     createdAt: item.createdAt || new Date().toISOString(),
     updatedAt: item.updatedAt || item.createdAt || new Date().toISOString(),
@@ -2781,6 +2969,14 @@ function clearAlertsReminderForm() {
   });
   const repeat = document.getElementById('alertReminderRepeat');
   if (repeat) repeat.value = 'Daily';
+  const fontSize = document.getElementById('alertReminderFontSize');
+  if (fontSize) fontSize.value = '';
+  const cancelForm = document.getElementById('alertReminderCancelForm');
+  if (cancelForm) cancelForm.value = '';
+  const cancelPeriod = document.getElementById('alertReminderCancelPeriod');
+  if (cancelPeriod) cancelPeriod.value = 'day';
+  setAlertReminderRoleCheckboxes(ALERT_REMINDER_DEFAULT_ROLES);
+  applyAlertReminderEditorFontSize('');
   const editor = document.getElementById('alertsReminderEditor');
   if (editor) editor.innerHTML = '';
   const saveBtn = document.getElementById('alertReminderSaveBtn');
@@ -2797,11 +2993,16 @@ function populateAlertsReminderForm(reminder, source = 'active') {
     alertReminderStartTime: normalized.startTime,
     alertReminderEndTime: normalized.endTime,
     alertReminderRepeat: normalized.repeat,
+    alertReminderFontSize: normalized.fontSize,
+    alertReminderCancelForm: normalized.cancelFormKey,
+    alertReminderCancelPeriod: normalized.cancelPeriod,
   };
   Object.entries(values).forEach(([id, value]) => {
     const input = document.getElementById(id);
     if (input) input.value = value;
   });
+  setAlertReminderRoleCheckboxes(normalized.roles);
+  applyAlertReminderEditorFontSize(normalized.fontSize);
   const editor = document.getElementById('alertsReminderEditor');
   if (editor) editor.innerHTML = normalized.html;
   const saveBtn = document.getElementById('alertReminderSaveBtn');
@@ -2817,6 +3018,10 @@ function getAlertsReminderFormValues() {
     startTime: document.getElementById('alertReminderStartTime')?.value || '',
     endTime: document.getElementById('alertReminderEndTime')?.value || '',
     repeat: document.getElementById('alertReminderRepeat')?.value || 'Daily',
+    fontSize: normalizeAlertReminderFontSize(document.getElementById('alertReminderFontSize')?.value || ''),
+    roles: getSelectedAlertReminderRoles(),
+    cancelFormKey: normalizeAlertCancelFormKey(document.getElementById('alertReminderCancelForm')?.value || ''),
+    cancelPeriod: normalizeAlertCancelPeriod(document.getElementById('alertReminderCancelPeriod')?.value || 'day'),
     html: sanitizeReminderHtml(editor?.innerHTML || ''),
   };
 }
@@ -2833,6 +3038,7 @@ function validateAlertsReminder(values) {
   const startDate = parseDateOnly(values.startDate);
   const endDate = parseDateOnly(values.endDate);
   if (!startDate || !endDate || endDate < startDate) return 'End date must be on or after the start date.';
+  if (!Array.isArray(values.roles) || !values.roles.length) return 'Select at least one role.';
   if (!stripReminderText(values.html)) return 'Reminder text is required.';
   return '';
 }
@@ -2893,9 +3099,14 @@ function renderReminderListItem(reminder, source) {
   loadBtn.type = 'button';
   loadBtn.className = 'alerts-reminder-load';
   const preview = stripReminderText(reminder.html) || 'Untitled reminder';
+  const rolesLabel = getAlertReminderRoleLabels(reminder.roles).join(', ');
+  const fontSizeLabel = reminder.fontSize ? ` • Font ${reminder.fontSize}px` : '';
+  const cancelLabel = reminder.cancelFormKey
+    ? ` • Cancels when ${getAlertCancelFormLabel(reminder.cancelFormKey)} is complete for the ${getAlertCancelPeriodLabel(reminder.cancelPeriod).toLowerCase()}`
+    : '';
   loadBtn.innerHTML = `
     <span class="alerts-reminder-list-title">${escapeHtml(preview)}</span>
-    <span class="alerts-reminder-list-meta">${escapeHtml(reminder.startDate)} ${escapeHtml(reminder.startTime)} - ${escapeHtml(reminder.endDate)} ${escapeHtml(reminder.endTime)} • ${escapeHtml(reminder.repeat)}</span>
+    <span class="alerts-reminder-list-meta">${escapeHtml(reminder.startDate)} ${escapeHtml(reminder.startTime)} - ${escapeHtml(reminder.endDate)} ${escapeHtml(reminder.endTime)} • ${escapeHtml(reminder.repeat)} • ${escapeHtml(rolesLabel)}${escapeHtml(fontSizeLabel)}${escapeHtml(cancelLabel)}</span>
   `;
   item.appendChild(loadBtn);
   return item;
@@ -2964,6 +3175,12 @@ function setupAlertsRemindersUI() {
       const list = source === 'history' ? alertsRemindersData.history : alertsRemindersData.active;
       const reminder = list.find((entry) => entry.id === item?.dataset.alertReminderId);
       if (reminder) populateAlertsReminderForm(reminder, source);
+    }
+  });
+
+  section.addEventListener('change', (event) => {
+    if (event.target?.id === 'alertReminderFontSize') {
+      applyAlertReminderEditorFontSize(event.target.value);
     }
   });
 }
@@ -3073,17 +3290,157 @@ function getAlertReminderShownKey(reminder, now = new Date()) {
   return `poolproAlertReminderShown:${reminder.id}:${repeatKey}`;
 }
 
-function maybeShowActiveAlertRemindersOnPageLoad() {
+function normalizeAlertFacilityKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[^\w\s-]/g, '');
+}
+
+function getCurrentAlertReminderRoleKey() {
+  if (isSupervisor()) return 'supervisor';
+  return getRoleKeyForAccessMode(getRequestedAccessMode());
+}
+
+function isAlertReminderRoleAllowed(reminder) {
+  const roles = normalizeAlertReminderRoles(reminder.roles);
+  return roles.includes(getCurrentAlertReminderRoleKey());
+}
+
+function getCurrentAlertReminderFacilityKey() {
+  const currentRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  const values = [
+    currentRecord?.homePool,
+    currentRecord?.facilityName,
+    currentRecord?.pool,
+  ];
+  try {
+    values.push(
+      sessionStorage.getItem('chemlogEmployeeHomePool'),
+      localStorage.getItem('chemlogEmployeeHomePool')
+    );
+  } catch (_) { /* ignore */ }
+  return normalizeAlertFacilityKey(values.find((value) => String(value || '').trim()));
+}
+
+function getAlertSubmissionFacilityKey(record = {}, config = {}) {
+  const fields = Array.isArray(config.facilityFields) ? config.facilityFields : [];
+  const direct = fields.map((field) => record?.[field]).find((value) => String(value || '').trim());
+  return normalizeAlertFacilityKey(direct);
+}
+
+function getAlertSubmissionDate(record = {}, config = {}) {
+  const fields = Array.isArray(config.timeFields) ? config.timeFields : [];
+  for (const field of fields) {
+    const date = toDateObject(record?.[field]);
+    if (date) return date;
+  }
+  return null;
+}
+
+function getAlertCompletionWindow(period, now = new Date()) {
+  const current = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  const start = new Date(current);
+  const end = new Date(current);
+
+  switch (normalizeAlertCancelPeriod(period)) {
+    case 'hour':
+      start.setMinutes(0, 0, 0);
+      end.setMinutes(59, 59, 999);
+      break;
+    case 'half-day': {
+      const startHour = current.getHours() < 12 ? 0 : 12;
+      start.setHours(startHour, 0, 0, 0);
+      end.setHours(startHour + 11, 59, 59, 999);
+      break;
+    }
+    case 'week': {
+      const day = current.getDay();
+      const daysSinceFriday = (day + 2) % 7;
+      start.setDate(current.getDate() - daysSinceFriday);
+      start.setHours(0, 0, 0, 0);
+      end.setTime(start.getTime());
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+      break;
+    }
+    case 'month':
+      if (current.getDate() >= 24) {
+        start.setDate(24);
+        start.setHours(0, 0, 0, 0);
+        end.setMonth(start.getMonth() + 1, 23);
+      } else {
+        start.setMonth(current.getMonth() - 1, 24);
+        start.setHours(0, 0, 0, 0);
+        end.setDate(23);
+      }
+      end.setHours(23, 59, 59, 999);
+      break;
+    case 'day':
+    default:
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      break;
+  }
+
+  return { start, end };
+}
+
+async function hasFacilitySubmissionForAlertReminder(reminder, now = new Date()) {
+  const config = getAlertCancelFormConfig(reminder.cancelFormKey);
+  if (!config) return false;
+  const facilityKey = getCurrentAlertReminderFacilityKey();
+  if (!facilityKey) return false;
+  const { start, end } = getAlertCompletionWindow(reminder.cancelPeriod, now);
+  const cacheKey = [
+    config.key,
+    facilityKey,
+    normalizeAlertCancelPeriod(reminder.cancelPeriod),
+    start.getTime(),
+    end.getTime(),
+  ].join(':');
+  if (alertReminderCompletionCache.has(cacheKey)) return alertReminderCompletionCache.get(cacheKey);
+
+  try {
+    const snap = await getDocs(collection(db, config.collection));
+    const found = snap.docs.some((docSnap) => {
+      const data = docSnap.data() || {};
+      if (getAlertSubmissionFacilityKey(data, config) !== facilityKey) return false;
+      const submittedAt = getAlertSubmissionDate(data, config);
+      return !!submittedAt && submittedAt >= start && submittedAt <= end;
+    });
+    alertReminderCompletionCache.set(cacheKey, found);
+    return found;
+  } catch (err) {
+    console.warn('[PoolPro] Unable to check alert reminder completion status:', err);
+    alertReminderCompletionCache.set(cacheKey, false);
+    return false;
+  }
+}
+
+function getAlertReminderPopupStyle(reminder) {
+  const fontSize = normalizeAlertReminderFontSize(reminder.fontSize);
+  return fontSize ? `font-size: ${fontSize}px;` : '';
+}
+
+async function maybeShowActiveAlertRemindersOnPageLoad() {
   if (!alertsRemindersLoaded || alertsReminderPopupChecked || !canDisplayLoginAlertReminders()) return;
   alertsReminderPopupChecked = true;
   const now = new Date();
-  const due = alertsRemindersData.active.filter((item) => {
-    if (!isAlertReminderDueNow(item, now)) return false;
+  const due = [];
+  for (const rawItem of alertsRemindersData.active) {
+    const item = normalizeAlertReminder(rawItem);
+    if (!isAlertReminderDueNow(item, now)) continue;
+    if (!isAlertReminderRoleAllowed(item)) continue;
     const key = getAlertReminderShownKey(item, now);
-    if (sessionStorage.getItem(key) === 'true') return false;
+    if (sessionStorage.getItem(key) === 'true') continue;
+    if (await hasFacilitySubmissionForAlertReminder(item, now)) continue;
     sessionStorage.setItem(key, 'true');
-    return true;
-  });
+    due.push(item);
+  }
   if (due.length) showActiveAlertReminderPopup(due);
 }
 
@@ -3099,7 +3456,10 @@ function showActiveAlertReminderPopup(reminders) {
     <div class="poolpro-alert-popup-card">
       <button type="button" class="poolpro-alert-popup-close" aria-label="Close">&times;</button>
       <div class="poolpro-alert-popup-content">
-        ${reminders.map((item) => `<article class="poolpro-alert-popup-item">${sanitizeReminderHtml(item.html)}</article>`).join('')}
+        ${reminders.map((item) => {
+          const style = getAlertReminderPopupStyle(item);
+          return `<article class="poolpro-alert-popup-item"${style ? ` style="${escapeHtml(style)}"` : ''}>${sanitizeReminderHtml(item.html)}</article>`;
+        }).join('')}
       </div>
     </div>
   `;
@@ -9266,6 +9626,14 @@ window.addEventListener('pageshow', (event) => {
 document.addEventListener('click', (event) => {
   const link = event.target.closest('a[href]');
   if (!link) return;
+  const navKey = link.dataset.nav || '';
+  const navPermission = NAV_PERMISSION_MAP[navKey];
+  if (navPermission && !canAccessPage(navPermission)) {
+    event.preventDefault();
+    closeDropdownMenus();
+    alert(`You do not have permission to view ${pageTitleForPermission(navPermission)}.`);
+    return;
+  }
   const href = link.getAttribute('href') || '';
   if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
   if (link.target && link.target !== '_self') return;
