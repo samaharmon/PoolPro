@@ -3171,7 +3171,7 @@ async function handleSaveAlertReminder() {
   try {
     await saveAlertsRemindersSettings();
     renderAlertsReminderLists();
-    populateAlertsReminderForm(reminder, 'active');
+    clearAlertsReminderForm();
     setAlertsReminderMessage('Reminder deployed.');
   } catch (err) {
     console.error('[PoolPro] Error saving alert reminder:', err);
