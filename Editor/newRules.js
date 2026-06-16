@@ -171,6 +171,7 @@ function captureRockbridgePresetIfNeeded() {
 
     const poolRules = { ph: {}, cl: {} };
     const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
+    const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
 
     getResponseFields(block, poolIndex).forEach((area) => {
       const typeKey = area.id.includes('_ph_') ? 'ph' : 'cl';
@@ -184,6 +185,7 @@ function captureRockbridgePresetIfNeeded() {
     });
 
     poolRules.autoController = !!autoControllerCheckbox?.checked;
+    poolRules.requiresWeeklyBackwashing = weeklyBackwashCheckbox?.checked !== false;
 
     preset.rulesByPoolIndex[poolIndex] = poolRules;
   });
@@ -246,6 +248,8 @@ function applyRockbridgePresetToNewPool() {
   Object.entries(preset.rulesByPoolIndex).forEach(([poolIndex, rules]) => {
     const autoControllerCheckbox = document.querySelector(`.pool-rule-block[data-pool-index="${poolIndex}"] .pool-auto-controller-checkbox`);
     if (autoControllerCheckbox) autoControllerCheckbox.checked = !!rules.autoController;
+    const weeklyBackwashCheckbox = document.querySelector(`.pool-rule-block[data-pool-index="${poolIndex}"] .pool-weekly-backwash-checkbox`);
+    if (weeklyBackwashCheckbox) weeklyBackwashCheckbox.checked = rules.requiresWeeklyBackwashing !== false;
     ['ph', 'cl'].forEach(typeKey => {
       const group = rules[typeKey] || {};
       Object.entries(group).forEach(([key, rule]) => {
@@ -571,6 +575,8 @@ function setBlockEnabled(block, enabled) {
   if (nameInput) nameInput.disabled = !enabled;
   const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
   if (autoControllerCheckbox) autoControllerCheckbox.disabled = !enabled;
+  const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
+  if (weeklyBackwashCheckbox) weeklyBackwashCheckbox.disabled = !enabled;
 
   // add overlay class only to the rules-table region
   block.querySelectorAll('.rules-table').forEach(tbl => {
@@ -1071,6 +1077,8 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
     if (nameInput) nameInput.value = fromDoc.poolName || '';
     const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
     if (autoControllerCheckbox) autoControllerCheckbox.checked = !!fromDoc.autoController;
+    const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
+    if (weeklyBackwashCheckbox) weeklyBackwashCheckbox.checked = fromDoc.requiresWeeklyBackwashing !== false;
   });
 
   // Make sure the right sanitize tab is active & buttons are wired
@@ -1147,6 +1155,7 @@ function readEditorToObject() {
     const state = getOrCreatePoolRuleState(poolIndex);
     const nameInput = block.querySelector('.pool-name-input');
     const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
+    const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
     const poolName = nameInput ? nameInput.value.trim() : '';
     const phMethods = state.phMethods || createEmptyPhMethods();
     const defaultPh = phMethods[DEFAULT_PH_RULE_METHOD]?.ph || {};
@@ -1159,6 +1168,7 @@ function readEditorToObject() {
       off: { ...(state.off || createEmptyMethodRules()), ph: cloneRuleMap(defaultPh) },
       poolName,
       autoController: !!autoControllerCheckbox?.checked,
+      requiresWeeklyBackwashing: weeklyBackwashCheckbox?.checked !== false,
     });
   });
 
@@ -1358,6 +1368,8 @@ function setBlockEditing(block, isEditing) {
   });
   const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
   if (autoControllerCheckbox) autoControllerCheckbox.disabled = !isEditing;
+  const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
+  if (weeklyBackwashCheckbox) weeklyBackwashCheckbox.disabled = !isEditing;
 
   const editBtn = block.querySelector('.pool-edit-btn');
   const saveBtn = block.querySelector('.pool-save-btn');
@@ -2267,6 +2279,11 @@ function ensureEditorAccessibility() {
       if (!autoControllerCheckbox.id) autoControllerCheckbox.id = `pool${poolIndex}_auto_controller`;
       autoControllerCheckbox.setAttribute('aria-label', `Pool ${poolIndex} auto controller`);
     }
+    const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
+    if (weeklyBackwashCheckbox) {
+      if (!weeklyBackwashCheckbox.id) weeklyBackwashCheckbox.id = `pool${poolIndex}_weekly_backwash_required`;
+      weeklyBackwashCheckbox.setAttribute('aria-label', `Pool ${poolIndex} requires weekly backwashing`);
+    }
 
     block.querySelectorAll('.copy-rules-location').forEach((copyLocation) => {
       const copyKind = copyLocation.closest('.copy-rules-row')?.dataset.copyKind || 'rules';
@@ -2314,18 +2331,32 @@ function ensureEditorAccessibility() {
 
 function ensureAutoControllerToggles() {
   document.querySelectorAll('.pool-rule-block').forEach((block) => {
-    if (block.querySelector('.pool-auto-controller-toggle')) return;
     const title = block.querySelector('.pool-rule-title');
     if (!title) return;
     const poolIndex = block.dataset.poolIndex || '';
 
-    const toggle = document.createElement('label');
-    toggle.className = 'pool-auto-controller-toggle';
-    toggle.innerHTML = `
-      <input type="checkbox" class="market-filter-checkbox pool-auto-controller-checkbox" data-pool-index="${poolIndex}">
-      <span>Auto Controller</span>
-    `;
-    title.insertAdjacentElement('afterend', toggle);
+    let autoToggle = block.querySelector('.pool-auto-controller-toggle');
+    if (!autoToggle) {
+      autoToggle = document.createElement('label');
+      autoToggle.className = 'pool-auto-controller-toggle pool-rule-option-toggle';
+      autoToggle.innerHTML = `
+        <input type="checkbox" class="market-filter-checkbox pool-auto-controller-checkbox" data-pool-index="${poolIndex}">
+        <span>Auto Controller</span>
+      `;
+      title.insertAdjacentElement('afterend', autoToggle);
+    } else {
+      autoToggle.classList.add('pool-rule-option-toggle');
+    }
+
+    if (!block.querySelector('.pool-weekly-backwash-toggle')) {
+      const backwashToggle = document.createElement('label');
+      backwashToggle.className = 'pool-weekly-backwash-toggle pool-rule-option-toggle';
+      backwashToggle.innerHTML = `
+        <input type="checkbox" class="market-filter-checkbox pool-weekly-backwash-checkbox" data-pool-index="${poolIndex}" checked>
+        <span>Requires Weekly Backwashing.</span>
+      `;
+      autoToggle.insertAdjacentElement('afterend', backwashToggle);
+    }
   });
 }
 

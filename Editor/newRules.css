@@ -305,26 +305,37 @@
   margin-bottom: 12px;
  }
 
-.pool-auto-controller-toggle {
+.pool-auto-controller-toggle,
+.pool-rule-option-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin: -4px 0 12px;
+  margin: -4px 0 8px;
   color: #fff;
   font-size: 14px;
   font-weight: 700;
 }
 
-.pool-auto-controller-toggle .market-filter-checkbox {
+.pool-weekly-backwash-toggle {
+  display: flex;
+  width: fit-content;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
+.pool-auto-controller-toggle .market-filter-checkbox,
+.pool-rule-option-toggle .market-filter-checkbox {
   margin: 0;
 }
 
-.pool-auto-controller-toggle:has(.pool-auto-controller-checkbox:disabled) {
+.pool-auto-controller-toggle:has(.pool-auto-controller-checkbox:disabled),
+.pool-weekly-backwash-toggle:has(.pool-weekly-backwash-checkbox:disabled) {
   opacity: 0.62;
   cursor: not-allowed;
 }
 
-.pool-auto-controller-checkbox:disabled {
+.pool-auto-controller-checkbox:disabled,
+.pool-weekly-backwash-checkbox:disabled {
   cursor: not-allowed;
 }
  

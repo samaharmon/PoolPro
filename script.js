@@ -2715,6 +2715,11 @@ const ALERT_REMINDER_FONT_SIZE_OPTIONS = [
 const ALERT_REMINDER_CANCEL_FORM_OPTIONS = [
   { key: '', label: 'Do not cancel', collection: '', facilityFields: [], timeFields: [] },
   {
+    key: 'weeklyBackwashComplete',
+    label: 'Weekly Backwashing Complete',
+    completionType: 'weeklyBackwash',
+  },
+  {
     key: 'cleanlinessReport',
     label: 'Cleanliness Report',
     collection: 'dutySubmissions',
@@ -2871,10 +2876,10 @@ function ensureAlertsRemindersSettingsSection() {
       <div class="settings-row alerts-reminders-grid alerts-reminders-cancel-grid">
         <label class="alerts-reminder-toggle settings-field-full">
           <input type="checkbox" id="alertReminderContinueUntilComplete" class="market-filter-checkbox">
-          <span>Continue showing until the selected form is submitted</span>
+          <span>Continue showing until the selected completion condition is satisfied</span>
         </label>
         <div class="settings-field settings-field-full">
-          <label for="alertReminderCancelForm">Cancel the alert for facilities where this form is completed:</label>
+          <label for="alertReminderCancelForm">Cancel the alert if:</label>
           <select id="alertReminderCancelForm" class="training-filter-select">
             ${getAlertReminderCancelFormOptionsMarkup()}
           </select>
@@ -2977,7 +2982,9 @@ function getAlertReminderRoleLabels(roles) {
 
 function getAlertCancelFormConfig(key) {
   const normalized = normalizeAlertCancelFormKey(key);
-  return ALERT_REMINDER_CANCEL_FORM_OPTIONS.find((option) => option.key === normalized && option.collection) || null;
+  return ALERT_REMINDER_CANCEL_FORM_OPTIONS.find((option) =>
+    option.key === normalized && (option.collection || option.completionType)
+  ) || null;
 }
 
 function getAlertCancelFormLabel(key) {
@@ -3149,7 +3156,7 @@ function validateAlertsReminder(values) {
   if (!startDate || !endDate || endDate < startDate) return 'End date must be on or after the start date.';
   if (!Array.isArray(values.roles) || !values.roles.length) return 'Select at least one role.';
   if (values.continueUntilComplete && !values.cancelFormKey) {
-    return 'Select a form before using the continue-until-submitted option.';
+    return 'Select a completion condition before using the continue-until-submitted option.';
   }
   if (!stripReminderText(values.html)) return 'Reminder text is required.';
   return '';
@@ -3213,10 +3220,13 @@ function renderReminderListItem(reminder, source) {
   const preview = stripReminderText(reminder.html) || 'Untitled reminder';
   const rolesLabel = getAlertReminderRoleLabels(reminder.roles).join(', ');
   const fontSizeLabel = reminder.fontSize ? ` • Font ${reminder.fontSize}px` : '';
-  const cancelLabel = reminder.cancelFormKey
-    ? ` • Cancels when ${getAlertCancelFormLabel(reminder.cancelFormKey)} is complete for the ${getAlertCancelPeriodLabel(reminder.cancelPeriod).toLowerCase()}`
-    : '';
-  const continueLabel = reminder.continueUntilComplete ? ' • Continues until submitted' : '';
+  const cancelConfig = getAlertCancelFormConfig(reminder.cancelFormKey);
+  const cancelLabel = cancelConfig?.completionType === 'weeklyBackwash'
+    ? ' • Cancels when weekly backwashing is complete'
+    : reminder.cancelFormKey
+      ? ` • Cancels when ${getAlertCancelFormLabel(reminder.cancelFormKey)} is complete for the ${getAlertCancelPeriodLabel(reminder.cancelPeriod).toLowerCase()}`
+      : '';
+  const continueLabel = reminder.continueUntilComplete ? ' • Continues until completed/submitted' : '';
   loadBtn.innerHTML = `
     <span class="alerts-reminder-list-title">${escapeHtml(preview)}</span>
     <span class="alerts-reminder-list-meta">${escapeHtml(reminder.startDate)} ${escapeHtml(reminder.startTime)} - ${escapeHtml(reminder.endDate)} ${escapeHtml(reminder.endTime)} • ${escapeHtml(reminder.repeat)} • ${escapeHtml(rolesLabel)}${escapeHtml(fontSizeLabel)}${escapeHtml(cancelLabel)}${escapeHtml(continueLabel)}</span>
@@ -3551,6 +3561,58 @@ function getAlertSubmissionDate(record = {}, config = {}) {
   return null;
 }
 
+async function getAlertReminderFacilityPoolDoc(facilityKey) {
+  if (!facilityKey) return null;
+  const cached = poolsCache.find((poolDoc) => normalizeAlertFacilityKey(getPoolName(poolDoc)) === facilityKey);
+  if (cached) return cached;
+
+  try {
+    const snap = await getDocs(collection(db, 'pools'));
+    const pools = snap.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...docSnap.data(),
+    }));
+    if (pools.length) poolsCache = pools;
+    return pools.find((poolDoc) => normalizeAlertFacilityKey(getPoolName(poolDoc)) === facilityKey) || null;
+  } catch (err) {
+    console.warn('[PoolPro] Unable to load facility rules for alert reminder completion checks:', err);
+    return null;
+  }
+}
+
+async function hasFacilityWeeklyBackwashingCompleteForAlertReminder(facilityKey, now = new Date()) {
+  const weekKey = getOperationalWeekKey(now);
+  const cacheKey = ['weeklyBackwashComplete', facilityKey, weekKey].join(':');
+  if (alertReminderCompletionCache.has(cacheKey)) return alertReminderCompletionCache.get(cacheKey);
+
+  try {
+    const poolDoc = await getAlertReminderFacilityPoolDoc(facilityKey);
+    if (!poolDoc) {
+      alertReminderCompletionCache.set(cacheKey, false);
+      return false;
+    }
+
+    await loadOperationalStatusLogs();
+    const facilityName = getPoolName(poolDoc);
+    const poolCount = Math.max(1, Number(poolDoc.numPools || poolDoc.poolCount || 1));
+    const requiredPoolIndexes = [];
+    for (let idx = 0; idx < poolCount; idx += 1) {
+      if (poolRequiresWeeklyBackwashing(poolDoc, idx)) requiredPoolIndexes.push(idx);
+    }
+
+    const complete = !requiredPoolIndexes.length || requiredPoolIndexes.every((idx) => {
+      const latestBackwash = getLatestOperationalStatus(facilityName, idx, 'backwash');
+      return getEffectiveWeeklyBackwashStatus(latestBackwash || {}, now) === 'Yes';
+    });
+    alertReminderCompletionCache.set(cacheKey, complete);
+    return complete;
+  } catch (err) {
+    console.warn('[PoolPro] Unable to check weekly backwashing alert reminder status:', err);
+    alertReminderCompletionCache.set(cacheKey, false);
+    return false;
+  }
+}
+
 function getAlertCompletionWindow(period, now = new Date(), reminder = {}) {
   const current = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
   const start = new Date(current);
@@ -3616,6 +3678,10 @@ async function hasFacilitySubmissionForAlertReminder(reminder, now = new Date())
   if (!config) return false;
   const facilityKey = getCurrentAlertReminderFacilityKey();
   if (!facilityKey) return false;
+  if (config.completionType === 'weeklyBackwash') {
+    return hasFacilityWeeklyBackwashingCompleteForAlertReminder(facilityKey, now);
+  }
+  if (!config.collection) return false;
   const { start, end } = getAlertCompletionWindow(reminder.cancelPeriod, now, reminder);
   const cacheKey = [
     config.key,
@@ -4428,7 +4494,10 @@ let dashboardSupplyFilters = { market: 'all', pool: 'all' };
 const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a trickle'];
 const BLEACH_FEEDER_STATUS_OPTIONS = ['Not applicable', 'Off', '0 or L', '1', '1.5', '1.75', '2', '2.25', '2.5', '3', '4', '5', '6', '7', '8', '9', '10'];
 const POOL_CLOSURE_OPTIONS = ['Open', 'Weather', 'Contamination', 'Chemical Imbalance', 'System Malfunction', 'Other'];
-const WEEKLY_BACKWASH_COMPLETION_OPTIONS = ['No', 'Yes'];
+const WEEKLY_BACKWASH_COMPLETION_OPTIONS = [
+  { value: 'No', label: 'Not Completed' },
+  { value: 'Yes', label: 'Completed' },
+];
 const POOL_CLOSURE_TODOS = {
   Weather: ['Close and tie shut all umbrellas, then remove any equipment that may be damaged by the storm.'],
   Contamination: ['Do not make any changes until instructed by a supervisor.'],
@@ -4500,6 +4569,15 @@ function getFacilityPoolLabel(poolDoc, poolIdx) {
   if (customName) return `Pool ${poolIdx + 1}: ${customName}`;
   if (poolIdx === 0) return 'Pool 1 (Main)';
   return `Pool ${poolIdx + 1}`;
+}
+
+function poolRequiresWeeklyBackwashing(poolDoc, poolIdx) {
+  const rulesPool = poolDoc?.rules?.pools?.[poolIdx];
+  return rulesPool?.requiresWeeklyBackwashing !== false;
+}
+
+function formatWeeklyBackwashStatus(status) {
+  return status === 'Yes' ? 'Completed' : 'Not Completed';
 }
 
 // Map submitted pH select value → rule key used in pool docs
@@ -4721,10 +4799,10 @@ function normalizeWeeklyBackwashStatus(data = {}) {
   return status === 'Yes' || status === 'No' ? status : '';
 }
 
-function getEffectiveWeeklyBackwashStatus(data = {}) {
+function getEffectiveWeeklyBackwashStatus(data = {}, now = new Date()) {
   const status = normalizeWeeklyBackwashStatus(data);
   if (status !== 'Yes') return status;
-  return getWeeklyBackwashRecordWeekKey(data) === getOperationalWeekKey() ? 'Yes' : 'No';
+  return getWeeklyBackwashRecordWeekKey(data) === getOperationalWeekKey(now) ? 'Yes' : 'No';
 }
 
 function normalizeOperationalStatusRecord(rawDoc, idOverride = '') {
@@ -5703,7 +5781,13 @@ function buildOperationalOptionGroup({ name, options, selected, variant = '', on
   const group = document.createElement('div');
   group.className = `operational-switch-group${variant ? ` operational-switch-group--${variant}` : ''}`;
   if (disabled) group.classList.add('operational-switch-group--disabled');
-  options.forEach((option) => {
+  options.forEach((optionConfig) => {
+    const option = typeof optionConfig === 'object' && optionConfig !== null
+      ? String(optionConfig.value || '')
+      : String(optionConfig || '');
+    const labelText = typeof optionConfig === 'object' && optionConfig !== null
+      ? String(optionConfig.label || option)
+      : option;
     const label = document.createElement('label');
     label.className = 'operational-switch-option';
     if (variant === 'closure' && option === 'Open') {
@@ -5722,7 +5806,7 @@ function buildOperationalOptionGroup({ name, options, selected, variant = '', on
       });
     }
     const text = document.createElement('span');
-    text.textContent = option;
+    text.textContent = labelText;
     label.appendChild(input);
     label.appendChild(text);
     group.appendChild(label);
@@ -5829,6 +5913,7 @@ function renderOperationalStatusLog() {
     const closureLog = getLatestOperationalStatus(facilityName, idx, 'closure');
     const backwashLog = getLatestOperationalStatus(facilityName, idx, 'backwash');
     const backwashStatus = backwashLog?.weeklyBackwashStatus || 'No';
+    const requiresBackwash = poolRequiresWeeklyBackwashing(poolDoc, idx);
     const poolLabel = getPoolSimpleLabel(poolDoc, idx);
 
     const card = document.createElement('section');
@@ -5867,23 +5952,26 @@ function renderOperationalStatusLog() {
       selected: bleachLog?.bleachStatus || 'Not applicable',
     }));
 
-    const backwashBlock = document.createElement('div');
-    backwashBlock.className = 'operational-control-block';
-    backwashBlock.innerHTML = `
-      <div class="operational-control-heading">
-        <span>Weekly Backwash Completion</span>
-        <small>Current: ${escapeHtml(backwashStatus)}</small>
-      </div>
-    `;
-    backwashBlock.appendChild(buildOperationalOptionGroup({
-      name: `operational_backwash_${idx}`,
-      options: WEEKLY_BACKWASH_COMPLETION_OPTIONS,
-      selected: backwashStatus,
-      variant: 'backwash',
-      disabled: !canEditBackwash,
-    }));
-    if (!canEditBackwash) {
-      backwashBlock.insertAdjacentHTML('beforeend', '<p class="operational-control-note">Managers and supervisors only.</p>');
+    let backwashBlock = null;
+    if (requiresBackwash) {
+      backwashBlock = document.createElement('div');
+      backwashBlock.className = 'operational-control-block';
+      backwashBlock.innerHTML = `
+        <div class="operational-control-heading">
+          <span>Weekly Backwash Completion</span>
+          <small>Current: ${escapeHtml(formatWeeklyBackwashStatus(backwashStatus))}</small>
+        </div>
+      `;
+      backwashBlock.appendChild(buildOperationalOptionGroup({
+        name: `operational_backwash_${idx}`,
+        options: WEEKLY_BACKWASH_COMPLETION_OPTIONS,
+        selected: backwashStatus,
+        variant: 'backwash',
+        disabled: !canEditBackwash,
+      }));
+      if (!canEditBackwash) {
+        backwashBlock.insertAdjacentHTML('beforeend', '<p class="operational-control-note">Managers and supervisors only.</p>');
+      }
     }
 
     const closureBlock = document.createElement('div');
@@ -5908,7 +5996,7 @@ function renderOperationalStatusLog() {
 
     card.appendChild(fillBlock);
     card.appendChild(bleachBlock);
-    card.appendChild(backwashBlock);
+    if (backwashBlock) card.appendChild(backwashBlock);
     card.appendChild(closureBlock);
     cards.appendChild(card);
   }
@@ -5939,7 +6027,10 @@ async function saveOperationalStatusLog() {
     for (let idx = 0; idx < poolCount; idx++) {
       const fillStatus = document.querySelector(`input[name="operational_fill_${idx}"]:checked`)?.value || '';
       const bleachStatus = document.querySelector(`input[name="operational_bleach_${idx}"]:checked`)?.value || '';
-      const weeklyBackwashStatus = document.querySelector(`input[name="operational_backwash_${idx}"]:checked`)?.value || 'No';
+      const requiresBackwash = poolRequiresWeeklyBackwashing(poolDoc, idx);
+      const weeklyBackwashStatus = requiresBackwash
+        ? document.querySelector(`input[name="operational_backwash_${idx}"]:checked`)?.value || 'No'
+        : '';
       const closureReason = document.querySelector(`input[name="operational_closure_${idx}"]:checked`)?.value || 'Open';
       const latestFill = getLatestOperationalStatus(facilityName, idx, 'fill');
       const latestBleach = getLatestOperationalStatus(facilityName, idx, 'bleach');
@@ -5947,7 +6038,7 @@ async function saveOperationalStatusLog() {
       const latestClosure = getLatestOperationalStatus(facilityName, idx, 'closure');
       const fillChanged = fillStatus && fillStatus !== (latestFill?.fillStatus || '');
       const bleachChanged = bleachStatus && bleachStatus !== (latestBleach?.bleachStatus || '');
-      const backwashChanged = canEditWeeklyBackwashCompletion() && weeklyBackwashStatus !== (latestBackwash?.weeklyBackwashStatus || 'No');
+      const backwashChanged = requiresBackwash && canEditWeeklyBackwashCompletion() && weeklyBackwashStatus !== (latestBackwash?.weeklyBackwashStatus || 'No');
       const closureChanged = closureReason !== (latestClosure?.closureReason || '');
       if (!fillChanged && !bleachChanged && !backwashChanged && !closureChanged) continue;
 
@@ -10945,7 +11036,7 @@ function renderOperationalDashboard() {
             <td>${escapeHtml(log.poolLabel || `Pool ${Number(log.poolIndex || 0) + 1}`)}</td>
             <td>${escapeHtml(log.fillStatus || '—')}</td>
             <td>${escapeHtml(log.bleachStatus || '—')}</td>
-            <td>${escapeHtml(log.weeklyBackwashStatus || '—')}</td>
+            <td>${escapeHtml(log.weeklyBackwashStatus ? formatWeeklyBackwashStatus(log.weeklyBackwashStatus) : '—')}</td>
             <td>${escapeHtml((log.closureStatus || log.closureReason) ? getOperationalClosureSummary(log) : '—')}</td>
             <td>${escapeHtml(getLogRespondentName(log))}</td>
             <td>${escapeHtml(formatTimestampDisplay(log.timestamp))}</td>
@@ -11025,7 +11116,7 @@ function renderOperationalDashboard() {
           <td>${escapeHtml(getFacilityPoolLabel(poolDoc, poolIdx))}</td>
           <td>${escapeHtml(latestFillLog?.fillStatus || '—')}</td>
           <td>${escapeHtml(latestBleachLog?.bleachStatus || '—')}</td>
-          <td>${escapeHtml(latestBackwashLog?.weeklyBackwashStatus || '—')}</td>
+          <td>${escapeHtml(latestBackwashLog?.weeklyBackwashStatus ? formatWeeklyBackwashStatus(latestBackwashLog.weeklyBackwashStatus) : '—')}</td>
           <td>${escapeHtml(latestClosureLog ? getOperationalClosureSummary(latestClosureLog) : '—')}</td>
           <td>${escapeHtml(latestLog ? getLogRespondentName(latestLog) : '—')}</td>
           <td>${escapeHtml(latestLog ? formatTimestampDisplay(latestLog.timestamp) : '—')}</td>
