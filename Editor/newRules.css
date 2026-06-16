@@ -19,6 +19,67 @@
   margin-bottom: 24px;
  }
 
+.editor-accordion {
+  position: relative;
+}
+
+.editor-accordion-content[hidden] {
+  display: none !important;
+}
+
+.editor-accordion-toggle {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #555;
+  border-bottom: 2px solid #69140e;
+  border-radius: 0;
+  background: #1a1a1a;
+  color: #fff;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+}
+
+.editor-accordion-toggle:hover {
+  background: #252525;
+}
+
+.editor-accordion-indicator {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #69140e;
+  background: #303030;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.editor-accordion-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.editor-section-accordion-content {
+  padding-top: 14px;
+}
+
+#poolMetadataSection.editor-section-accordion .metadata-content > h3:first-child,
+#supplyInfoSection.editor-section-accordion .supply-info-content > h3:first-child,
+#cleanlinessReportSection.editor-section-accordion .cleanliness-report-content > h3:first-child,
+#ruleEditorSection.editor-section-accordion > .editor-section-accordion-content > h3:first-child {
+  display: none;
+}
+
 .form-row {
   display: flex;
   flex-wrap: wrap;
@@ -548,6 +609,7 @@ body.dark-mode #mainForm .header {
 /* --- Darken hidden/inner sections so they match the main content --- */
 body.dark-mode #poolMetadataSection,
 body.dark-mode #supplyInfoSection,
+body.dark-mode #cleanlinessReportSection,
 body.dark-mode #ruleEditorSection,
 body.dark-mode .pool-rule-block {
   background-color: #2e2e2e;
@@ -588,6 +650,45 @@ body.dark-mode .pool-rule-block {
   gap: 12px;
   padding: 10px 14px;
   background-color: #1a1a1a;
+}
+
+.pool-rule-header .pool-rule-accordion-toggle {
+  width: auto;
+  min-width: 118px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border-bottom-width: 1px;
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+
+.pool-rule-header .pool-rule-accordion-toggle .editor-accordion-indicator {
+  width: 20px;
+  height: 20px;
+  font-size: 15px;
+}
+
+.pool-rule-block-content {
+  display: grid;
+  gap: 14px;
+  padding: 12px 0 0;
+}
+
+.rule-table-accordion {
+  background: #252525;
+  border: 1px solid #444;
+}
+
+.rule-table-accordion .rule-table-accordion-toggle {
+  min-height: 38px;
+  border: 0;
+  border-bottom: 2px solid #69140e;
+  background: #242424;
+  font-size: 16px;
+}
+
+.rule-table-accordion-content {
+  padding: 0;
 }
 
 /* “Pool N: [name input]” as a flex row */
@@ -967,6 +1068,7 @@ body.dark-mode .pool-rule-block {
 /* Section spacing inside the pool editor */
 #poolMetadataSection,
 #supplyInfoSection,
+#cleanlinessReportSection,
 #ruleEditorSection {
   margin-top: 24px;
 }

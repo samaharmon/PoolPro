@@ -965,6 +965,122 @@ function collectCleanlinessReportSettings() {
   return normalizeCleanlinessReportSettings(settings);
 }
 
+function setEditorAccordionState(toggle, content, collapsed) {
+  if (!toggle || !content) return;
+  const isCollapsed = !!collapsed;
+  toggle.setAttribute('aria-expanded', String(!isCollapsed));
+  content.hidden = isCollapsed;
+  const indicator = toggle.querySelector('.editor-accordion-indicator');
+  if (indicator) indicator.textContent = isCollapsed ? '+' : '-';
+  const root = toggle.closest('.editor-accordion');
+  if (root) {
+    root.classList.toggle('is-collapsed', isCollapsed);
+    root.classList.toggle('is-open', !isCollapsed);
+  }
+}
+
+function createEditorAccordionToggle(title, className = '') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = ['editor-accordion-toggle', className].filter(Boolean).join(' ');
+  button.innerHTML = `
+    <span class="editor-accordion-indicator" aria-hidden="true">+</span>
+    <span class="editor-accordion-title">${escapeHtmlUnsafe(title)}</span>
+  `;
+  button.setAttribute('aria-expanded', 'false');
+  return button;
+}
+
+function wrapSectionAccordion(section, title) {
+  if (!section || section.dataset.editorAccordionReady === 'true') return;
+  const content = document.createElement('div');
+  content.className = 'editor-accordion-content editor-section-accordion-content';
+  const toggle = createEditorAccordionToggle(title, 'editor-section-accordion-toggle');
+  const contentId = `${section.id || `editor-section-${Date.now()}`}-accordion-content`;
+  content.id = contentId;
+  toggle.setAttribute('aria-controls', contentId);
+
+  Array.from(section.childNodes).forEach((node) => content.appendChild(node));
+  section.append(toggle, content);
+  section.classList.add('editor-accordion', 'editor-section-accordion');
+  section.dataset.editorAccordionReady = 'true';
+  toggle.addEventListener('click', () => setEditorAccordionState(toggle, content, !content.hidden));
+  setEditorAccordionState(toggle, content, true);
+}
+
+function wrapPoolRuleBlockAccordion(block) {
+  if (!block || block.dataset.poolAccordionReady === 'true') return;
+  const header = block.querySelector(':scope > .pool-rule-header');
+  if (!header) return;
+
+  const poolIndex = block.dataset.poolIndex || '';
+  const toggle = createEditorAccordionToggle(`Pool ${poolIndex}`, 'pool-rule-accordion-toggle');
+  toggle.classList.add('editor-inline-accordion-toggle');
+  const content = document.createElement('div');
+  content.className = 'editor-accordion-content pool-rule-block-content';
+  const contentId = `pool${poolIndex || Date.now()}RuleAccordionContent`;
+  content.id = contentId;
+  toggle.setAttribute('aria-controls', contentId);
+
+  header.insertBefore(toggle, header.firstElementChild);
+  Array.from(block.children).forEach((child) => {
+    if (child !== header) content.appendChild(child);
+  });
+  block.appendChild(content);
+  block.classList.add('editor-accordion', 'pool-rule-accordion');
+  block.dataset.poolAccordionReady = 'true';
+  toggle.addEventListener('click', (event) => {
+    event.preventDefault();
+    setEditorAccordionState(toggle, content, !content.hidden);
+  });
+  setEditorAccordionState(toggle, content, true);
+}
+
+function wrapRuleTableAccordion(tableWrapper) {
+  if (!tableWrapper || tableWrapper.dataset.ruleTableAccordionReady === 'true') return;
+  const isPh = !!tableWrapper.querySelector('.ph-table');
+  const isCl = !!tableWrapper.querySelector('.cl-table');
+  const title = isPh ? 'pH' : isCl ? 'Cl' : 'Rules';
+  const poolIndex = tableWrapper.closest('.pool-rule-block')?.dataset.poolIndex || '';
+  const metricKey = isPh ? 'ph' : isCl ? 'cl' : 'rules';
+  const toggle = createEditorAccordionToggle(title, 'rule-table-accordion-toggle');
+  const content = document.createElement('div');
+  content.className = 'editor-accordion-content rule-table-accordion-content';
+  const contentId = `pool${poolIndex || Date.now()}${metricKey}AccordionContent`;
+  content.id = contentId;
+  toggle.setAttribute('aria-controls', contentId);
+
+  Array.from(tableWrapper.childNodes).forEach((node) => content.appendChild(node));
+  tableWrapper.append(toggle, content);
+  tableWrapper.classList.add('editor-accordion', 'rule-table-accordion');
+  tableWrapper.dataset.ruleTableAccordionReady = 'true';
+  toggle.addEventListener('click', () => setEditorAccordionState(toggle, content, !content.hidden));
+  setEditorAccordionState(toggle, content, true);
+}
+
+function setupEditorAccordions() {
+  const metadataSection = document.getElementById('poolMetadataSection');
+  const cleanlinessSection = document.getElementById('cleanlinessReportSection');
+  const supplySection = document.getElementById('supplyInfoSection');
+  const ruleSection = document.getElementById('ruleEditorSection');
+
+  if (metadataSection && cleanlinessSection && supplySection && ruleSection) {
+    metadataSection.insertAdjacentElement('afterend', cleanlinessSection);
+    cleanlinessSection.insertAdjacentElement('afterend', supplySection);
+    supplySection.insertAdjacentElement('afterend', ruleSection);
+  }
+
+  wrapSectionAccordion(document.getElementById('poolMetadataSection'), 'Pool Metadata');
+  wrapSectionAccordion(document.getElementById('cleanlinessReportSection'), 'Cleanliness Report Sections');
+  wrapSectionAccordion(document.getElementById('supplyInfoSection'), 'Supply Info');
+  wrapSectionAccordion(document.getElementById('ruleEditorSection'), 'Pool Chemistry Log Feedback Editor');
+
+  document.querySelectorAll('#poolRuleBlocks .pool-rule-block').forEach((block) => {
+    wrapPoolRuleBlockAccordion(block);
+    block.querySelectorAll('.table-wrapper').forEach(wrapRuleTableAccordion);
+  });
+}
+
  
 function updatePoolBlockVisibility(count) {
   const blocks = document.querySelectorAll('#poolRuleBlocks .pool-rule-block');
@@ -2765,6 +2881,7 @@ async function initEditor() {
   await refreshPools();
   convertRuleTextareasToRichEditors();
   removeDuplicateRuleHeaderControls();
+  setupEditorAccordions();
 
   // Deduplicate any repeated ids in the rule blocks BEFORE wiring events
   if (typeof dedupeRuleFieldIds === 'function') {
