@@ -9,6 +9,24 @@ const DUTY_UPLOAD_IMAGE_MAX_SIDE = 1024;
 const DUTY_UPLOAD_IMAGE_QUALITY = 0.66;
 const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 750 * 1024;
 const DUTY_UPLOAD_CONCURRENCY = 3;
+const CLEANLINESS_REPORT_QUESTION_TYPES = [
+  'deck',
+  'pool',
+  'skimmers',
+  'damaged',
+  'bleachFeeders',
+  'desLogbooks',
+  'fillLines',
+  'otherNotes',
+];
+const CLEANLINESS_REPORT_PHOTO_GROUPS = {
+  deck: { wrapperId: 'deckPhotosGroup', uploadId: 'deckUpload', min: 2, max: 10, initialSlots: 2 },
+  pool: { wrapperId: 'poolPhotosGroup', uploadId: 'poolUpload', min: 2, max: 10, initialSlots: 2 },
+  skimmers: { wrapperId: 'skimmersPhotosGroup', uploadId: 'skimmersUpload', min: 2, max: 10, initialSlots: 2 },
+  damaged: { wrapperId: 'damagedEquipmentGroup', uploadId: 'damagedUpload', min: 0, max: 10, noteIds: ['damagedNotes'] },
+  bleachFeeders: { wrapperId: 'bleachFeedersGroup', uploadId: 'bleachFeederUpload', min: 1, max: 10, initialSlots: 1 },
+  otherNotes: { wrapperId: 'otherNotesGroup', noteIds: ['dutiesOtherNotes'] },
+};
 
 // ============================================================
 // INIT
@@ -25,11 +43,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (poolSel) {
     poolSel.addEventListener('change', () => {
       populateCYAFields(poolSel.value);
-      updateFillLinesFields(poolSel.value);
-      updateDESLogbooksFields(poolSel.value);
+      updateCleanlinessReportFields(poolSel.value);
     });
-    updateFillLinesFields(poolSel.value);
-    updateDESLogbooksFields(poolSel.value);
+    updateCleanlinessReportFields(poolSel.value);
   }
 });
 
@@ -99,8 +115,7 @@ function populatePools() {
   if (!pools.length) {
     schedulePoolPopulateRetry();
     populateCYAFields('');
-    updateFillLinesFields('');
-    updateDESLogbooksFields('');
+    updateCleanlinessReportFields('');
     return;
   }
   if (poolPopulateRetryId) {
@@ -126,8 +141,7 @@ function populatePools() {
   });
   if (current) sel.value = current;
   populateCYAFields(sel.value || '');
-  updateFillLinesFields(sel.value || '');
-  updateDESLogbooksFields(sel.value || '');
+  updateCleanlinessReportFields(sel.value || '');
 }
 
 function getSelectedPoolDoc(poolValue) {
@@ -158,6 +172,91 @@ function resetPhotoGroup(groupId, options = {}) {
     addPhotoSlotToGroup(group);
   }
   updateAddBtn(groupId);
+}
+
+function getDefaultCleanlinessReportSettings() {
+  return {
+    enabledQuestionTypes: Object.fromEntries(CLEANLINESS_REPORT_QUESTION_TYPES.map((key) => [key, true])),
+    requireBathroomPhotos: false,
+  };
+}
+
+function normalizeCleanlinessReportSettings(source = {}) {
+  const defaults = getDefaultCleanlinessReportSettings();
+  const enabledSource = source.enabledQuestionTypes || source.questionTypes || {};
+
+  CLEANLINESS_REPORT_QUESTION_TYPES.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(enabledSource, key)) {
+      defaults.enabledQuestionTypes[key] = enabledSource[key] !== false;
+    } else if (Object.prototype.hasOwnProperty.call(source, key)) {
+      defaults.enabledQuestionTypes[key] = source[key] !== false;
+    }
+  });
+
+  defaults.requireBathroomPhotos =
+    source.requireBathroomPhotos === true ||
+    source.bathroomPhotosRequired === true ||
+    source.requireBathrooms === true;
+
+  return defaults;
+}
+
+function getCleanlinessReportSettings(poolValue) {
+  const poolDoc = getSelectedPoolDoc(poolValue);
+  return normalizeCleanlinessReportSettings(poolDoc?.cleanlinessReport || {});
+}
+
+function setCleanlinessPhotoGroup(config, visible) {
+  const wrapper = document.getElementById(config.wrapperId);
+  if (!wrapper) return;
+  wrapper.classList.toggle('hidden', !visible);
+
+  if (config.uploadId) {
+    resetPhotoGroup(config.uploadId, visible
+      ? { min: config.min, max: config.max, initialSlots: config.initialSlots }
+      : { min: 0, max: config.max, empty: true });
+  }
+
+  if (!visible && Array.isArray(config.noteIds)) {
+    config.noteIds.forEach((id) => {
+      const field = document.getElementById(id);
+      if (field) field.value = '';
+    });
+  }
+}
+
+function setSpecialPhotoGroupHidden(groupId, uploadId, max = 2) {
+  const wrapper = document.getElementById(groupId);
+  if (wrapper) wrapper.classList.add('hidden');
+  resetPhotoGroup(uploadId, { min: 0, max, empty: true });
+}
+
+function updateBathroomPhotoRequirement(required) {
+  const wrapper = document.getElementById('bathroomsGroup');
+  if (!wrapper) return;
+  wrapper.classList.toggle('hidden', !required);
+  resetPhotoGroup('bathroomsUpload', required
+    ? { min: 4, max: 12, initialSlots: 4 }
+    : { min: 0, max: 12, empty: true });
+}
+
+function updateCleanlinessReportFields(poolValue) {
+  const settings = getCleanlinessReportSettings(poolValue);
+  Object.entries(CLEANLINESS_REPORT_PHOTO_GROUPS).forEach(([key, config]) => {
+    setCleanlinessPhotoGroup(config, settings.enabledQuestionTypes[key] !== false);
+  });
+
+  updateFillLinesFields(poolValue);
+  updateDESLogbooksFields(poolValue);
+
+  if (settings.enabledQuestionTypes.fillLines === false) {
+    setSpecialPhotoGroupHidden('fillLinesGroup', 'fillLinesUpload', 2);
+  }
+  if (settings.enabledQuestionTypes.desLogbooks === false) {
+    setSpecialPhotoGroupHidden('desLogbooksGroup', 'desLogbooksUpload', 2);
+  }
+
+  updateBathroomPhotoRequirement(!!settings.requireBathroomPhotos);
 }
 
 function updateFillLinesFields(poolValue) {
@@ -828,15 +927,22 @@ window.submitDutiesForm = async function () {
     }
   }
 
-  // Validate required photo groups
-  const requiredGroups = managerialPage
-    ? []
-    : [
-        { id: 'deckUpload', label: 'Deck', min: 2 },
-        { id: 'poolUpload', label: 'Pool', min: 2 },
-        { id: 'skimmersUpload', label: 'Skimmers', min: 2 },
-        { id: 'bleachFeederUpload', label: 'Bleach Feeders', min: 1 },
-      ];
+  const requiredGroups = [];
+  const addRequiredPhotoGroup = (id, label, fallbackMin = 1) => {
+    const upload = document.getElementById(id);
+    const wrapper = upload?.closest('.duties-photo-group');
+    if (!upload || !wrapper || wrapper.classList.contains('hidden')) return;
+    const min = parseInt(upload.dataset.min || String(fallbackMin), 10);
+    if (min > 0) requiredGroups.push({ id, label, min });
+  };
+
+  if (!managerialPage) {
+    addRequiredPhotoGroup('deckUpload', 'Deck', 2);
+    addRequiredPhotoGroup('poolUpload', 'Pool', 2);
+    addRequiredPhotoGroup('skimmersUpload', 'Skimmers', 2);
+    addRequiredPhotoGroup('bathroomsUpload', 'Bathrooms', 4);
+    addRequiredPhotoGroup('bleachFeederUpload', 'Bleach Feeders', 1);
+  }
 
   const fillLinesGroup = document.getElementById('fillLinesGroup');
   const fillLinesUpload = document.getElementById('fillLinesUpload');
@@ -876,6 +982,7 @@ window.submitDutiesForm = async function () {
       { groupId: 'deckUpload', category: 'deck', resultKey: 'deck', label: 'Deck' },
       { groupId: 'poolUpload', category: 'pool', resultKey: 'pool', label: 'Pool' },
       { groupId: 'skimmersUpload', category: 'skimmers', resultKey: 'skimmers', label: 'Skimmers' },
+      { groupId: 'bathroomsUpload', category: 'bathrooms', resultKey: 'bathrooms', label: 'Bathrooms' },
       { groupId: 'damagedUpload', category: 'damaged', resultKey: 'damaged', label: 'Damaged Equipment' },
       { groupId: 'bleachFeederUpload', category: 'bleachFeeders', resultKey: 'bleachFeeders', label: 'Bleach Feeders' },
       { groupId: 'desLogbooksUpload', category: 'desLogbooks', resultKey: 'desLogbooks', label: 'DES Logbooks' },
@@ -938,14 +1045,15 @@ window.submitDutiesForm = async function () {
         deck: uploadedPhotos.deck || [],
         pool: uploadedPhotos.pool || [],
         skimmers: uploadedPhotos.skimmers || [],
+        bathrooms: uploadedPhotos.bathrooms || [],
         damaged: uploadedPhotos.damaged || [],
         bleachFeeders: uploadedPhotos.bleachFeeders || [],
         desLogbooks: uploadedPhotos.desLogbooks || [],
         fillLines: uploadedPhotos.fillLines || [],
         bleach: uploadedPhotos.bleach || [],
       },
-      damagedNotes: document.getElementById('damagedNotes')?.value?.trim() || '',
-      otherNotes: document.getElementById('dutiesOtherNotes')?.value?.trim() || '',
+      damagedNotes: document.getElementById('damagedEquipmentGroup')?.classList.contains('hidden') ? '' : (document.getElementById('damagedNotes')?.value?.trim() || ''),
+      otherNotes: document.getElementById('otherNotesGroup')?.classList.contains('hidden') ? '' : (document.getElementById('dutiesOtherNotes')?.value?.trim() || ''),
       bleachVolume: document.getElementById('bleachVolume')?.value || null,
       muriaticAcid: document.getElementById('muriaticAcid')?.value || null,
       shockGranular: document.getElementById('shockGranular')?.value || null,
@@ -996,7 +1104,7 @@ function resetForm() {
   document.querySelectorAll('.cya-input').forEach(el => { el.value = ''; });
 
   // Reset all photo groups
-  ['deckUpload', 'poolUpload', 'skimmersUpload', 'damagedUpload', 'bleachFeederUpload', 'desLogbooksUpload', 'bleachUpload'].forEach(groupId => {
+  ['deckUpload', 'poolUpload', 'skimmersUpload', 'bathroomsUpload', 'damagedUpload', 'bleachFeederUpload', 'desLogbooksUpload', 'fillLinesUpload', 'bleachUpload'].forEach(groupId => {
     const group = document.getElementById(groupId);
     if (!group) return;
     group.innerHTML = '';
@@ -1006,6 +1114,5 @@ function resetForm() {
     for (let i = 0; i < initialSlots; i++) addPhotoSlotToGroup(group);
     updateAddBtn(groupId);
   });
-  updateFillLinesFields('');
-  updateDESLogbooksFields('');
+  updateCleanlinessReportFields('');
 }

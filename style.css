@@ -4658,6 +4658,45 @@ td.concern-major {
   margin: 0;
 }
 
+.alerts-excluded-employees {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.alerts-excluded-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 128, 128, 0.55);
+  background: #262626;
+  color: #fff;
+  font-weight: 700;
+}
+
+.alerts-excluded-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.alerts-excluded-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #69140e;
+  background: #69140e;
+  color: #fff;
+  cursor: pointer;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
 .alerts-reminders-cancel-grid {
   margin-top: -4px;
 }

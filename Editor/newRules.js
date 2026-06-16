@@ -52,6 +52,16 @@ const SUPPLY_SECTIONS = [
     ],
   },
 ];
+const CLEANLINESS_REPORT_QUESTION_TYPES = [
+  { id: 'deck', label: 'Deck photos' },
+  { id: 'pool', label: 'Pool photos' },
+  { id: 'skimmers', label: 'Skimmer photos' },
+  { id: 'damaged', label: 'Damaged equipment photos and notes' },
+  { id: 'bleachFeeders', label: 'Bleach feeder photos' },
+  { id: 'desLogbooks', label: 'DES logbook photos' },
+  { id: 'fillLines', label: 'Fill line photos' },
+  { id: 'otherNotes', label: 'Other notes' },
+];
 
 // ruleStateByPool[poolIndex] = { bleach: { ph:{}, cl:{} }, granular: { ph:{}, cl:{} }, tablet: { ph:{}, cl:{} }, off: { ph:{}, cl:{} } }
 const ruleStateByPool = {};
@@ -869,6 +879,92 @@ function collectSupplyInfo() {
   return info;
 }
 
+function getDefaultCleanlinessReportSettings() {
+  return {
+    enabledQuestionTypes: Object.fromEntries(
+      CLEANLINESS_REPORT_QUESTION_TYPES.map((item) => [item.id, true])
+    ),
+    requireBathroomPhotos: false,
+  };
+}
+
+function normalizeCleanlinessReportSettings(source = {}) {
+  const defaults = getDefaultCleanlinessReportSettings();
+  const enabledSource = source.enabledQuestionTypes || source.questionTypes || {};
+
+  CLEANLINESS_REPORT_QUESTION_TYPES.forEach(({ id }) => {
+    if (Object.prototype.hasOwnProperty.call(enabledSource, id)) {
+      defaults.enabledQuestionTypes[id] = enabledSource[id] !== false;
+    } else if (Object.prototype.hasOwnProperty.call(source, id)) {
+      defaults.enabledQuestionTypes[id] = source[id] !== false;
+    }
+  });
+
+  defaults.requireBathroomPhotos =
+    source.requireBathroomPhotos === true ||
+    source.bathroomPhotosRequired === true ||
+    source.requireBathrooms === true;
+
+  return defaults;
+}
+
+function setCleanlinessReportEnabled(enabled) {
+  const section = document.getElementById('cleanlinessReportSection');
+  if (!section) return;
+  section.querySelectorAll('.cleanliness-report-content input').forEach((field) => {
+    field.disabled = !enabled;
+  });
+  section.classList.toggle('overlay-disabled', !enabled);
+}
+
+function renderCleanlinessReportSettings(poolDoc = {}) {
+  const container = document.getElementById('cleanlinessQuestionRows');
+  if (!container) return;
+  const settings = normalizeCleanlinessReportSettings(poolDoc.cleanlinessReport || {});
+  container.innerHTML = '';
+
+  const questionCard = document.createElement('div');
+  questionCard.className = 'supply-info-card cleanliness-info-card';
+  questionCard.innerHTML = '<h4>Question Types</h4>';
+
+  CLEANLINESS_REPORT_QUESTION_TYPES.forEach((item) => {
+    const row = document.createElement('label');
+    row.className = 'supply-info-row cleanliness-info-row';
+    row.innerHTML = `
+      <input type="checkbox" class="market-filter-checkbox cleanliness-question-enabled" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" ${settings.enabledQuestionTypes[item.id] ? 'checked' : ''}>
+      <span class="supply-info-name">${escapeHtmlUnsafe(item.label)}</span>
+    `;
+    questionCard.appendChild(row);
+  });
+  container.appendChild(questionCard);
+
+  const bathroomCard = document.createElement('div');
+  bathroomCard.className = 'supply-info-card cleanliness-info-card';
+  bathroomCard.innerHTML = `
+    <h4>Bathroom Photos</h4>
+    <label class="supply-info-row cleanliness-info-row cleanliness-bathroom-row">
+      <input type="checkbox" class="market-filter-checkbox" id="cleanlinessRequireBathroomPhotos" ${settings.requireBathroomPhotos ? 'checked' : ''}>
+      <span class="supply-info-name">
+        Require at least 2 photos from each bathroom
+        <small>Requires a minimum of 4 total bathroom photos: 2 men's and 2 women's.</small>
+      </span>
+    </label>
+  `;
+  container.appendChild(bathroomCard);
+  setCleanlinessReportEnabled(false);
+}
+
+function collectCleanlinessReportSettings() {
+  const settings = getDefaultCleanlinessReportSettings();
+  document.querySelectorAll('.cleanliness-question-enabled').forEach((checkbox) => {
+    const questionId = checkbox.dataset.cleanlinessQuestion;
+    if (!questionId || !Object.prototype.hasOwnProperty.call(settings.enabledQuestionTypes, questionId)) return;
+    settings.enabledQuestionTypes[questionId] = !!checkbox.checked;
+  });
+  settings.requireBathroomPhotos = document.getElementById('cleanlinessRequireBathroomPhotos')?.checked === true;
+  return normalizeCleanlinessReportSettings(settings);
+}
+
  
 function updatePoolBlockVisibility(count) {
   const blocks = document.querySelectorAll('#poolRuleBlocks .pool-rule-block');
@@ -1007,9 +1103,11 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
   // Reveal the metadata + rule sections when editing
   const metadataSection = document.getElementById('poolMetadataSection');
   const supplyInfoSection = document.getElementById('supplyInfoSection');
+  const cleanlinessReportSection = document.getElementById('cleanlinessReportSection');
   const ruleSection = document.getElementById('ruleEditorSection');
   metadataSection?.classList.remove('hidden');
   supplyInfoSection?.classList.remove('hidden');
+  cleanlinessReportSection?.classList.remove('hidden');
   ruleSection?.classList.remove('hidden');
 
   const poolNameInput   = document.getElementById('editorPoolName');
@@ -1037,6 +1135,7 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
   }
 
   renderSupplyInfo(normalizedDoc);
+  renderCleanlinessReportSettings(normalizedDoc);
 
   // Load rules for each pool into editor state.
   const rulesForPools = normalizedDoc.rules?.pools || [];
@@ -1177,6 +1276,7 @@ function readEditorToObject() {
     markets,
     numPools,
     supplyInfo: collectSupplyInfo(),
+    cleanlinessReport: collectCleanlinessReportSettings(),
     rules: { pools },
   };
 }
@@ -1240,6 +1340,8 @@ function disableAllEditors() {
   const metadataSaveBtn = document.getElementById('saveMetadataBtn');
   const supplyEditBtn = document.getElementById('editSupplyInfoBtn');
   const supplySaveBtn = document.getElementById('saveSupplyInfoBtn');
+  const cleanlinessEditBtn = document.getElementById('editCleanlinessReportBtn');
+  const cleanlinessSaveBtn = document.getElementById('saveCleanlinessReportBtn');
   if (metadataEditBtn && metadataSaveBtn) {
     metadataEditBtn.disabled = false;
     metadataSaveBtn.disabled = true;
@@ -1248,11 +1350,17 @@ function disableAllEditors() {
     supplyEditBtn.disabled = false;
     supplySaveBtn.disabled = true;
   }
+  if (cleanlinessEditBtn && cleanlinessSaveBtn) {
+    cleanlinessEditBtn.disabled = false;
+    cleanlinessSaveBtn.disabled = true;
+  }
   syncMetadataToggleFromButtons();
   syncSupplyToggleFromButtons();
+  syncCleanlinessToggleFromButtons();
 
   setMetadataEnabled(false);
   setSupplyInfoEnabled(false);
+  setCleanlinessReportEnabled(false);
   captureRockbridgePresetIfNeeded();
 }
 
@@ -1401,6 +1509,87 @@ function syncSupplyToggleFromButtons() {
   const saveBtn = document.getElementById('saveSupplyInfoBtn');
   const toggle = document.querySelector('#supplyInfoSection .edit-save-toggle-input');
   if (saveBtn && toggle) toggle.checked = saveBtn.disabled;
+}
+
+function syncCleanlinessToggleFromButtons() {
+  const saveBtn = document.getElementById('saveCleanlinessReportBtn');
+  const toggle = document.querySelector('#cleanlinessReportSection .edit-save-toggle-input');
+  if (saveBtn && toggle) toggle.checked = saveBtn.disabled;
+}
+
+function wireCleanlinessReportButtons() {
+  const editBtn = document.getElementById('editCleanlinessReportBtn');
+  const saveBtn = document.getElementById('saveCleanlinessReportBtn');
+  const ruleButtons = document.querySelector('#cleanlinessReportSection .metadata-rule-buttons');
+  if (!editBtn || !saveBtn || !ruleButtons) return;
+
+  const setEditing = (isEditing) => {
+    setCleanlinessReportEnabled(isEditing);
+    editBtn.disabled = isEditing;
+    saveBtn.disabled = !isEditing;
+    syncCleanlinessToggleFromButtons();
+  };
+
+  const saveCleanlinessReport = async () => {
+    setCleanlinessReportEnabled(false);
+    editBtn.disabled = true;
+    saveBtn.disabled = true;
+    syncCleanlinessToggleFromButtons();
+    const success = await attemptSave();
+    if (success) setEditing(false);
+    else setEditing(true);
+    return success;
+  };
+
+  if (editBtn.dataset.cleanlinessBound !== 'true') {
+    editBtn.dataset.cleanlinessBound = 'true';
+    editBtn.addEventListener('click', () => setEditing(true));
+  }
+  if (saveBtn.dataset.cleanlinessBound !== 'true') {
+    saveBtn.dataset.cleanlinessBound = 'true';
+    saveBtn.addEventListener('click', saveCleanlinessReport);
+  }
+  if (ruleButtons.querySelector('.theme-switch')) {
+    syncCleanlinessToggleFromButtons();
+    return;
+  }
+
+  const label = document.createElement('label');
+  label.className = 'theme-toggle rule-edit-save-toggle';
+  label.setAttribute('aria-label', 'Cleanliness Report edit and save mode');
+  const switchDiv = document.createElement('div');
+  switchDiv.className = 'theme-switch';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.className = 'edit-save-toggle-input';
+  cb.setAttribute('aria-label', 'Toggle Cleanliness Report edit and save mode');
+  cb.checked = !!saveBtn.disabled;
+  const track = document.createElement('div');
+  track.className = 'theme-switch-track';
+  const editSpan = document.createElement('span');
+  editSpan.className = 'theme-switch-text theme-light-text';
+  editSpan.textContent = 'Edit';
+  const saveSpan = document.createElement('span');
+  saveSpan.className = 'theme-switch-text theme-dark-text';
+  saveSpan.textContent = 'Save';
+  const thumb = document.createElement('div');
+  thumb.className = 'theme-switch-thumb';
+  track.append(editSpan, saveSpan, thumb);
+  switchDiv.append(cb, track);
+  label.append(switchDiv);
+  ruleButtons.appendChild(label);
+  cb.addEventListener('change', async () => {
+    if (!cb.checked) {
+      setEditing(true);
+    } else {
+      cb.disabled = true;
+      const success = await saveCleanlinessReport();
+      cb.disabled = false;
+      if (!success) cb.checked = false;
+    }
+  });
+  new MutationObserver(syncCleanlinessToggleFromButtons).observe(saveBtn, { attributes: true, attributeFilter: ['disabled'] });
+  syncCleanlinessToggleFromButtons();
 }
 
 function wireSupplyInfoButtons() {
@@ -1610,9 +1799,13 @@ function updatePoolsCacheAfterSave(poolId, poolData) {
 
 function hasUnsavedEditorChanges() {
   const metadataSaveBtn = document.getElementById('saveMetadataBtn');
+  const supplySaveBtn = document.getElementById('saveSupplyInfoBtn');
+  const cleanlinessSaveBtn = document.getElementById('saveCleanlinessReportBtn');
   const metadataEditing = !!metadataSaveBtn && !metadataSaveBtn.disabled;
+  const supplyEditing = !!supplySaveBtn && !supplySaveBtn.disabled;
+  const cleanlinessEditing = !!cleanlinessSaveBtn && !cleanlinessSaveBtn.disabled;
   const blockEditing = !!document.querySelector('.pool-rule-block[data-is-editing="true"]');
-  return metadataEditing || blockEditing;
+  return metadataEditing || supplyEditing || cleanlinessEditing || blockEditing;
 }
 
 async function saveCurrentPoolBeforeSwitch(nextPoolId) {
@@ -1708,6 +1901,7 @@ function toggleMode(mode) {
   const rockbridgeWrapper   = document.getElementById('rockbridgePresetWrapper');
   const poolMetadataSection = document.getElementById('poolMetadataSection');
   const supplyInfoSection   = document.getElementById('supplyInfoSection');
+  const cleanlinessReportSection = document.getElementById('cleanlinessReportSection');
   const ruleEditorSection   = document.getElementById('ruleEditorSection');
 
   const addBtn  = document.getElementById('editorModeAdd');
@@ -1724,8 +1918,10 @@ function toggleMode(mode) {
     rockbridgeWrapper?.classList.remove('hidden');
     poolMetadataSection?.classList.remove('hidden');
     supplyInfoSection?.classList.remove('hidden');
+    cleanlinessReportSection?.classList.remove('hidden');
     ruleEditorSection?.classList.remove('hidden');
     renderSupplyInfo({ supplyInfo: getDefaultSupplyInfo() });
+    renderCleanlinessReportSettings({ cleanlinessReport: getDefaultCleanlinessReportSettings() });
   } else {
     // "Edit existing pool" mode
     poolSelectWrapper?.classList.remove('hidden');
@@ -1736,11 +1932,13 @@ function toggleMode(mode) {
     if (poolSelect && poolSelect.value) {
       poolMetadataSection?.classList.remove('hidden');
       supplyInfoSection?.classList.remove('hidden');
+      cleanlinessReportSection?.classList.remove('hidden');
       ruleEditorSection?.classList.remove('hidden');
     } else {
       // Force selection before exposing the editor
       poolMetadataSection?.classList.add('hidden');
       supplyInfoSection?.classList.add('hidden');
+      cleanlinessReportSection?.classList.add('hidden');
       ruleEditorSection?.classList.add('hidden');
     }
   }
@@ -1859,6 +2057,7 @@ function resetPoolEditorState() {
   });
 
   renderSupplyInfo({ supplyInfo: getDefaultSupplyInfo() });
+  renderCleanlinessReportSettings({ cleanlinessReport: getDefaultCleanlinessReportSettings() });
   currentPoolId = '';
 }
 
@@ -2575,6 +2774,7 @@ async function initEditor() {
 
   wireMetadataButtons();
   wireSupplyInfoButtons();
+  wireCleanlinessReportButtons();
   wireBlockButtons();
   injectFormattingToolbars();
   wireAutoResizeRuleTextareas();

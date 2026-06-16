@@ -2823,6 +2823,7 @@ function ensureAlertsRemindersSettingsSection() {
   section.classList.add('alerts-reminders-section');
   if (section.dataset.alertsRemindersReady === 'true') {
     setupAlertsRemindersUI();
+    setupAlertReminderEmployeeExclusionSearch();
     renderAlertsReminderLists();
     return;
   }
@@ -2872,6 +2873,15 @@ function ensureAlertsRemindersSettingsSection() {
           ${getAlertReminderRoleOptionsMarkup()}
         </div>
       </fieldset>
+      <fieldset class="alerts-reminder-fieldset">
+        <legend>Excluded Employees</legend>
+        <div class="settings-field roles-search-field alert-reminder-exclusion-search-field">
+          <label for="alertReminderEmployeeExcludeSearch">Employee</label>
+          <input type="text" id="alertReminderEmployeeExcludeSearch" autocomplete="off" placeholder="Type a name, email, or username">
+          <div class="roles-search-results" id="alertReminderEmployeeExcludeResults"></div>
+        </div>
+        <div id="alertReminderExcludedEmployees" class="alerts-excluded-employees"></div>
+      </fieldset>
       <h4>Completion Cancellation</h4>
       <div class="settings-row alerts-reminders-grid alerts-reminders-cancel-grid">
         <label class="alerts-reminder-toggle settings-field-full">
@@ -2919,6 +2929,7 @@ function ensureAlertsRemindersSettingsSection() {
   section.dataset.alertsRemindersReady = 'true';
   if (wasNew) section.dataset.accordionReady = '';
   setupAlertsRemindersUI();
+  setupAlertReminderEmployeeExclusionSearch();
   renderAlertsReminderLists();
 }
 
@@ -3009,6 +3020,113 @@ function setAlertReminderRoleCheckboxes(roles) {
   });
 }
 
+function normalizeAlertReminderExcludedEmployees(value) {
+  const list = Array.isArray(value) ? value : [];
+  return [...new Set(list.map((item) => {
+    if (typeof item === 'string') return normalizeIdentityKey(item);
+    return normalizeIdentityKey(
+      item?.employeeKey ||
+      item?.key ||
+      item?.email ||
+      item?.id ||
+      item?.username ||
+      getEmployeeRoleKey(item)
+    );
+  }).filter(Boolean))];
+}
+
+function getAlertReminderEmployeeLabel(employeeKey) {
+  const employee = findEmployeeByRoleKey(employeeKey);
+  if (!employee) return employeeKey;
+  const normalized = normalizeEmployeeRecord(employee);
+  const name = employeeDisplayName(normalized);
+  return normalized.email ? `${name} - ${normalized.email}` : name;
+}
+
+function getSelectedAlertReminderExcludedEmployees() {
+  return normalizeAlertReminderExcludedEmployees(
+    Array.from(document.querySelectorAll('#alertReminderExcludedEmployees [data-excluded-employee-key]'))
+      .map((chip) => chip.dataset.excludedEmployeeKey)
+  );
+}
+
+function setAlertReminderExcludedEmployees(keys = []) {
+  const container = document.getElementById('alertReminderExcludedEmployees');
+  if (!container) return;
+  const normalizedKeys = normalizeAlertReminderExcludedEmployees(keys);
+  container.innerHTML = '';
+  normalizedKeys.forEach((key) => {
+    const chip = document.createElement('span');
+    chip.className = 'alerts-excluded-chip';
+    chip.dataset.excludedEmployeeKey = key;
+    chip.innerHTML = `
+      <span>${escapeHtml(getAlertReminderEmployeeLabel(key))}</span>
+      <button type="button" class="alerts-excluded-remove" aria-label="Remove excluded employee">&times;</button>
+    `;
+    container.appendChild(chip);
+  });
+}
+
+function addAlertReminderExcludedEmployee(employeeKey) {
+  const keys = getSelectedAlertReminderExcludedEmployees();
+  const normalized = normalizeIdentityKey(employeeKey);
+  if (!normalized || keys.includes(normalized)) return;
+  setAlertReminderExcludedEmployees([...keys, normalized]);
+}
+
+function setupAlertReminderEmployeeExclusionSearch() {
+  const input = document.getElementById('alertReminderEmployeeExcludeSearch');
+  const results = document.getElementById('alertReminderEmployeeExcludeResults');
+  if (!input || !results || input.dataset.bound === 'true') return;
+  input.dataset.bound = 'true';
+
+  const renderResults = () => {
+    const term = normalizeIdentityKey(input.value);
+    const excluded = new Set(getSelectedAlertReminderExcludedEmployees());
+    results.innerHTML = '';
+    if (!term) {
+      results.classList.remove('visible');
+      return;
+    }
+    const matches = employeesData
+      .map(normalizeEmployeeRecord)
+      .filter((employee) => {
+        const key = getEmployeeRoleKey(employee);
+        if (!key || excluded.has(key)) return false;
+        const haystack = [
+          employeeDisplayName(employee),
+          employee.email,
+          employee.username,
+          employee.id,
+          employee.homePool,
+        ].join(' ').toLowerCase();
+        return haystack.includes(term);
+      })
+      .slice(0, 8);
+
+    matches.forEach((employee) => {
+      const key = getEmployeeRoleKey(employee);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'roles-search-option';
+      button.textContent = getAlertReminderEmployeeLabel(key);
+      button.addEventListener('click', () => {
+        addAlertReminderExcludedEmployee(key);
+        input.value = '';
+        results.innerHTML = '';
+        results.classList.remove('visible');
+      });
+      results.appendChild(button);
+    });
+    results.classList.toggle('visible', matches.length > 0);
+  };
+
+  input.addEventListener('input', renderResults);
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.alert-reminder-exclusion-search-field')) results.classList.remove('visible');
+  });
+}
+
 function applyAlertReminderEditorFontSize(value) {
   const editor = document.getElementById('alertsReminderEditor');
   if (!editor) return;
@@ -3027,6 +3145,7 @@ function normalizeAlertReminder(item = {}) {
     repeat: ['Hourly', 'Daily', 'Weekly', 'Biweekly', 'Monthly'].includes(item.repeat) ? item.repeat : 'Daily',
     fontSize: normalizeAlertReminderFontSize(item.fontSize),
     roles: normalizeAlertReminderRoles(item.roles),
+    excludedEmployees: normalizeAlertReminderExcludedEmployees(item.excludedEmployees || item.excludedEmployeeKeys || item.employeeExclusions),
     cancelFormKey: normalizeAlertCancelFormKey(item.cancelFormKey || item.cancelForm || ''),
     cancelPeriod: normalizeAlertCancelPeriod(item.cancelPeriod || 'day'),
     continueUntilComplete: item.continueUntilComplete === true || item.stayVisibleUntilComplete === true,
@@ -3089,6 +3208,14 @@ function clearAlertsReminderForm() {
   const continueUntilComplete = document.getElementById('alertReminderContinueUntilComplete');
   if (continueUntilComplete) continueUntilComplete.checked = false;
   setAlertReminderRoleCheckboxes(ALERT_REMINDER_DEFAULT_ROLES);
+  setAlertReminderExcludedEmployees([]);
+  const excludeSearch = document.getElementById('alertReminderEmployeeExcludeSearch');
+  if (excludeSearch) excludeSearch.value = '';
+  const excludeResults = document.getElementById('alertReminderEmployeeExcludeResults');
+  if (excludeResults) {
+    excludeResults.innerHTML = '';
+    excludeResults.classList.remove('visible');
+  }
   applyAlertReminderEditorFontSize('');
   const editor = document.getElementById('alertsReminderEditor');
   if (editor) editor.innerHTML = '';
@@ -3115,6 +3242,7 @@ function populateAlertsReminderForm(reminder, source = 'active') {
     if (input) input.value = value;
   });
   setAlertReminderRoleCheckboxes(normalized.roles);
+  setAlertReminderExcludedEmployees(normalized.excludedEmployees);
   const continueUntilComplete = document.getElementById('alertReminderContinueUntilComplete');
   if (continueUntilComplete) continueUntilComplete.checked = !!normalized.continueUntilComplete;
   applyAlertReminderEditorFontSize(normalized.fontSize);
@@ -3135,6 +3263,7 @@ function getAlertsReminderFormValues() {
     repeat: document.getElementById('alertReminderRepeat')?.value || 'Daily',
     fontSize: normalizeAlertReminderFontSize(document.getElementById('alertReminderFontSize')?.value || ''),
     roles: getSelectedAlertReminderRoles(),
+    excludedEmployees: getSelectedAlertReminderExcludedEmployees(),
     cancelFormKey: normalizeAlertCancelFormKey(document.getElementById('alertReminderCancelForm')?.value || ''),
     cancelPeriod: normalizeAlertCancelPeriod(document.getElementById('alertReminderCancelPeriod')?.value || 'day'),
     continueUntilComplete: document.getElementById('alertReminderContinueUntilComplete')?.checked === true,
@@ -3220,6 +3349,8 @@ function renderReminderListItem(reminder, source) {
   const preview = stripReminderText(reminder.html) || 'Untitled reminder';
   const rolesLabel = getAlertReminderRoleLabels(reminder.roles).join(', ');
   const fontSizeLabel = reminder.fontSize ? ` • Font ${reminder.fontSize}px` : '';
+  const excludedCount = normalizeAlertReminderExcludedEmployees(reminder.excludedEmployees).length;
+  const excludedLabel = excludedCount ? ` • Excludes ${excludedCount} employee${excludedCount === 1 ? '' : 's'}` : '';
   const cancelConfig = getAlertCancelFormConfig(reminder.cancelFormKey);
   const cancelLabel = cancelConfig?.completionType === 'weeklyBackwash'
     ? ' • Cancels when weekly backwashing is complete'
@@ -3229,7 +3360,7 @@ function renderReminderListItem(reminder, source) {
   const continueLabel = reminder.continueUntilComplete ? ' • Continues until completed/submitted' : '';
   loadBtn.innerHTML = `
     <span class="alerts-reminder-list-title">${escapeHtml(preview)}</span>
-    <span class="alerts-reminder-list-meta">${escapeHtml(reminder.startDate)} ${escapeHtml(reminder.startTime)} - ${escapeHtml(reminder.endDate)} ${escapeHtml(reminder.endTime)} • ${escapeHtml(reminder.repeat)} • ${escapeHtml(rolesLabel)}${escapeHtml(fontSizeLabel)}${escapeHtml(cancelLabel)}${escapeHtml(continueLabel)}</span>
+    <span class="alerts-reminder-list-meta">${escapeHtml(reminder.startDate)} ${escapeHtml(reminder.startTime)} - ${escapeHtml(reminder.endDate)} ${escapeHtml(reminder.endTime)} • ${escapeHtml(reminder.repeat)} • ${escapeHtml(rolesLabel)}${escapeHtml(fontSizeLabel)}${escapeHtml(excludedLabel)}${escapeHtml(cancelLabel)}${escapeHtml(continueLabel)}</span>
   `;
   item.appendChild(loadBtn);
   return item;
@@ -3260,6 +3391,7 @@ function setupAlertsRemindersUI() {
   const section = document.getElementById('alertsRemindersSettings');
   if (!section || section.dataset.alertsRemindersBound === 'true') return;
   section.dataset.alertsRemindersBound = 'true';
+  setupAlertReminderEmployeeExclusionSearch();
 
   section.addEventListener('click', async (event) => {
     const toolbarBtn = event.target.closest('[data-alert-cmd]');
@@ -3279,6 +3411,14 @@ function setupAlertsRemindersUI() {
     if (event.target.closest('#alertReminderClearBtn')) {
       event.preventDefault();
       clearAlertsReminderForm();
+      return;
+    }
+
+    const excludedRemove = event.target.closest('.alerts-excluded-remove');
+    if (excludedRemove) {
+      event.preventDefault();
+      const chip = excludedRemove.closest('[data-excluded-employee-key]');
+      if (chip) chip.remove();
       return;
     }
 
@@ -3528,6 +3668,26 @@ function isAlertReminderRoleAllowed(reminder) {
   return roles.includes(getCurrentAlertReminderRoleKey());
 }
 
+function isAlertReminderEmployeeExcluded(reminder) {
+  const excluded = new Set(normalizeAlertReminderExcludedEmployees(reminder.excludedEmployees));
+  if (!excluded.size) return false;
+  const currentKeys = getCurrentIdentityKeys();
+  const currentRecord = typeof window.getCurrentEmployeeRecord === 'function'
+    ? window.getCurrentEmployeeRecord()
+    : null;
+  if (currentRecord) {
+    currentKeys.push(
+      currentRecord.email,
+      currentRecord.id,
+      currentRecord.employeeId,
+      currentRecord.username,
+      getEmployeeRoleKey(currentRecord)
+    );
+  }
+  return [...new Set(currentKeys.map(normalizeIdentityKey).filter(Boolean))]
+    .some((key) => excluded.has(key));
+}
+
 function getCurrentAlertReminderFacilityKey() {
   const currentRecord = typeof window.getCurrentEmployeeRecord === 'function'
     ? window.getCurrentEmployeeRecord()
@@ -3723,6 +3883,7 @@ async function maybeShowActiveAlertRemindersOnPageLoad() {
     const item = normalizeAlertReminder(rawItem);
     if (!isAlertReminderDueNow(item, now)) continue;
     if (!isAlertReminderRoleAllowed(item)) continue;
+    if (isAlertReminderEmployeeExcluded(item)) continue;
     const key = getAlertReminderShownKey(item, now);
     if (sessionStorage.getItem(key) === 'true') continue;
     if (await hasFacilitySubmissionForAlertReminder(item, now)) continue;
@@ -12070,6 +12231,7 @@ function openDutyFormModal(sub) {
         ${photoSectionHtml('Deck', photos.deck)}
         ${photoSectionHtml('Pool', photos.pool)}
         ${photoSectionHtml('Skimmers', photos.skimmers)}
+        ${photoSectionHtml('Bathrooms', photos.bathrooms)}
         ${photoSectionHtml('Damaged Equipment', photos.damaged)}
         ${photoSectionHtml('Bleach Feeders', photos.bleachFeeders)}
         ${photoSectionHtml('DES Logbooks', photos.desLogbooks)}

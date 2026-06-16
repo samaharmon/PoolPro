@@ -67,7 +67,8 @@
   background: #464646;
 }
 
-#supplyInfoSection {
+#supplyInfoSection,
+#cleanlinessReportSection {
   background: #464646;
 }
 
@@ -75,14 +76,17 @@
   margin-top: 0;
 }
 
-#supplyInfoSection h3 {
+#supplyInfoSection h3,
+#cleanlinessReportSection h3 {
   margin-top: 0;
 }
 
 #poolMetadataSection input[type="text"],
 #poolMetadataSection input[type="number"],
 #supplyInfoSection input[type="text"],
-#supplyInfoSection select {
+#supplyInfoSection select,
+#cleanlinessReportSection input[type="text"],
+#cleanlinessReportSection select {
   padding: 10px;
   font-size: 14px;
    background-color: #eee;
@@ -94,7 +98,9 @@
 #poolMetadataSection input[type="number"]:enabled,
 #poolMetadataSection select:enabled,
 #supplyInfoSection input[type="text"]:enabled,
-#supplyInfoSection select:enabled {
+#supplyInfoSection select:enabled,
+#cleanlinessReportSection input[type="text"]:enabled,
+#cleanlinessReportSection select:enabled {
     background-color: #fff;
 }
  
@@ -185,7 +191,8 @@
   margin-bottom: 12px;
  }
 
-.supply-info-rows {
+.supply-info-rows,
+.cleanliness-question-rows {
   display: grid;
   gap: 16px;
 }
@@ -269,6 +276,19 @@
 .supply-info-name {
   color: #fff;
   font-weight: 700;
+}
+
+.cleanliness-info-row {
+  grid-template-columns: auto minmax(0, 1fr);
+  cursor: pointer;
+}
+
+.cleanliness-info-row small {
+  display: block;
+  margin-top: 4px;
+  color: #d7d7d7;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 @media (max-width: 720px) {
@@ -794,18 +814,21 @@ body.dark-mode .pool-rule-block {
 
 /* Full grey-out overlay for editable metadata sections when locked */
 #poolMetadataSection,
-#supplyInfoSection {
+#supplyInfoSection,
+#cleanlinessReportSection {
   position: relative;
 }
 
 #poolMetadataSection.overlay-disabled .metadata-content,
-#supplyInfoSection.overlay-disabled .supply-info-content {
+#supplyInfoSection.overlay-disabled .supply-info-content,
+#cleanlinessReportSection.overlay-disabled .cleanliness-report-content {
   position: relative;
   opacity: 0.6;
 }
 
 #poolMetadataSection.overlay-disabled .metadata-content::after,
-#supplyInfoSection.overlay-disabled .supply-info-content::after {
+#supplyInfoSection.overlay-disabled .supply-info-content::after,
+#cleanlinessReportSection.overlay-disabled .cleanliness-report-content::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -817,33 +840,38 @@ body.dark-mode .pool-rule-block {
 
 /* Keep metadata content under the blocking layer when saved */
 #poolMetadataSection.overlay-disabled .metadata-content > *,
-#supplyInfoSection.overlay-disabled .supply-info-content > * {
+#supplyInfoSection.overlay-disabled .supply-info-content > *,
+#cleanlinessReportSection.overlay-disabled .cleanliness-report-content > * {
   position: relative;
   z-index: 1;
 }
 
 /* But leave the Edit / Save / Delete buttons clickable */
 #poolMetadataSection .form-row,
-#supplyInfoSection .form-row {
+#supplyInfoSection .form-row,
+#cleanlinessReportSection .form-row {
   position: relative;
   z-index: 3;
 }
 
 /* Pool metadata overlay – grey out the entire metadata area except buttons */
 #poolMetadataSection,
-#supplyInfoSection {
+#supplyInfoSection,
+#cleanlinessReportSection {
     position: relative;
 }
 
 #poolMetadataSection.overlay-disabled .metadata-content,
-#supplyInfoSection.overlay-disabled .supply-info-content {
+#supplyInfoSection.overlay-disabled .supply-info-content,
+#cleanlinessReportSection.overlay-disabled .cleanliness-report-content {
     position: relative;
     opacity: 0.6;          /* visual grey-out */
 }
 
 /* Optional: more explicit overlay */
 #poolMetadataSection.overlay-disabled .metadata-content::after,
-#supplyInfoSection.overlay-disabled .supply-info-content::after {
+#supplyInfoSection.overlay-disabled .supply-info-content::after,
+#cleanlinessReportSection.overlay-disabled .cleanliness-report-content::after {
     content: "";
     position: absolute;
     inset: 0;

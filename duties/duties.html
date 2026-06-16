@@ -76,7 +76,7 @@
         <p class="duties-section-desc">Submit photos of the following facility areas. If your facility has multiple pools, some submissions require photos in EACH pool area.</p>
 
         <!-- Deck -->
-        <div class="duties-photo-group">
+        <div class="duties-photo-group" id="deckPhotosGroup">
           <h3 class="duties-photo-group-title">Deck <span class="duties-req-badge">2 required</span></h3>
           <p class="duties-group-desc">Submit at least two photos (per pool) of the deck surrounding each pool at your facility.</p>
           <div class="duties-multi-upload" id="deckUpload" data-category="deck" data-min="2" data-max="10"></div>
@@ -84,7 +84,7 @@
         </div>
 
         <!-- Pool -->
-        <div class="duties-photo-group">
+        <div class="duties-photo-group" id="poolPhotosGroup">
           <h3 class="duties-photo-group-title">Pool <span class="duties-req-badge">2 required</span></h3>
           <p class="duties-group-desc">Submit at least two photos (per pool) of the pool area. If your pool has a deep end, make sure to include a photo of it.</p>
           <div class="duties-multi-upload" id="poolUpload" data-category="pool" data-min="2" data-max="10"></div>
@@ -92,15 +92,23 @@
         </div>
 
         <!-- Skimmers -->
-        <div class="duties-photo-group">
+        <div class="duties-photo-group" id="skimmersPhotosGroup">
           <h3 class="duties-photo-group-title">Skimmers <span class="duties-req-badge">2 required</span></h3>
           <p class="duties-group-desc">Submit at least two photos (per pool) of clean skimmer baskets.</p>
           <div class="duties-multi-upload" id="skimmersUpload" data-category="skimmers" data-min="2" data-max="10"></div>
           <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('skimmersUpload')">+ Add Photo</button>
         </div>
 
+        <!-- Bathrooms -->
+        <div class="duties-photo-group hidden" id="bathroomsGroup">
+          <h3 class="duties-photo-group-title">Bathrooms <span class="duties-req-badge">4 required</span></h3>
+          <p class="duties-group-desc">Submit at least two photos of the men's bathroom and at least two photos of the women's bathroom.</p>
+          <div class="duties-multi-upload" id="bathroomsUpload" data-category="bathrooms" data-min="0" data-max="12"></div>
+          <button type="button" class="duties-add-photo-btn" onclick="addPhotoSlot('bathroomsUpload')">+ Add Photo</button>
+        </div>
+
         <!-- Damaged Equipment -->
-        <div class="duties-photo-group">
+        <div class="duties-photo-group" id="damagedEquipmentGroup">
           <h3 class="duties-photo-group-title">Damaged Equipment <span class="duties-opt-badge">optional</span></h3>
           <p class="duties-group-desc">Submit photos of any damaged equipment at your facility (e.g., loose ladder or diving board steps, cracking or crooked diving boards, damaged furniture, loose railings, deteriorating lifeguard tubes or backboard equipment, loose or broken pool tiles, etc.).</p>
           <div class="duties-multi-upload" id="damagedUpload" data-category="damaged" data-min="0" data-max="10"></div>
@@ -112,7 +120,7 @@
         </div>
 
         <!-- Bleach Feeders -->
-        <div class="duties-photo-group">
+        <div class="duties-photo-group" id="bleachFeedersGroup">
           <h3 class="duties-photo-group-title">Bleach Feeders <span class="duties-req-badge">1 required</span></h3>
           <p class="duties-group-desc">For pools using a bleach feeder for chlorination, attach a picture of each with the selected feed rate (i.e., the dial number) clearly visible. THE FEEDER MUST BE SET BETWEEN 1 AND 2 EVERY NIGHT, UNLESS TOLD OTHERWISE BY A SUPERVISOR!!!</p>
           <div class="duties-multi-upload" id="bleachFeederUpload" data-category="bleachFeeders" data-min="1" data-max="10"></div>
@@ -136,7 +144,7 @@
         </div>
 
         <!-- Other Notes -->
-        <div class="duties-photo-group">
+        <div class="duties-photo-group" id="otherNotesGroup">
           <h3 class="duties-photo-group-title">Other Notes</h3>
           <p class="duties-group-desc">Use this field for any questions, concerns, or additional comments about your shift or facility.</p>
           <div class="duties-note-group">
