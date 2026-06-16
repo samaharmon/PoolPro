@@ -1395,11 +1395,15 @@ async function upsertEmployeeRecord(employee) {
 }
 
 function getSignupRoleForCurrentAccessMode() {
-  return currentRole === 'attendant' ? 'attendant' : 'lifeguard';
+  const accessMode = normalizeAccessMode(currentRole);
+  if (accessMode === 'attendant') return 'attendant';
+  if (accessMode === 'manager') return 'poolManager';
+  return 'lifeguard';
 }
 
 function buildSignupRecords({ username, firstName, lastName, email, phone, homePool, role = 'lifeguard' }) {
-  const normalizedRole = role === 'attendant' ? 'attendant' : 'lifeguard';
+  const validRoleKeys = new Set(ROLE_DEFINITIONS.map(({ key }) => key));
+  const normalizedRole = validRoleKeys.has(role) ? role : 'lifeguard';
   const createdAt = new Date().toISOString();
   const employeeRecord = {
     email,
@@ -1410,6 +1414,7 @@ function buildSignupRecords({ username, firstName, lastName, email, phone, homeP
     phone,
     homePool,
     role: normalizedRole,
+    roles: [normalizedRole],
     createdAt,
   };
 
@@ -1422,6 +1427,7 @@ function buildSignupRecords({ username, firstName, lastName, email, phone, homeP
     phone,
     homePool,
     role: normalizedRole,
+    roles: [normalizedRole],
     phoneLinked: false,
     createdAt,
   };
@@ -1451,14 +1457,12 @@ async function findLifeguardAccountByEmail(email) {
 async function assignSignupRolePermissions(employeeRecord, role = 'lifeguard') {
   const memberKey = normalizeIdentityKey(employeeRecord?.email || employeeRecord?.id || employeeRecord?.username);
   if (!memberKey) return;
-  const roleKey = role === 'attendant' ? 'attendant' : 'lifeguard';
+  const validRoleKeys = new Set(ROLE_DEFINITIONS.map(({ key }) => key));
+  const roleKey = validRoleKeys.has(role) ? role : 'lifeguard';
   try {
     const ref = doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID);
     const snap = await getDoc(ref);
     const next = normalizeRolesPermissionsData(snap.exists() ? snap.data() : {});
-    ROLE_DEFINITIONS.forEach(({ key }) => {
-      next.roles[key] = (next.roles[key] || []).filter((existingKey) => existingKey !== memberKey);
-    });
     if (!next.roles[roleKey].includes(memberKey)) next.roles[roleKey].push(memberKey);
     await setDoc(ref, next, { merge: false });
     homeRolesPermissionsData = next;

@@ -1893,6 +1893,17 @@ const ROLE_DEFINITIONS = [
   { key: 'poolManager', label: 'Pool Manager' },
   { key: 'supervisor', label: 'Supervisor' },
 ];
+const ROLE_KEY_ALIASES = {
+  lifeguard: 'lifeguard',
+  'life guard': 'lifeguard',
+  attendant: 'attendant',
+  'gate attendant': 'attendant',
+  gate: 'attendant',
+  manager: 'poolManager',
+  poolmanager: 'poolManager',
+  'pool manager': 'poolManager',
+  supervisor: 'supervisor',
+};
 const PERMISSION_DEFINITIONS = [
   { key: 'poolChemistryLog', label: 'Pool Chemistry Log' },
   { key: 'trainingSignup', label: 'Training Signup' },
@@ -1999,6 +2010,40 @@ function getRoleKeyForAccessMode(accessMode) {
   return 'lifeguard';
 }
 
+function normalizeRoleKey(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const direct = ROLE_DEFINITIONS.find(({ key }) => key === raw)?.key;
+  if (direct) return direct;
+  const lookup = raw
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+  return ROLE_KEY_ALIASES[lookup] || '';
+}
+
+function normalizeEmployeeRoleKeys(source = {}) {
+  const roles = [];
+  const addRole = (roleValue) => {
+    const roleKey = normalizeRoleKey(roleValue);
+    if (roleKey && !roles.includes(roleKey)) roles.push(roleKey);
+  };
+
+  if (Array.isArray(source.roles)) {
+    source.roles.forEach(addRole);
+  } else if (typeof source.roles === 'string') {
+    source.roles.split(',').forEach(addRole);
+  }
+  addRole(source.role);
+  return roles;
+}
+
+function getRoleLabel(roleKey) {
+  const normalized = normalizeRoleKey(roleKey);
+  return ROLE_DEFINITIONS.find((entry) => entry.key === normalized)?.label || String(roleKey || '').trim();
+}
+
 function getRequestedAccessMode() {
   if (hasFreshSupervisorToken()) return 'supervisor';
   try {
@@ -2030,6 +2075,40 @@ function clearRequestedAccessMode() {
 function getEmployeeRoleKey(employee) {
   const normalized = normalizeEmployeeRecord(employee || {});
   return normalizeIdentityKey(normalized.email || normalized.id || normalized.username);
+}
+
+function getEmployeeIdentityKeys(employee = {}) {
+  const normalized = normalizeEmployeeRecord(employee || {});
+  return [
+    normalized.email,
+    normalized.id,
+    normalized.username,
+    normalized.employeeId,
+  ].map(normalizeIdentityKey).filter(Boolean);
+}
+
+function getPermissionRoleKeysForEmployee(employee = {}) {
+  const employeeKeys = new Set(getEmployeeIdentityKeys(employee));
+  if (!employeeKeys.size) return [];
+  return ROLE_DEFINITIONS
+    .filter(({ key }) => (rolesPermissionsData.roles?.[key] || [])
+      .map(normalizeIdentityKey)
+      .some((memberKey) => employeeKeys.has(memberKey)))
+    .map(({ key }) => key);
+}
+
+function getResolvedEmployeeRoleKeys(employee = {}) {
+  return [
+    ...getPermissionRoleKeysForEmployee(employee),
+    ...normalizeEmployeeRoleKeys(employee),
+  ].filter((roleKey, index, roleKeys) => roleKey && roleKeys.indexOf(roleKey) === index);
+}
+
+function formatEmployeeRoles(employee = {}) {
+  return getResolvedEmployeeRoleKeys(employee)
+    .map(getRoleLabel)
+    .filter(Boolean)
+    .join(', ');
 }
 
 function getCurrentIdentityKeys() {
@@ -2180,6 +2259,8 @@ async function loadRolesPermissions() {
   applyDashboardAccessMode();
   enforceDesPreInspectionAccess();
   enforceCurrentPageAccess();
+  renderEmployeesTable();
+  renderUnverifiedAccountsTable();
   renderRolesPermissionsSettings();
   return rolesPermissionsData;
 }
@@ -2192,6 +2273,8 @@ async function saveRolesPermissions() {
   applyDashboardAccessMode();
   enforceDesPreInspectionAccess();
   enforceCurrentPageAccess();
+  renderEmployeesTable();
+  renderUnverifiedAccountsTable();
 }
 
 function hasPermission(permissionKey) {
@@ -6293,7 +6376,7 @@ const EMPLOYEE_TABLE_COLUMNS = [
   { key: 'username', label: 'Username' },
   { key: 'phone', label: 'Phone Number' },
   { key: 'homePool', label: 'Home Pool' },
-  { key: 'role', label: 'Role' },
+  { key: 'role', label: 'Role(s)' },
   { key: 'createdAt', label: 'Account Created' },
   { key: 'lastVerifiedAt', label: 'Last Verified' },
   { key: 'emailVerificationOverride', label: 'Email Override' },
@@ -6783,6 +6866,7 @@ function normalizeEmployeeRecord(rawEmployee) {
   const legacyId = (employee.id ?? '').toString().trim();
   const emailSource = employee.email ?? (legacyId.includes('@') ? legacyId : '');
   const email = emailSource.toString().trim().toLowerCase();
+  const roleKeys = normalizeEmployeeRoleKeys(employee);
   return {
     ...employee,
     id: email || legacyId,
@@ -6792,6 +6876,8 @@ function normalizeEmployeeRecord(rawEmployee) {
     lastName: (employee.lastName ?? '').toString().trim(),
     homePool: (employee.homePool ?? '').toString().trim(),
     phone: normalizePhoneDigits(employee.phone ?? ''),
+    role: roleKeys[0] || '',
+    roles: roleKeys,
   };
 }
 
@@ -6817,7 +6903,8 @@ function normalizeLifeguardAccountRecord(rawAccount, docId = '') {
     lastName: (account.lastName ?? '').toString().trim(),
     phone: normalizePhoneDigits(account.phone ?? ''),
     homePool: (account.homePool ?? '').toString().trim(),
-    role: (account.role ?? '').toString().trim(),
+    role: normalizeEmployeeRoleKeys(account)[0] || '',
+    roles: normalizeEmployeeRoleKeys(account),
     createdAt: account.createdAt || '',
     lastVerifiedAt: account.lastVerifiedAt || '',
     lastVerificationMethod: account.lastVerificationMethod || '',
@@ -6870,6 +6957,10 @@ function mergeEmployeeAndAccountData(employee = {}) {
     phone: normalizedEmployee.phone || account.phone,
     homePool: normalizedEmployee.homePool || account.homePool,
     role: normalizedEmployee.role || account.role,
+    roles: [
+      ...normalizeEmployeeRoleKeys(normalizedEmployee),
+      ...normalizeEmployeeRoleKeys(account),
+    ].filter((roleKey, index, roleKeys) => roleKey && roleKeys.indexOf(roleKey) === index),
     createdAt: normalizedEmployee.createdAt || account.createdAt,
     lastVerifiedAt: normalizedEmployee.lastVerifiedAt || account.lastVerifiedAt,
     lastVerificationMethod: normalizedEmployee.lastVerificationMethod || account.lastVerificationMethod,
@@ -6892,8 +6983,7 @@ function formatEmployeeDateTime(value) {
 }
 
 function formatEmployeeRole(value) {
-  const role = String(value || '').trim();
-  return ROLE_DEFINITIONS.find((entry) => entry.key === role)?.label || role || '';
+  return getRoleLabel(value) || '';
 }
 
 function formatEmployeeCell(record, columnKey) {
@@ -6901,7 +6991,7 @@ function formatEmployeeCell(record, columnKey) {
     case 'phone':
       return formatPhoneDisplay(record.phone);
     case 'role':
-      return formatEmployeeRole(record.role);
+      return formatEmployeeRoles(record);
     case 'createdAt':
     case 'lastVerifiedAt':
       return formatEmployeeDateTime(record[columnKey]);
@@ -7023,7 +7113,7 @@ function renderEmployeesTable() {
         normalized.phone,
         formatPhoneDisplay(normalized.phone),
         normalized.homePool,
-        formatEmployeeRole(normalized.role),
+        formatEmployeeRoles(normalized),
         formatEmployeeDateTime(normalized.createdAt),
         formatEmployeeDateTime(normalized.lastVerifiedAt),
         normalized.emailVerificationOverride === true ? 'email override yes' : 'email override no',
@@ -7117,7 +7207,7 @@ function renderUnverifiedAccountsTable() {
       <td>${escapeHtml(account.username || '')}</td>
       <td>${escapeHtml(formatPhoneDisplay(account.phone))}</td>
       <td>${escapeHtml(account.homePool || '')}</td>
-      <td>${escapeHtml(formatEmployeeRole(account.role))}</td>
+      <td>${escapeHtml(formatEmployeeRoles(account))}</td>
       <td>${escapeHtml(formatEmployeeDateTime(account.createdAt))}</td>
       <td><span class="employee-unverified-status">Awaiting verification</span></td>
     `;
@@ -7519,7 +7609,7 @@ function employeeDisplayName(employee) {
 
 function findEmployeeByRoleKey(roleKey) {
   const key = normalizeIdentityKey(roleKey);
-  return employeesData.find((employee) => getEmployeeRoleKey(employee) === key) || null;
+  return employeesData.find((employee) => getEmployeeIdentityKeys(employee).includes(key)) || null;
 }
 
 const ROLE_MEMBERS_PER_PAGE = 10;
@@ -7562,7 +7652,7 @@ function ensureRolesPermissionsSettingsSection() {
         <h4>Lifeguards</h4>
         <div class="table-scroll-wrap">
           <table class="employee-table roles-table">
-            <thead><tr><th>Name</th><th>Email</th><th>Permissions</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email</th><th>Permissions</th><th>Remove</th></tr></thead>
             <tbody id="lifeguardRoleBody"></tbody>
           </table>
         </div>
@@ -7661,7 +7751,7 @@ function setupRolesPermissionsSearch() {
       button.addEventListener('click', async () => {
         const role = roleSelect.value || 'lifeguard';
         assignEmployeeToRole(key, role);
-        await saveRolesPermissions();
+        await saveRolesPermissionsAndSyncEmployeeRole(key);
         renderRolesPermissionsSettings();
         input.value = '';
         results.innerHTML = '';
@@ -7679,13 +7769,89 @@ function setupRolesPermissionsSearch() {
 }
 
 function assignEmployeeToRole(memberKey, roleKey) {
-  ROLE_DEFINITIONS.forEach(({ key }) => {
-    rolesPermissionsData.roles[key] = (rolesPermissionsData.roles[key] || []).filter((existingKey) => existingKey !== memberKey);
-  });
-  if (!rolesPermissionsData.roles[roleKey]) rolesPermissionsData.roles[roleKey] = [];
-  if (!rolesPermissionsData.roles[roleKey].includes(memberKey)) {
-    rolesPermissionsData.roles[roleKey].push(memberKey);
+  const normalizedMemberKey = normalizeIdentityKey(memberKey);
+  const normalizedRoleKey = normalizeRoleKey(roleKey);
+  if (!normalizedMemberKey || !normalizedRoleKey) return;
+  if (!rolesPermissionsData.roles[normalizedRoleKey]) rolesPermissionsData.roles[normalizedRoleKey] = [];
+  if (!rolesPermissionsData.roles[normalizedRoleKey].includes(normalizedMemberKey)) {
+    rolesPermissionsData.roles[normalizedRoleKey].push(normalizedMemberKey);
   }
+}
+
+function removeEmployeeFromRole(memberKey, roleKey) {
+  const normalizedMemberKey = normalizeIdentityKey(memberKey);
+  const normalizedRoleKey = normalizeRoleKey(roleKey);
+  if (!normalizedMemberKey || !normalizedRoleKey || !rolesPermissionsData.roles[normalizedRoleKey]) return;
+  rolesPermissionsData.roles[normalizedRoleKey] = rolesPermissionsData.roles[normalizedRoleKey]
+    .filter((existingKey) => normalizeIdentityKey(existingKey) !== normalizedMemberKey);
+}
+
+function syncEmployeeRoleFieldsForMember(memberKey) {
+  const normalizedMemberKey = normalizeIdentityKey(memberKey);
+  if (!normalizedMemberKey) return false;
+  let changed = false;
+  employeesData = employeesData.map((employee) => {
+    const normalized = normalizeEmployeeRecord(employee);
+    if (!getEmployeeIdentityKeys(normalized).includes(normalizedMemberKey)) return normalized;
+    const nextRoles = getPermissionRoleKeysForEmployee(normalized);
+    const next = normalizeEmployeeRecord({
+      ...normalized,
+      role: nextRoles[0] || '',
+      roles: nextRoles,
+    });
+    const existingRoles = normalizeEmployeeRoleKeys(normalized).join('|');
+    const syncedRoles = nextRoles.join('|');
+    if (normalized.role !== next.role || existingRoles !== syncedRoles) changed = true;
+    return next;
+  });
+  return changed;
+}
+
+async function syncLifeguardAccountRoleFieldsForMember(memberKey) {
+  const normalizedMemberKey = normalizeIdentityKey(memberKey);
+  if (!normalizedMemberKey || !Array.isArray(lifeguardAccountsData) || !lifeguardAccountsData.length) return false;
+  let changed = false;
+  const writes = [];
+
+  lifeguardAccountsData = lifeguardAccountsData.map((account) => {
+    const normalized = normalizeLifeguardAccountRecord(account, account.username || '');
+    const matches = getLifeguardAccountIdentityKeys(normalized).includes(normalizedMemberKey);
+    if (!matches) return normalized;
+
+    const nextRoles = getPermissionRoleKeysForEmployee(normalized);
+    const existingRoles = normalizeEmployeeRoleKeys(normalized).join('|');
+    const syncedRoles = nextRoles.join('|');
+    if (normalized.role !== (nextRoles[0] || '') || existingRoles !== syncedRoles) {
+      changed = true;
+      if (normalized.username) {
+        writes.push(setDoc(doc(db, 'lifeguardAccounts', normalized.username), {
+          role: nextRoles[0] || '',
+          roles: nextRoles,
+        }, { merge: true }));
+      }
+    }
+
+    return normalizeLifeguardAccountRecord({
+      ...normalized,
+      role: nextRoles[0] || '',
+      roles: nextRoles,
+    }, normalized.username);
+  });
+
+  if (writes.length) await Promise.all(writes);
+  return changed;
+}
+
+async function saveRolesPermissionsAndSyncEmployeeRole(memberKey) {
+  await saveRolesPermissions();
+  const employeeChanged = syncEmployeeRoleFieldsForMember(memberKey);
+  const accountChanged = await syncLifeguardAccountRoleFieldsForMember(memberKey);
+  if (employeeChanged) {
+    await saveEmployees();
+  }
+  if (accountChanged) renderRolesPermissionsSettings();
+  renderEmployeesTable();
+  renderUnverifiedAccountsTable();
 }
 
 function getRoleDefaultPermission(roleKey, permissionKey) {
@@ -7792,16 +7958,21 @@ function renderRoleMembers(roleKey, tbodyId) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   tbody.innerHTML = '';
-  const baseMembers = roleKey === 'lifeguard'
-    ? employeesData.map((employee) => getEmployeeRoleKey(employee)).filter(Boolean)
-    : [];
+  const baseMembers = employeesData
+    .filter((employee) => {
+      const normalized = normalizeEmployeeRecord(employee);
+      if (getPermissionRoleKeysForEmployee(normalized).length) return false;
+      return normalizeEmployeeRoleKeys(normalized).includes(roleKey);
+    })
+    .map((employee) => getEmployeeRoleKey(employee))
+    .filter(Boolean);
   const members = [...new Set(baseMembers.concat(rolesPermissionsData.roles[roleKey] || []))];
   const totalPages = Math.max(1, Math.ceil(members.length / ROLE_MEMBERS_PER_PAGE));
   if (!roleMemberPages[roleKey] || roleMemberPages[roleKey] > totalPages) roleMemberPages[roleKey] = totalPages;
   const pageStart = (roleMemberPages[roleKey] - 1) * ROLE_MEMBERS_PER_PAGE;
   const pageMembers = members.slice(pageStart, pageStart + ROLE_MEMBERS_PER_PAGE);
   if (!members.length) {
-    tbody.innerHTML = `<tr><td colspan="${roleKey === 'lifeguard' ? 3 : 4}">No users assigned.</td></tr>`;
+    tbody.innerHTML = '<tr><td colspan="4">No users assigned.</td></tr>';
     renderRolePagination(roleKey, tbody, totalPages);
     return;
   }
@@ -7814,7 +7985,7 @@ function renderRoleMembers(roleKey, tbodyId) {
       <td>${escapeHtml(displayName)}</td>
       <td>${escapeHtml(email)}</td>
       <td class="roles-row-permissions"></td>
-      ${roleKey === 'lifeguard' ? '' : '<td class="actions-cell"></td>'}
+      <td class="actions-cell"></td>
     `;
     const permissionsCell = tr.querySelector('.roles-row-permissions');
     const permissionsButton = document.createElement('button');
@@ -7834,18 +8005,16 @@ function renderRoleMembers(roleKey, tbodyId) {
     });
     permissionsCell.appendChild(summary);
 
-    if (roleKey !== 'lifeguard') {
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'submit-btn roles-remove-btn';
-      removeBtn.textContent = 'Remove';
-      removeBtn.addEventListener('click', async () => {
-        rolesPermissionsData.roles[roleKey] = (rolesPermissionsData.roles[roleKey] || []).filter((key) => key !== memberKey);
-        await saveRolesPermissions();
-        renderRolesPermissionsSettings();
-      });
-      tr.querySelector('.actions-cell').appendChild(removeBtn);
-    }
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'submit-btn roles-remove-btn';
+    removeBtn.textContent = 'Remove';
+    removeBtn.addEventListener('click', async () => {
+      removeEmployeeFromRole(memberKey, roleKey);
+      await saveRolesPermissionsAndSyncEmployeeRole(memberKey);
+      renderRolesPermissionsSettings();
+    });
+    tr.querySelector('.actions-cell').appendChild(removeBtn);
     tbody.appendChild(tr);
   });
   renderRolePagination(roleKey, tbody, totalPages);
@@ -7943,8 +8112,9 @@ function renderRolePermissionsTable() {
 function renderRolesPermissionsSettings() {
   const section = document.getElementById('rolesPermissionsSettings');
   if (!section) return;
-  section.style.display = isDeveloperUser() ? '' : 'none';
-  if (!isDeveloperUser()) return;
+  const canManageRoles = isSupervisor() || isDeveloperUser();
+  section.style.display = canManageRoles ? '' : 'none';
+  if (!canManageRoles) return;
   renderRoleMembers('lifeguard', 'lifeguardRoleBody');
   renderRoleMembers('attendant', 'attendantRoleBody');
   renderRoleMembers('poolManager', 'poolManagerRoleBody');
