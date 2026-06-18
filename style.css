@@ -4588,6 +4588,9 @@ td.concern-major {
 
 .dashboard-inspection-date-filter {
   align-items: center;
+  justify-content: center;
+  margin: 16px auto 0;
+  padding: 0;
 }
 
 .dashboard-inspection-date-field {
@@ -4597,6 +4600,10 @@ td.concern-major {
 .dashboard-inspection-date-arrow {
   flex: 0 0 auto;
   margin: 0;
+}
+
+.dashboard-market-section .dashboard-inspection-date-filter {
+  width: 100%;
 }
 
 .alerts-reminders-section h4 {
@@ -4671,11 +4678,16 @@ td.concern-major {
   margin: 0;
 }
 
-.alerts-excluded-employees {
+.alerts-excluded-employees,
+.alerts-excluded-facilities {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
+}
+
+.alert-reminder-facility-exclusion-field {
+  margin-top: 14px;
 }
 
 .alerts-excluded-chip {
