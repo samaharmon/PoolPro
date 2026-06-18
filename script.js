@@ -4678,6 +4678,7 @@ let sanitationSelections = {}; // poolId::poolIdx -> 'bleach' | 'granular' | 'ta
 const PH_RULE_METHODS = ['muriaticAcid', 'noChanges'];
 let dashboardPoolFilter = 'all';
 let dashboardDateFilter = getTodayDateValue();
+let dashboardInspectionDateFilter = getTodayDateValue();
 let dashboardChemPage = 1;
 let dashboardChemPageByTable = {};
 let dashboardJobPage = 1;
@@ -10825,6 +10826,18 @@ function formatInspectionPeriodDate(date) {
   return date.toLocaleDateString(undefined, { month: '2-digit', day: '2-digit', year: 'numeric' });
 }
 
+function getInspectionAnchorDate() {
+  return parseDateOnly(dashboardInspectionDateFilter) || new Date();
+}
+
+function shiftInspectionDate(days) {
+  const anchor = getInspectionAnchorDate();
+  anchor.setDate(anchor.getDate() + days);
+  dashboardInspectionDateFilter = formatDateInputValue(anchor);
+  dashboardManagerialPage = 1;
+  renderInspectionReports();
+}
+
 function isReportInPeriod(report, period) {
   const date = toDateObject(report?.timestamp);
   return !!date && date >= period.start && date <= period.end;
@@ -10833,15 +10846,58 @@ function isReportInPeriod(report, period) {
 function renderInspectionDateFilter(container, managerialPeriod, desPeriod) {
   const filter = document.createElement('div');
   filter.className = 'dashboard-date-filter dashboard-inspection-date-filter';
-  filter.innerHTML = `
-    <span class="filter-by-label">Date Filter:</span>
-    <span class="dashboard-date-filter-chip">
-      Managerial: ${escapeHtml(formatInspectionPeriodDate(managerialPeriod.start))} - ${escapeHtml(formatInspectionPeriodDate(managerialPeriod.end))}
-    </span>
-    <span class="dashboard-date-filter-chip">
-      DES: ${escapeHtml(formatInspectionPeriodDate(desPeriod.start))} - ${escapeHtml(formatInspectionPeriodDate(desPeriod.end))}
-    </span>
-  `;
+
+  const label = document.createElement('span');
+  label.className = 'filter-by-label';
+  label.textContent = 'Date Filter:';
+
+  const prevButton = document.createElement('button');
+  prevButton.type = 'button';
+  prevButton.className = 'emp-pagination-arrow dashboard-inspection-date-arrow';
+  prevButton.textContent = '←';
+  prevButton.title = 'Previous week';
+  prevButton.setAttribute('aria-label', 'Previous inspection week');
+  prevButton.addEventListener('click', () => shiftInspectionDate(-7));
+
+  const dateField = document.createElement('label');
+  dateField.className = 'dashboard-filter-field dashboard-inspection-date-field';
+  const dateText = document.createElement('span');
+  dateText.textContent = 'Date';
+  const dateInput = document.createElement('input');
+  dateInput.type = 'date';
+  dateInput.className = 'training-filter-select dashboard-date-input';
+  dateInput.value = dashboardInspectionDateFilter || getTodayDateValue();
+  dateInput.setAttribute('aria-label', 'Inspection report date');
+  dateInput.addEventListener('change', () => {
+    dashboardInspectionDateFilter = dateInput.value || getTodayDateValue();
+    dashboardManagerialPage = 1;
+    renderInspectionReports();
+  });
+  dateField.appendChild(dateText);
+  dateField.appendChild(dateInput);
+
+  const nextButton = document.createElement('button');
+  nextButton.type = 'button';
+  nextButton.className = 'emp-pagination-arrow dashboard-inspection-date-arrow';
+  nextButton.textContent = '→';
+  nextButton.title = 'Next week';
+  nextButton.setAttribute('aria-label', 'Next inspection week');
+  nextButton.addEventListener('click', () => shiftInspectionDate(7));
+
+  const managerialChip = document.createElement('span');
+  managerialChip.className = 'dashboard-date-filter-chip';
+  managerialChip.textContent = `Managerial: ${formatInspectionPeriodDate(managerialPeriod.start)} - ${formatInspectionPeriodDate(managerialPeriod.end)}`;
+
+  const desChip = document.createElement('span');
+  desChip.className = 'dashboard-date-filter-chip';
+  desChip.textContent = `DES: ${formatInspectionPeriodDate(desPeriod.start)} - ${formatInspectionPeriodDate(desPeriod.end)}`;
+
+  filter.appendChild(label);
+  filter.appendChild(prevButton);
+  filter.appendChild(dateField);
+  filter.appendChild(nextButton);
+  filter.appendChild(managerialChip);
+  filter.appendChild(desChip);
   container.appendChild(filter);
 }
 
@@ -10866,8 +10922,9 @@ function renderInspectionReports() {
   container.innerHTML = '';
 
   renderDashboardFilterBar(container, renderInspectionReports, { includeDate: false });
-  const managerialPeriod = getCurrentManagerialInspectionPeriod();
-  const desPeriod = getCurrentDesInspectionPeriod();
+  const selectedDate = getInspectionAnchorDate();
+  const managerialPeriod = getCurrentManagerialInspectionPeriod(selectedDate);
+  const desPeriod = getCurrentDesInspectionPeriod(selectedDate);
   renderInspectionDateFilter(container, managerialPeriod, desPeriod);
 
   const marketMap = getDashboardMarketMap({ docs: false });

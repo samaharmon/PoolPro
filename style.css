@@ -4586,6 +4586,19 @@ td.concern-major {
   font-weight: 700;
 }
 
+.dashboard-inspection-date-filter {
+  align-items: center;
+}
+
+.dashboard-inspection-date-field {
+  flex: 0 1 auto;
+}
+
+.dashboard-inspection-date-arrow {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
 .alerts-reminders-section h4 {
   margin: 16px 0 10px;
   color: #69140e;
