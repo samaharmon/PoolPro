@@ -141,6 +141,7 @@ let verifyCooldownTimer = null;
 let verifyStatusPoller = null;
 let createAccountSubmitting = false;
 let lastHomeMenuActivationAt = 0;
+let homeMenuActionPending = false;
 let cleanlinessReminderModal = null;
 let loginSubmitting = false;
 let loginSubmitTouchAt = 0;
@@ -1208,6 +1209,46 @@ function getEmployeeHomePoolByEmail(email) {
   return employee?.homePool || '';
 }
 
+function ensureHomeActionLoadingOverlay() {
+  let overlay = document.getElementById('homeActionLoadingOverlay');
+  if (overlay) return overlay;
+  overlay = document.createElement('div');
+  overlay.id = 'homeActionLoadingOverlay';
+  overlay.className = 'home-action-loading-overlay';
+  overlay.setAttribute('aria-hidden', 'true');
+  overlay.innerHTML = '<div class="home-action-loading-spinner" role="status" aria-label="Loading"></div>';
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function setHomeMenuButtonsBusy(isBusy) {
+  document.querySelectorAll('.home-menu-item').forEach((button) => {
+    button.disabled = !!isBusy;
+    button.setAttribute('aria-busy', isBusy ? 'true' : 'false');
+  });
+}
+
+function showHomeActionLoadingOverlay() {
+  homeMenuActionPending = true;
+  const overlay = ensureHomeActionLoadingOverlay();
+  setHomeMenuButtonsBusy(true);
+  overlay.style.display = 'flex';
+  overlay.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function hideHomeActionLoadingOverlay() {
+  const overlay = document.getElementById('homeActionLoadingOverlay');
+  homeMenuActionPending = false;
+  setHomeMenuButtonsBusy(false);
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  overlay.setAttribute('aria-hidden', 'true');
+  setTimeout(() => {
+    if (!overlay.classList.contains('visible')) overlay.style.display = 'none';
+  }, 180);
+}
+
 function setRole(role) {
   currentRole = normalizeAccessMode(role);
 
@@ -1261,6 +1302,7 @@ function updateFirstTimeCallout() {
 }
 
 function openModal(target) {
+  hideHomeActionLoadingOverlay();
   const role = normalizeAccessMode(target);
   pendingTarget = 'chem';
   setRole(role);
@@ -2270,9 +2312,11 @@ async function handleResetPasswordSubmit(event) {
 
 async function activateHomeMenuButton(btn, event) {
   event?.preventDefault?.();
+  if (homeMenuActionPending) return;
   const now = Date.now();
   if (now - lastHomeMenuActivationAt < 500) return;
   lastHomeMenuActivationAt = now;
+  showHomeActionLoadingOverlay();
 
   const requestedMode = normalizeAccessMode(btn.dataset.accessRole || btn.dataset.target);
   pendingTarget = 'chem';

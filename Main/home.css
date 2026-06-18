@@ -155,6 +155,11 @@ body.page-exiting {
   filter: brightness(0.96);
 }
 
+.home-menu-item:disabled {
+  cursor: wait;
+  filter: brightness(0.86);
+}
+
 .home-menu-item-supervisor {
   border: 2px solid #fff;
 }
@@ -174,6 +179,34 @@ body.page-exiting {
 .home-menu-item[data-access-role="supervisor"],
 .home-menu-item-supervisor {
   background-position: 0 calc(-3 * (var(--home-menu-row-height) + var(--home-menu-gap)));
+}
+
+.home-action-loading-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.46);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+.home-action-loading-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.home-action-loading-spinner {
+  width: 54px;
+  height: 54px;
+  border: 5px solid rgba(255, 255, 255, 0.42);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: home-button-spin 0.75s linear infinite;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.55));
 }
 
 /* Modal shell – match main site feel */
