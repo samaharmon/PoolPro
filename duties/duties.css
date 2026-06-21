@@ -47,6 +47,48 @@ body.dark-mode .duties-group-desc {
   color: #aaa;
 }
 
+.duties-form-fields.hidden-by-shift {
+  display: none !important;
+}
+
+.duties-shift-section {
+  padding-bottom: 24px;
+}
+
+.duties-shift-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  border: 2px solid #69140e;
+  background: #444;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.16);
+}
+
+.duties-shift-option {
+  min-width: 170px;
+  border: 0;
+  border-right: 1px solid #69140e;
+  background: #555;
+  color: #fff;
+  padding: 12px 18px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.duties-shift-option:last-child {
+  border-right: 0;
+}
+
+.duties-shift-option.active {
+  background: #69140e;
+  color: #fff;
+}
+
+.duties-shift-option:not(.active):hover {
+  background: #666;
+}
+
 /* Pool row */
 .duties-pool-row {
   display: flex;
@@ -311,6 +353,29 @@ body.dark-mode .duties-manager-section.duties-section:last-of-type {
   background-color: #fdf0f0;
 }
 
+.duties-custom-requirements {
+  display: grid;
+  gap: 10px;
+  max-width: 760px;
+}
+
+.duties-custom-requirement-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid #bbb;
+  background: #f2f2f2;
+  color: #333;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.duties-custom-requirement-check {
+  margin-top: 2px;
+}
+
 .duties-clear-btn {
   background-color: #444;
   color: #fff;
@@ -449,6 +514,43 @@ body.dark-mode .duties-add-photo-btn {
 
 body.dark-mode .duties-add-photo-btn:hover {
   background-color: #2a1010;
+}
+
+body.dark-mode .duties-shift-toggle {
+  border-color: #ff8080;
+  background: #202020;
+}
+
+body.dark-mode .duties-shift-option {
+  border-color: #ff8080;
+  background: #3a3a3a;
+}
+
+body.dark-mode .duties-shift-option.active {
+  background: #69140e;
+}
+
+body.dark-mode .duties-custom-requirement-row {
+  border-color: #555;
+  background: #303030;
+  color: #fff;
+}
+
+@media (max-width: 560px) {
+  .duties-shift-toggle {
+    display: grid;
+    width: 100%;
+  }
+
+  .duties-shift-option {
+    width: 100%;
+    border-right: 0;
+    border-bottom: 1px solid #69140e;
+  }
+
+  .duties-shift-option:last-child {
+    border-bottom: 0;
+  }
 }
 
 .duties-upload-progress-modal {

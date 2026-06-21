@@ -1,10 +1,12 @@
-import { getPools, listenPools, savePoolDoc, deletePoolDoc } from '../firebase.js';
+import { db, doc, getDoc, setDoc, getPools, listenPools, savePoolDoc, deletePoolDoc } from '../firebase.js';
  
 let poolsCache = [];
 let currentPoolId = '';
 let poolsListenerStarted = false;
 let activePoolLoadToken = 0;
 let editorSaveInProgress = false;
+let cleanlinessQuestionBank = [];
+let pendingCleanlinessPoolUpdates = new Map();
 
 let currentEditorMode = window.currentEditorMode ?? null;
 window.currentEditorMode = currentEditorMode;
@@ -62,6 +64,12 @@ const CLEANLINESS_REPORT_QUESTION_TYPES = [
   { id: 'fillLines', label: 'Fill line photos' },
   { id: 'otherNotes', label: 'Other notes' },
 ];
+const CLEANLINESS_REPORT_SETTINGS_DOC_ID = 'cleanlinessReport';
+const CLEANLINESS_REPORT_SHIFTS = [
+  { key: 'opening', label: 'Opening Shift' },
+  { key: 'closing', label: 'Closing Shift' },
+];
+const CLEANLINESS_BUILT_IN_IDS = new Set(CLEANLINESS_REPORT_QUESTION_TYPES.map((item) => item.id));
 
 // ruleStateByPool[poolIndex] = { bleach: { ph:{}, cl:{} }, granular: { ph:{}, cl:{} }, tablet: { ph:{}, cl:{} }, off: { ph:{}, cl:{} } }
 const ruleStateByPool = {};
@@ -879,39 +887,146 @@ function collectSupplyInfo() {
   return info;
 }
 
-function getDefaultCleanlinessReportSettings() {
+function getDefaultCleanlinessQuestionBank() {
+  return CLEANLINESS_REPORT_QUESTION_TYPES.map((item) => ({
+    ...item,
+    builtIn: true,
+  }));
+}
+
+function normalizeCleanlinessQuestionId(value) {
+  const base = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48);
+  return base || `requirement_${Date.now()}`;
+}
+
+function createUniqueCleanlinessQuestionId(label) {
+  const usedIds = new Set(cleanlinessQuestionBank.map((item) => item.id));
+  const base = `custom_${normalizeCleanlinessQuestionId(label)}`;
+  let candidate = base;
+  let index = 2;
+  while (usedIds.has(candidate)) {
+    candidate = `${base}_${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function normalizeCleanlinessQuestionBank(items = []) {
+  const byId = new Map();
+  getDefaultCleanlinessQuestionBank().forEach((item) => byId.set(item.id, item));
+
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const label = String(item?.label || '').trim();
+    if (!label) return;
+    const id = normalizeCleanlinessQuestionId(item.id || label);
+    const builtIn = CLEANLINESS_BUILT_IN_IDS.has(id);
+    byId.set(id, {
+      id,
+      label,
+      builtIn,
+      custom: !builtIn,
+    });
+  });
+
+  return Array.from(byId.values());
+}
+
+async function loadCleanlinessQuestionBank() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', CLEANLINESS_REPORT_SETTINGS_DOC_ID));
+    cleanlinessQuestionBank = normalizeCleanlinessQuestionBank(snap.exists() ? snap.data()?.questionBank : []);
+  } catch (err) {
+    console.error('[Pool Editor] Error loading cleanliness question bank:', err);
+    cleanlinessQuestionBank = normalizeCleanlinessQuestionBank();
+  }
+}
+
+async function saveCleanlinessQuestionBank() {
+  const questionBank = normalizeCleanlinessQuestionBank(cleanlinessQuestionBank)
+    .filter((item) => item.custom || !CLEANLINESS_BUILT_IN_IDS.has(item.id))
+    .map(({ id, label, custom }) => ({ id, label, custom: custom !== false }));
+  await setDoc(doc(db, 'settings', CLEANLINESS_REPORT_SETTINGS_DOC_ID), { questionBank }, { merge: true });
+}
+
+function isCleanlinessBuiltInQuestion(questionId) {
+  return CLEANLINESS_BUILT_IN_IDS.has(questionId);
+}
+
+function getCleanlinessQuestionBank() {
+  if (!cleanlinessQuestionBank.length) {
+    cleanlinessQuestionBank = normalizeCleanlinessQuestionBank();
+  }
+  return cleanlinessQuestionBank;
+}
+
+function getDefaultCleanlinessShiftSettings() {
+  const enabledQuestionTypes = {};
+  getCleanlinessQuestionBank().forEach((item) => {
+    enabledQuestionTypes[item.id] = isCleanlinessBuiltInQuestion(item.id);
+  });
   return {
-    enabledQuestionTypes: Object.fromEntries(
-      CLEANLINESS_REPORT_QUESTION_TYPES.map((item) => [item.id, true])
-    ),
+    enabledQuestionTypes,
+    questionLabels: {},
     requireBathroomPhotos: false,
   };
 }
 
-function normalizeCleanlinessReportSettings(source = {}) {
-  const defaults = getDefaultCleanlinessReportSettings();
-  const enabledSource = source.enabledQuestionTypes || source.questionTypes || {};
+function getDefaultCleanlinessReportSettings() {
+  return Object.fromEntries(
+    CLEANLINESS_REPORT_SHIFTS.map(({ key }) => [key, getDefaultCleanlinessShiftSettings()])
+  );
+}
 
-  CLEANLINESS_REPORT_QUESTION_TYPES.forEach(({ id }) => {
+function normalizeCleanlinessShiftSettings(source = {}, legacySource = null) {
+  const defaults = getDefaultCleanlinessShiftSettings();
+  const fallback = legacySource && typeof legacySource === 'object' ? legacySource : null;
+  const enabledSource = source.enabledQuestionTypes || source.questionTypes || fallback?.enabledQuestionTypes || fallback?.questionTypes || {};
+  const labelSource = source.questionLabels || source.labels || {};
+
+  getCleanlinessQuestionBank().forEach(({ id }) => {
     if (Object.prototype.hasOwnProperty.call(enabledSource, id)) {
       defaults.enabledQuestionTypes[id] = enabledSource[id] !== false;
     } else if (Object.prototype.hasOwnProperty.call(source, id)) {
       defaults.enabledQuestionTypes[id] = source[id] !== false;
+    } else if (fallback && Object.prototype.hasOwnProperty.call(fallback, id)) {
+      defaults.enabledQuestionTypes[id] = fallback[id] !== false;
     }
+    const label = String(labelSource[id] || '').trim();
+    if (label) defaults.questionLabels[id] = label;
   });
 
   defaults.requireBathroomPhotos =
     source.requireBathroomPhotos === true ||
     source.bathroomPhotosRequired === true ||
-    source.requireBathrooms === true;
+    source.requireBathrooms === true ||
+    fallback?.requireBathroomPhotos === true ||
+    fallback?.bathroomPhotosRequired === true ||
+    fallback?.requireBathrooms === true;
 
   return defaults;
+}
+
+function normalizeCleanlinessReportSettings(source = {}) {
+  const hasShiftSettings = CLEANLINESS_REPORT_SHIFTS.some(({ key }) => source && typeof source[key] === 'object');
+  const legacySource = hasShiftSettings ? null : source;
+  const settings = {};
+  CLEANLINESS_REPORT_SHIFTS.forEach(({ key }) => {
+    settings[key] = normalizeCleanlinessShiftSettings(source?.[key] || {}, legacySource);
+  });
+  return settings;
 }
 
 function setCleanlinessReportEnabled(enabled) {
   const section = document.getElementById('cleanlinessReportSection');
   if (!section) return;
-  section.querySelectorAll('.cleanliness-report-content input').forEach((field) => {
+  section.querySelectorAll(
+    '.cleanliness-report-content input, .cleanliness-report-content select, .cleanliness-report-content textarea, .cleanliness-report-content .cleanliness-add-question-btn'
+  ).forEach((field) => {
     field.disabled = !enabled;
   });
   section.classList.toggle('overlay-disabled', !enabled);
@@ -923,34 +1038,70 @@ function renderCleanlinessReportSettings(poolDoc = {}) {
   const settings = normalizeCleanlinessReportSettings(poolDoc.cleanlinessReport || {});
   container.innerHTML = '';
 
-  const questionCard = document.createElement('div');
-  questionCard.className = 'supply-info-card cleanliness-info-card';
-  questionCard.innerHTML = '<h4>Question Types</h4>';
-
-  CLEANLINESS_REPORT_QUESTION_TYPES.forEach((item) => {
-    const row = document.createElement('label');
-    row.className = 'supply-info-row cleanliness-info-row';
-    row.innerHTML = `
-      <input type="checkbox" class="market-filter-checkbox cleanliness-question-enabled" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" ${settings.enabledQuestionTypes[item.id] ? 'checked' : ''}>
-      <span class="supply-info-name">${escapeHtmlUnsafe(item.label)}</span>
+  CLEANLINESS_REPORT_SHIFTS.forEach(({ key, label }) => {
+    const shiftSettings = settings[key] || getDefaultCleanlinessShiftSettings();
+    const shiftCard = document.createElement('section');
+    shiftCard.className = 'supply-info-card cleanliness-info-card cleanliness-shift-card editor-accordion';
+    const contentId = `cleanliness-${key}-content`;
+    shiftCard.innerHTML = `
+      <button type="button" class="editor-accordion-toggle cleanliness-shift-toggle" aria-expanded="false" aria-controls="${contentId}">
+        <span class="editor-accordion-indicator" aria-hidden="true">+</span>
+        <span class="editor-accordion-title">${escapeHtmlUnsafe(label)}</span>
+      </button>
+      <div class="editor-accordion-content cleanliness-shift-content" id="${contentId}" hidden>
+        <div class="cleanliness-question-list"></div>
+        <label class="supply-info-row cleanliness-info-row cleanliness-bathroom-row">
+          <input type="checkbox" class="market-filter-checkbox cleanliness-bathroom-required" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" ${shiftSettings.requireBathroomPhotos ? 'checked' : ''}>
+          <span class="supply-info-name">
+            Require at least 2 photos from each bathroom
+            <small>Requires a minimum of 4 total bathroom photos: 2 men's and 2 women's.</small>
+          </span>
+        </label>
+        <div class="cleanliness-add-requirement">
+          <h4>Add Question or Requirement</h4>
+          <label class="cleanliness-add-label">
+            <span>Requirement Text</span>
+            <input type="text" class="cleanliness-new-question-input" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" placeholder="Type a new question or requirement">
+          </label>
+          <fieldset class="cleanliness-pool-assignment">
+            <legend>Require For</legend>
+            <label class="cleanliness-pool-option">
+              <input type="checkbox" class="market-filter-checkbox cleanliness-pool-assignment-all" data-cleanliness-shift="${escapeHtmlUnsafe(key)}">
+              <span>All</span>
+            </label>
+            <div class="cleanliness-pool-options" data-cleanliness-shift="${escapeHtmlUnsafe(key)}">
+              ${buildCleanlinessPoolAssignmentOptions()}
+            </div>
+          </fieldset>
+          <button type="button" class="submit-btn cleanliness-add-question-btn" data-cleanliness-shift="${escapeHtmlUnsafe(key)}">Add Requirement</button>
+        </div>
+      </div>
     `;
-    questionCard.appendChild(row);
-  });
-  container.appendChild(questionCard);
 
-  const bathroomCard = document.createElement('div');
-  bathroomCard.className = 'supply-info-card cleanliness-info-card';
-  bathroomCard.innerHTML = `
-    <h4>Bathroom Photos</h4>
-    <label class="supply-info-row cleanliness-info-row cleanliness-bathroom-row">
-      <input type="checkbox" class="market-filter-checkbox" id="cleanlinessRequireBathroomPhotos" ${settings.requireBathroomPhotos ? 'checked' : ''}>
-      <span class="supply-info-name">
-        Require at least 2 photos from each bathroom
-        <small>Requires a minimum of 4 total bathroom photos: 2 men's and 2 women's.</small>
-      </span>
-    </label>
-  `;
-  container.appendChild(bathroomCard);
+    const list = shiftCard.querySelector('.cleanliness-question-list');
+    getCleanlinessQuestionBank().forEach((item) => {
+      const row = document.createElement('div');
+      row.className = 'supply-info-row cleanliness-info-row cleanliness-question-row';
+      row.innerHTML = `
+        <label class="cleanliness-question-check">
+          <input type="checkbox" class="market-filter-checkbox cleanliness-question-enabled" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" ${shiftSettings.enabledQuestionTypes[item.id] ? 'checked' : ''}>
+          <span class="supply-info-name">${escapeHtmlUnsafe(item.label)}</span>
+        </label>
+        <span class="cleanliness-question-editable">
+          <input type="text" class="cleanliness-question-label-input" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" value="${escapeHtmlUnsafe(shiftSettings.questionLabels[item.id] || item.label)}" aria-label="${escapeHtmlUnsafe(label)} ${escapeHtmlUnsafe(item.label)} label">
+        </span>
+      `;
+      list.appendChild(row);
+    });
+
+    container.appendChild(shiftCard);
+    const toggle = shiftCard.querySelector('.cleanliness-shift-toggle');
+    const content = shiftCard.querySelector('.cleanliness-shift-content');
+    toggle?.addEventListener('click', () => setEditorAccordionState(toggle, content, !content.hidden));
+    setEditorAccordionState(toggle, content, true);
+  });
+
+  bindCleanlinessQuestionEditorEvents();
   setCleanlinessReportEnabled(false);
 }
 
@@ -958,11 +1109,148 @@ function collectCleanlinessReportSettings() {
   const settings = getDefaultCleanlinessReportSettings();
   document.querySelectorAll('.cleanliness-question-enabled').forEach((checkbox) => {
     const questionId = checkbox.dataset.cleanlinessQuestion;
-    if (!questionId || !Object.prototype.hasOwnProperty.call(settings.enabledQuestionTypes, questionId)) return;
-    settings.enabledQuestionTypes[questionId] = !!checkbox.checked;
+    const shiftKey = checkbox.dataset.cleanlinessShift;
+    if (!questionId || !settings[shiftKey]) return;
+    settings[shiftKey].enabledQuestionTypes[questionId] = !!checkbox.checked;
   });
-  settings.requireBathroomPhotos = document.getElementById('cleanlinessRequireBathroomPhotos')?.checked === true;
+  document.querySelectorAll('.cleanliness-question-label-input').forEach((input) => {
+    const questionId = input.dataset.cleanlinessQuestion;
+    const shiftKey = input.dataset.cleanlinessShift;
+    if (!questionId || !settings[shiftKey]) return;
+    const bankLabel = getCleanlinessQuestionBank().find((item) => item.id === questionId)?.label || '';
+    const label = String(input.value || '').trim();
+    if (label && label !== bankLabel) settings[shiftKey].questionLabels[questionId] = label;
+  });
+  document.querySelectorAll('.cleanliness-bathroom-required').forEach((checkbox) => {
+    const shiftKey = checkbox.dataset.cleanlinessShift;
+    if (settings[shiftKey]) settings[shiftKey].requireBathroomPhotos = checkbox.checked === true;
+  });
   return normalizeCleanlinessReportSettings(settings);
+}
+
+function buildCleanlinessPoolAssignmentOptions() {
+  const sortedPools = [...poolsCache].sort((a, b) => getPoolName(a).localeCompare(getPoolName(b)));
+  if (!sortedPools.length) {
+    return '<p class="cleanliness-pool-empty">Existing pools will appear here after they load.</p>';
+  }
+  return sortedPools.map((pool) => {
+    const poolId = pool.id || '';
+    if (!poolId) return '';
+    const checked = poolId === currentPoolId ? 'checked' : '';
+    return `
+      <label class="cleanliness-pool-option">
+        <input type="checkbox" class="market-filter-checkbox cleanliness-pool-assignment-option" data-cleanliness-pool-id="${escapeHtmlUnsafe(poolId)}" ${checked}>
+        <span>${escapeHtmlUnsafe(getPoolName(pool))}</span>
+      </label>
+    `;
+  }).join('');
+}
+
+function bindCleanlinessQuestionEditorEvents() {
+  document.querySelectorAll('.cleanliness-pool-assignment-all').forEach((checkbox) => {
+    if (checkbox.dataset.cleanlinessAllBound === 'true') return;
+    checkbox.dataset.cleanlinessAllBound = 'true';
+    checkbox.addEventListener('change', () => {
+      const shiftKey = checkbox.dataset.cleanlinessShift;
+      const options = document.querySelectorAll(`.cleanliness-pool-options[data-cleanliness-shift="${shiftKey}"] .cleanliness-pool-assignment-option`);
+      options.forEach((option) => {
+        option.checked = checkbox.checked;
+      });
+    });
+  });
+
+  document.querySelectorAll('.cleanliness-pool-assignment-option').forEach((checkbox) => {
+    if (checkbox.dataset.cleanlinessPoolBound === 'true') return;
+    checkbox.dataset.cleanlinessPoolBound = 'true';
+    checkbox.addEventListener('change', () => {
+      const wrapper = checkbox.closest('.cleanliness-add-requirement');
+      const allBox = wrapper?.querySelector('.cleanliness-pool-assignment-all');
+      if (!allBox) return;
+      const options = Array.from(wrapper.querySelectorAll('.cleanliness-pool-assignment-option'));
+      allBox.checked = options.length > 0 && options.every((option) => option.checked);
+    });
+  });
+
+  document.querySelectorAll('.cleanliness-add-question-btn').forEach((button) => {
+    if (button.dataset.cleanlinessAddBound === 'true') return;
+    button.dataset.cleanlinessAddBound = 'true';
+    button.addEventListener('click', () => handleAddCleanlinessQuestion(button.dataset.cleanlinessShift));
+  });
+}
+
+function getSelectedCleanlinessAssignmentPoolIds(shiftKey) {
+  const options = document.querySelectorAll(`.cleanliness-pool-options[data-cleanliness-shift="${shiftKey}"] .cleanliness-pool-assignment-option:checked`);
+  return Array.from(options)
+    .map((option) => option.dataset.cleanlinessPoolId)
+    .filter(Boolean);
+}
+
+function applyCleanlinessQuestionToPool(pool, questionId, shiftKey) {
+  if (!pool || !questionId || !shiftKey) return null;
+  const cleanlinessReport = normalizeCleanlinessReportSettings(pool.cleanlinessReport || {});
+  if (!cleanlinessReport[shiftKey]) cleanlinessReport[shiftKey] = getDefaultCleanlinessShiftSettings();
+  cleanlinessReport[shiftKey].enabledQuestionTypes[questionId] = true;
+  pool.cleanlinessReport = cleanlinessReport;
+  return cleanlinessReport;
+}
+
+function queueCleanlinessQuestionForPools(questionId, shiftKey, poolIds = []) {
+  const uniquePoolIds = [...new Set(poolIds.filter(Boolean))];
+  uniquePoolIds.forEach((poolId) => {
+    const pool = poolsCache.find((item) => item.id === poolId);
+    if (!pool) return;
+    const cleanlinessReport = applyCleanlinessQuestionToPool(pool, questionId, shiftKey);
+    if (poolId !== currentPoolId && cleanlinessReport) {
+      pendingCleanlinessPoolUpdates.set(poolId, { cleanlinessReport });
+    }
+  });
+}
+
+function handleAddCleanlinessQuestion(shiftKey) {
+  if (!CLEANLINESS_REPORT_SHIFTS.some((shift) => shift.key === shiftKey)) return;
+  const input = document.querySelector(`.cleanliness-new-question-input[data-cleanliness-shift="${shiftKey}"]`);
+  const label = String(input?.value || '').trim();
+  if (!label) {
+    showMessage('Type the question or requirement before adding it.', 'error');
+    input?.focus();
+    return;
+  }
+
+  const questionId = createUniqueCleanlinessQuestionId(label);
+  cleanlinessQuestionBank = normalizeCleanlinessQuestionBank([
+    ...getCleanlinessQuestionBank(),
+    { id: questionId, label, custom: true },
+  ]);
+
+  const currentSettings = collectCleanlinessReportSettings();
+  currentSettings[shiftKey].enabledQuestionTypes[questionId] = true;
+  const selectedPoolIds = getSelectedCleanlinessAssignmentPoolIds(shiftKey);
+  if (currentPoolId && !selectedPoolIds.includes(currentPoolId)) selectedPoolIds.push(currentPoolId);
+  queueCleanlinessQuestionForPools(questionId, shiftKey, selectedPoolIds);
+
+  renderCleanlinessReportSettings({ cleanlinessReport: currentSettings });
+  setCleanlinessReportEnabled(true);
+  const editBtn = document.getElementById('editCleanlinessReportBtn');
+  const saveBtn = document.getElementById('saveCleanlinessReportBtn');
+  if (editBtn) editBtn.disabled = true;
+  if (saveBtn) saveBtn.disabled = false;
+  syncCleanlinessToggleFromButtons();
+  showMessage('Requirement added. Save to deploy it.', 'success');
+}
+
+async function savePendingCleanlinessPoolUpdates() {
+  if (!pendingCleanlinessPoolUpdates.size) return;
+  const updates = Array.from(pendingCleanlinessPoolUpdates.entries());
+  pendingCleanlinessPoolUpdates = new Map();
+  for (const [poolId, data] of updates) {
+    try {
+      await savePoolDoc(poolId, data);
+    } catch (err) {
+      console.error('[Pool Editor] Error saving cleanliness assignment for pool:', poolId, err);
+      pendingCleanlinessPoolUpdates.set(poolId, data);
+      throw err;
+    }
+  }
 }
 
 function setEditorAccordionState(toggle, content, collapsed) {
@@ -1415,6 +1703,14 @@ async function handleSavePoolClick() {
   const updatedId = await savePoolDoc(currentPoolId, poolDoc);
   if (updatedId) {
     currentPoolId = updatedId;
+    try {
+      await saveCleanlinessQuestionBank();
+      await savePendingCleanlinessPoolUpdates();
+    } catch (err) {
+      console.error('[Pool Editor] Error saving cleanliness report settings:', err);
+      showMessage('Pool saved, but some Cleanliness Report settings could not be saved.', 'warning');
+      return;
+    }
     showMessage('Pool rules saved.', 'success');
   } else {
     showMessage('There was an error saving this pool.', 'error');
@@ -1431,6 +1727,8 @@ async function attemptSave() {
     const poolId = currentPoolId || poolData.name;
     const savedId = await savePoolDoc(poolId, poolData);
     if (!savedId) throw new Error('Pool save did not complete.');
+    await saveCleanlinessQuestionBank();
+    await savePendingCleanlinessPoolUpdates();
     currentPoolId = savedId;
     updatePoolsCacheAfterSave(savedId, poolData);
     onSaveSuccess(currentPoolId);
@@ -2879,6 +3177,7 @@ async function initEditor() {
   ensureAutoControllerToggles();
   startPoolListener();
   await refreshPools();
+  await loadCleanlinessQuestionBank();
   convertRuleTextareasToRichEditors();
   removeDuplicateRuleHeaderControls();
   setupEditorAccordions();

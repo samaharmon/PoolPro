@@ -56,6 +56,15 @@
     <h2 class="page-content-title">Cleanliness Report</h2>
 
     <div class="form-container">
+      <div class="duties-section duties-shift-section">
+        <h2 class="duties-section-title">Which shift are you completing a report for?</h2>
+        <div class="duties-shift-toggle" role="group" aria-label="Select report shift">
+          <button type="button" class="duties-shift-option" data-shift="opening" aria-pressed="false">Opening Shift</button>
+          <button type="button" class="duties-shift-option" data-shift="closing" aria-pressed="false">Closing Shift</button>
+        </div>
+      </div>
+
+      <div id="dutiesFormFields" class="duties-form-fields hidden-by-shift">
 
       <!-- Section 1: Pool Location -->
       <div class="duties-section">
@@ -152,10 +161,17 @@
             <textarea id="dutiesOtherNotes" rows="4" placeholder="Any other notes about your shift…"></textarea>
           </div>
         </div>
+
+        <div class="duties-photo-group hidden" id="customCleanlinessRequirementsGroup">
+          <h3 class="duties-photo-group-title">Additional Requirements <span class="duties-req-badge">required</span></h3>
+          <p class="duties-group-desc">Complete each pool-specific requirement before submitting this report.</p>
+          <div class="duties-custom-requirements" id="customCleanlinessRequirementsRows"></div>
+        </div>
       </div>
 
       <button type="button" class="submit-btn" id="dutiesSubmitBtn" onclick="submitDutiesForm()">Submit Form</button>
       <p id="dutiesMessage" style="margin-top:10px; color:#333;"></p>
+      </div>
     </div>
   </div>
 

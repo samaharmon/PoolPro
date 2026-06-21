@@ -10,15 +10,21 @@ const DUTY_UPLOAD_IMAGE_QUALITY = 0.66;
 const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 750 * 1024;
 const DUTY_UPLOAD_CONCURRENCY = 3;
 const CLEANLINESS_REPORT_QUESTION_TYPES = [
-  'deck',
-  'pool',
-  'skimmers',
-  'damaged',
-  'bleachFeeders',
-  'desLogbooks',
-  'fillLines',
-  'otherNotes',
+  { id: 'deck', label: 'Deck photos' },
+  { id: 'pool', label: 'Pool photos' },
+  { id: 'skimmers', label: 'Skimmer photos' },
+  { id: 'damaged', label: 'Damaged equipment photos and notes' },
+  { id: 'bleachFeeders', label: 'Bleach feeder photos' },
+  { id: 'desLogbooks', label: 'DES logbook photos' },
+  { id: 'fillLines', label: 'Fill line photos' },
+  { id: 'otherNotes', label: 'Other notes' },
 ];
+const CLEANLINESS_REPORT_SETTINGS_DOC_ID = 'cleanlinessReport';
+const CLEANLINESS_REPORT_SHIFTS = [
+  { key: 'opening', label: 'Opening Shift' },
+  { key: 'closing', label: 'Closing Shift' },
+];
+const CLEANLINESS_BUILT_IN_IDS = new Set(CLEANLINESS_REPORT_QUESTION_TYPES.map((item) => item.id));
 const CLEANLINESS_REPORT_PHOTO_GROUPS = {
   deck: { wrapperId: 'deckPhotosGroup', uploadId: 'deckUpload', min: 2, max: 10, initialSlots: 2 },
   pool: { wrapperId: 'poolPhotosGroup', uploadId: 'poolUpload', min: 2, max: 10, initialSlots: 2 },
@@ -27,6 +33,17 @@ const CLEANLINESS_REPORT_PHOTO_GROUPS = {
   bleachFeeders: { wrapperId: 'bleachFeedersGroup', uploadId: 'bleachFeederUpload', min: 1, max: 10, initialSlots: 1 },
   otherNotes: { wrapperId: 'otherNotesGroup', noteIds: ['dutiesOtherNotes'] },
 };
+let cleanlinessQuestionBank = [];
+let selectedCleanlinessShift = null;
+
+function escapeHtmlUnsafe(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 // ============================================================
 // INIT
@@ -35,7 +52,12 @@ const CLEANLINESS_REPORT_PHOTO_GROUPS = {
 document.addEventListener('DOMContentLoaded', () => {
   initSubmitterInfo();
   initPhotoGroups();
+  initCleanlinessShiftSelector();
   initManagerSectionToggle();
+  loadCleanlinessQuestionBank().finally(() => {
+    const poolSel = document.getElementById('dutiesPool');
+    updateCleanlinessReportFields(poolSel?.value || '');
+  });
   window.addEventListener('poolpro:pools-ready', populatePools);
   populatePools();
   // Wire main pool selector to update CYA fields
@@ -174,36 +196,162 @@ function resetPhotoGroup(groupId, options = {}) {
   updateAddBtn(groupId);
 }
 
-function getDefaultCleanlinessReportSettings() {
+function getDefaultCleanlinessQuestionBank() {
+  return CLEANLINESS_REPORT_QUESTION_TYPES.map((item) => ({
+    ...item,
+    builtIn: true,
+  }));
+}
+
+function normalizeCleanlinessQuestionId(value) {
+  const base = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48);
+  return base || `requirement_${Date.now()}`;
+}
+
+function normalizeCleanlinessQuestionBank(items = []) {
+  const byId = new Map();
+  getDefaultCleanlinessQuestionBank().forEach((item) => byId.set(item.id, item));
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const label = String(item?.label || '').trim();
+    if (!label) return;
+    const id = normalizeCleanlinessQuestionId(item.id || label);
+    const builtIn = CLEANLINESS_BUILT_IN_IDS.has(id);
+    byId.set(id, { id, label, builtIn, custom: !builtIn });
+  });
+  return Array.from(byId.values());
+}
+
+function getCleanlinessQuestionBank() {
+  if (!cleanlinessQuestionBank.length) {
+    cleanlinessQuestionBank = normalizeCleanlinessQuestionBank();
+  }
+  return cleanlinessQuestionBank;
+}
+
+async function loadCleanlinessQuestionBank() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', CLEANLINESS_REPORT_SETTINGS_DOC_ID));
+    cleanlinessQuestionBank = normalizeCleanlinessQuestionBank(snap.exists() ? snap.data()?.questionBank : []);
+  } catch (err) {
+    console.error('[Duties] Error loading cleanliness question bank:', err);
+    cleanlinessQuestionBank = normalizeCleanlinessQuestionBank();
+  }
+}
+
+function getDefaultCleanlinessShiftSettings() {
+  const enabledQuestionTypes = {};
+  getCleanlinessQuestionBank().forEach((item) => {
+    enabledQuestionTypes[item.id] = CLEANLINESS_BUILT_IN_IDS.has(item.id);
+  });
   return {
-    enabledQuestionTypes: Object.fromEntries(CLEANLINESS_REPORT_QUESTION_TYPES.map((key) => [key, true])),
+    enabledQuestionTypes,
+    questionLabels: {},
     requireBathroomPhotos: false,
   };
 }
 
-function normalizeCleanlinessReportSettings(source = {}) {
-  const defaults = getDefaultCleanlinessReportSettings();
-  const enabledSource = source.enabledQuestionTypes || source.questionTypes || {};
+function normalizeCleanlinessShiftSettings(source = {}, legacySource = null) {
+  const defaults = getDefaultCleanlinessShiftSettings();
+  const fallback = legacySource && typeof legacySource === 'object' ? legacySource : null;
+  const enabledSource = source.enabledQuestionTypes || source.questionTypes || fallback?.enabledQuestionTypes || fallback?.questionTypes || {};
+  const labelSource = source.questionLabels || source.labels || {};
 
-  CLEANLINESS_REPORT_QUESTION_TYPES.forEach((key) => {
-    if (Object.prototype.hasOwnProperty.call(enabledSource, key)) {
-      defaults.enabledQuestionTypes[key] = enabledSource[key] !== false;
-    } else if (Object.prototype.hasOwnProperty.call(source, key)) {
-      defaults.enabledQuestionTypes[key] = source[key] !== false;
+  getCleanlinessQuestionBank().forEach(({ id }) => {
+    if (Object.prototype.hasOwnProperty.call(enabledSource, id)) {
+      defaults.enabledQuestionTypes[id] = enabledSource[id] !== false;
+    } else if (Object.prototype.hasOwnProperty.call(source, id)) {
+      defaults.enabledQuestionTypes[id] = source[id] !== false;
+    } else if (fallback && Object.prototype.hasOwnProperty.call(fallback, id)) {
+      defaults.enabledQuestionTypes[id] = fallback[id] !== false;
     }
+    const label = String(labelSource[id] || '').trim();
+    if (label) defaults.questionLabels[id] = label;
   });
 
   defaults.requireBathroomPhotos =
     source.requireBathroomPhotos === true ||
     source.bathroomPhotosRequired === true ||
-    source.requireBathrooms === true;
+    source.requireBathrooms === true ||
+    fallback?.requireBathroomPhotos === true ||
+    fallback?.bathroomPhotosRequired === true ||
+    fallback?.requireBathrooms === true;
 
   return defaults;
 }
 
-function getCleanlinessReportSettings(poolValue) {
+function normalizeCleanlinessReportSettings(source = {}) {
+  const hasShiftSettings = CLEANLINESS_REPORT_SHIFTS.some(({ key }) => source && typeof source[key] === 'object');
+  const legacySource = hasShiftSettings ? null : source;
+  const settings = {};
+  CLEANLINESS_REPORT_SHIFTS.forEach(({ key }) => {
+    settings[key] = normalizeCleanlinessShiftSettings(source?.[key] || {}, legacySource);
+  });
+  return settings;
+}
+
+function getDefaultCleanlinessShift() {
+  const now = new Date();
+  const hour = now.getHours();
+  if (hour >= 14 && hour <= 23) return 'closing';
+  return 'opening';
+}
+
+function setCleanlinessShift(shiftKey) {
+  const shift = CLEANLINESS_REPORT_SHIFTS.find((item) => item.key === shiftKey) || CLEANLINESS_REPORT_SHIFTS[0];
+  selectedCleanlinessShift = shift.key;
+  document.querySelectorAll('.duties-shift-option').forEach((button) => {
+    const active = button.dataset.shift === shift.key;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+  });
+  const fields = document.getElementById('dutiesFormFields');
+  if (fields) fields.classList.remove('hidden-by-shift');
+  const poolSel = document.getElementById('dutiesPool');
+  updateCleanlinessReportFields(poolSel?.value || '');
+}
+
+function initCleanlinessShiftSelector() {
+  document.querySelectorAll('.duties-shift-option').forEach((button) => {
+    button.addEventListener('click', () => setCleanlinessShift(button.dataset.shift));
+  });
+  setCleanlinessShift(getDefaultCleanlinessShift());
+}
+
+function getCleanlinessShiftLabel(shiftKey = selectedCleanlinessShift) {
+  return CLEANLINESS_REPORT_SHIFTS.find((item) => item.key === shiftKey)?.label || '';
+}
+
+function getCleanlinessReportSettings(poolValue, shiftKey = selectedCleanlinessShift || getDefaultCleanlinessShift()) {
   const poolDoc = getSelectedPoolDoc(poolValue);
-  return normalizeCleanlinessReportSettings(poolDoc?.cleanlinessReport || {});
+  const settings = normalizeCleanlinessReportSettings(poolDoc?.cleanlinessReport || {});
+  return settings[shiftKey] || getDefaultCleanlinessShiftSettings();
+}
+
+function getCleanlinessQuestionLabel(questionId, settings) {
+  const override = String(settings?.questionLabels?.[questionId] || '').trim();
+  if (override) return override;
+  return getCleanlinessQuestionBank().find((item) => item.id === questionId)?.label || questionId;
+}
+
+function toCleanlinessGroupTitle(label) {
+  return String(label || '')
+    .replace(/\s+photos?(?:\s+and\s+notes)?$/i, '')
+    .replace(/\s+notes$/i, ' Notes')
+    .trim();
+}
+
+function updateCleanlinessGroupTitle(config, label) {
+  const wrapper = document.getElementById(config.wrapperId);
+  const title = wrapper?.querySelector('.duties-photo-group-title');
+  if (!title) return;
+  const badge = title.querySelector('span');
+  title.textContent = `${toCleanlinessGroupTitle(label)} `;
+  if (badge) title.appendChild(badge);
 }
 
 function setCleanlinessPhotoGroup(config, visible) {
@@ -243,6 +391,7 @@ function updateBathroomPhotoRequirement(required) {
 function updateCleanlinessReportFields(poolValue) {
   const settings = getCleanlinessReportSettings(poolValue);
   Object.entries(CLEANLINESS_REPORT_PHOTO_GROUPS).forEach(([key, config]) => {
+    updateCleanlinessGroupTitle(config, getCleanlinessQuestionLabel(key, settings));
     setCleanlinessPhotoGroup(config, settings.enabledQuestionTypes[key] !== false);
   });
 
@@ -257,6 +406,28 @@ function updateCleanlinessReportFields(poolValue) {
   }
 
   updateBathroomPhotoRequirement(!!settings.requireBathroomPhotos);
+  updateCustomCleanlinessRequirements(settings);
+}
+
+function updateCustomCleanlinessRequirements(settings) {
+  const wrapper = document.getElementById('customCleanlinessRequirementsGroup');
+  const rows = document.getElementById('customCleanlinessRequirementsRows');
+  if (!wrapper || !rows) return;
+  rows.innerHTML = '';
+  const customItems = getCleanlinessQuestionBank().filter((item) =>
+    !CLEANLINESS_BUILT_IN_IDS.has(item.id) && settings.enabledQuestionTypes[item.id] === true
+  );
+  wrapper.classList.toggle('hidden', customItems.length === 0);
+  customItems.forEach((item) => {
+    const label = getCleanlinessQuestionLabel(item.id, settings);
+    const row = document.createElement('label');
+    row.className = 'duties-custom-requirement-row';
+    row.innerHTML = `
+      <input type="checkbox" class="duties-custom-requirement-check" data-requirement-id="${escapeHtmlUnsafe(item.id)}">
+      <span>${escapeHtmlUnsafe(label)}</span>
+    `;
+    rows.appendChild(row);
+  });
 }
 
 function updateFillLinesFields(poolValue) {
@@ -666,6 +837,19 @@ function collectPhotosFromGroup(groupId) {
   return files;
 }
 
+function collectCustomCleanlinessRequirements() {
+  const rows = Array.from(document.querySelectorAll('#customCleanlinessRequirementsRows .duties-custom-requirement-row'));
+  return rows.map((row) => {
+    const checkbox = row.querySelector('.duties-custom-requirement-check');
+    const label = row.querySelector('span')?.textContent?.trim() || '';
+    return {
+      id: checkbox?.dataset.requirementId || '',
+      label,
+      completed: checkbox?.checked === true,
+    };
+  }).filter((item) => item.id || item.label);
+}
+
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -972,6 +1156,16 @@ window.submitDutiesForm = async function () {
     }
   }
 
+  const customRequirements = collectCustomCleanlinessRequirements();
+  const incompleteRequirement = customRequirements.find((item) => !item.completed);
+  if (!managerialPage && incompleteRequirement) {
+    if (msgEl) {
+      msgEl.style.color = '#c0392b';
+      msgEl.textContent = `Please complete this requirement: ${incompleteRequirement.label}`;
+    }
+    return;
+  }
+
   const submitBtn = document.getElementById('dutiesSubmitBtn');
   if (submitBtn) submitBtn.disabled = true;
   if (msgEl) { msgEl.style.color = '#333'; msgEl.textContent = 'Submitting…'; }
@@ -1033,6 +1227,8 @@ window.submitDutiesForm = async function () {
 
     await setDoc(submissionRef, {
       reportType: managerialPage ? 'managerial' : 'cleanliness',
+      shift: managerialPage ? null : (selectedCleanlinessShift || getDefaultCleanlinessShift()),
+      shiftLabel: managerialPage ? null : getCleanlinessShiftLabel(),
       pool,
       firstName: submitter.firstName,
       lastName: submitter.lastName,
@@ -1054,6 +1250,7 @@ window.submitDutiesForm = async function () {
       },
       damagedNotes: document.getElementById('damagedEquipmentGroup')?.classList.contains('hidden') ? '' : (document.getElementById('damagedNotes')?.value?.trim() || ''),
       otherNotes: document.getElementById('otherNotesGroup')?.classList.contains('hidden') ? '' : (document.getElementById('dutiesOtherNotes')?.value?.trim() || ''),
+      customRequirements: managerialPage ? [] : customRequirements,
       bleachVolume: document.getElementById('bleachVolume')?.value || null,
       muriaticAcid: document.getElementById('muriaticAcid')?.value || null,
       shockGranular: document.getElementById('shockGranular')?.value || null,
