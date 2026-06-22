@@ -58,6 +58,7 @@ const els = {
   directions: document.getElementById('inventoryDirections'),
   weekly: document.getElementById('weeklyInventoryFields'),
   urgent: document.getElementById('urgentInventoryFields'),
+  chemical: document.getElementById('chemicalInventoryFields'),
   addItem: document.getElementById('inventoryAddItemBtn'),
   submit: document.getElementById('inventorySubmitBtn'),
   message: document.getElementById('inventoryMessage'),
@@ -214,6 +215,54 @@ function renderUrgentFields() {
   urgentRowCounter = 0;
 }
 
+function renderChemicalInventoryFields() {
+  if (!els.chemical) return;
+  const pool = getSelectedPool();
+  els.chemical.innerHTML = `
+    <section class="inventory-section-card inventory-chemical-card">
+      <h3>Chemical Inventory</h3>
+      <div class="inventory-chemical-grid">
+        <label>
+          <span>Bleach Volume (%)</span>
+          <input type="number" id="chemicalBleachVolume" min="0" max="100" placeholder="0-100">
+        </label>
+        <label>
+          <span>Muriatic Acid (gal)</span>
+          <input type="number" id="chemicalMuriaticAcid" min="0" step="0.5" placeholder="Gallons">
+        </label>
+        <label>
+          <span>Shock / Granular (%)</span>
+          <input type="number" id="chemicalShockGranular" min="0" max="100" placeholder="0-100">
+        </label>
+      </div>
+    </section>
+    <section class="inventory-section-card inventory-chemical-card">
+      <h3>CYA Levels</h3>
+      <p class="inventory-directions">Enter a CYA level for each pool at this facility.</p>
+      <div class="inventory-chemical-cya-list" id="chemicalCyaFields"></div>
+    </section>
+  `;
+  const cyaFields = els.chemical.querySelector('#chemicalCyaFields');
+  if (!cyaFields) return;
+  if (!pool) {
+    cyaFields.innerHTML = '<p class="inventory-directions">Select a facility above to see CYA fields.</p>';
+    return;
+  }
+  const numPools = Math.max(1, parseInt(pool.numPools || pool.poolCount || pool.rules?.pools?.length || 1, 10));
+  const poolDefs = Array.isArray(pool.rules?.pools) ? pool.rules.pools : [];
+  for (let i = 1; i <= numPools; i += 1) {
+    const def = poolDefs[i - 1] || {};
+    const label = def.poolName ? `Pool ${i}: ${def.poolName}` : (numPools === 1 ? getPoolName(pool) : `Pool ${i}`);
+    const row = document.createElement('label');
+    row.className = 'inventory-chemical-cya-row';
+    row.innerHTML = `
+      <span>${escapeHtml(label)}</span>
+      <input type="number" min="0" max="100" class="inventory-chemical-cya-input" data-pool-index="${i}" placeholder="0-100">
+    `;
+    cyaFields.appendChild(row);
+  }
+}
+
 function addWeeklyCustomRow() {
   const list = document.getElementById('weeklyCustomItems');
   if (!list) return;
@@ -245,16 +294,20 @@ function syncFormType() {
   els.form?.classList.toggle('hidden', !type);
   els.weekly?.classList.toggle('hidden', type !== 'weekly');
   els.urgent?.classList.toggle('hidden', type !== 'urgent');
+  els.chemical?.classList.toggle('hidden', type !== 'chemical');
   els.addItem?.classList.toggle('hidden', type !== 'weekly' && type !== 'urgent');
   if (els.directions) {
     els.directions.textContent = type === 'urgent'
       ? 'Use this form to indicate any items that are critically low in stock and will run out before the next inventory form is completed (Thursdays).'
       : type === 'weekly'
         ? 'Fill out this form to indicate the supply level of each item needed to run your pool.'
+      : type === 'chemical'
+        ? 'Record chemical inventory values for the selected facility.'
         : '';
   }
   if (type === 'weekly') renderWeeklyFields();
   if (type === 'urgent') renderUrgentFields();
+  if (type === 'chemical') renderChemicalInventoryFields();
   setMessage('');
 }
 
@@ -330,6 +383,21 @@ function collectUrgentItems(pool) {
   }).filter(Boolean);
 }
 
+function collectChemicalInventoryValues() {
+  const cyaReadings = {};
+  document.querySelectorAll('.inventory-chemical-cya-input').forEach((input) => {
+    if (input.value !== '') {
+      cyaReadings[`pool${input.dataset.poolIndex}`] = parseFloat(input.value);
+    }
+  });
+  return {
+    bleachVolume: document.getElementById('chemicalBleachVolume')?.value || null,
+    muriaticAcid: document.getElementById('chemicalMuriaticAcid')?.value || null,
+    shockGranular: document.getElementById('chemicalShockGranular')?.value || null,
+    cyaReadings,
+  };
+}
+
 async function handleInventorySubmit(event) {
   event.preventDefault();
   const type = els.formType?.value || '';
@@ -337,12 +405,6 @@ async function handleInventorySubmit(event) {
   if (!type) return setMessage('Choose a form first.', true);
   if (!pool) return setMessage('Select a facility.', true);
 
-  const items = type === 'urgent' ? collectUrgentItems(pool) : collectWeeklyItems(pool);
-  if (!items.length) return setMessage('Add at least one item.', true);
-  const missingStatus = items.find((item) => !item.status);
-  if (missingStatus) return setMessage(`Select a level for ${missingStatus.item}.`, true);
-
-  const submissionRef = doc(collection(db, 'inventorySubmissions'));
   const respondent = getRespondentInfo();
   const markets = Array.isArray(pool.markets) ? pool.markets : (pool.market ? [pool.market] : []);
 
@@ -350,20 +412,46 @@ async function handleInventorySubmit(event) {
     els.submit.disabled = true;
     els.submit.textContent = 'Submitting...';
     setMessage('');
-    await setDoc(submissionRef, {
-      timestamp: serverTimestamp(),
-      submittedAtIso: new Date().toISOString(),
-      formType: type,
-      facilityId: pool.id || getPoolName(pool),
-      facilityName: getPoolName(pool),
-      market: markets[0] || 'Other',
-      items,
-      ...respondent,
-      version: 1,
-    });
+
+    if (type === 'chemical') {
+      const chemicalValues = collectChemicalInventoryValues();
+      const hasChemicalValue = ['bleachVolume', 'muriaticAcid', 'shockGranular'].some((key) => chemicalValues[key] !== null && chemicalValues[key] !== '') ||
+        Object.keys(chemicalValues.cyaReadings || {}).length > 0;
+      if (!hasChemicalValue) return setMessage('Enter at least one chemical inventory value.', true);
+      await setDoc(doc(collection(db, 'managerialReports')), {
+        reportType: 'managerial',
+        formType: 'chemicalInventory',
+        timestamp: serverTimestamp(),
+        submittedAtIso: new Date().toISOString(),
+        pool: getPoolName(pool),
+        facilityId: pool.id || getPoolName(pool),
+        facilityName: getPoolName(pool),
+        market: markets[0] || 'Other',
+        photos: { bleach: [] },
+        ...chemicalValues,
+        ...respondent,
+        version: 2,
+      });
+    } else {
+      const items = type === 'urgent' ? collectUrgentItems(pool) : collectWeeklyItems(pool);
+      if (!items.length) return setMessage('Add at least one item.', true);
+      const missingStatus = items.find((item) => !item.status);
+      if (missingStatus) return setMessage(`Select a level for ${missingStatus.item}.`, true);
+      await setDoc(doc(collection(db, 'inventorySubmissions')), {
+        timestamp: serverTimestamp(),
+        submittedAtIso: new Date().toISOString(),
+        formType: type,
+        facilityId: pool.id || getPoolName(pool),
+        facilityName: getPoolName(pool),
+        market: markets[0] || 'Other',
+        items,
+        ...respondent,
+        version: 1,
+      });
+    }
     event.target.reset();
     syncFormType();
-    setMessage('Inventory submitted.', false);
+    setMessage(type === 'chemical' ? 'Chemical inventory submitted.' : 'Inventory submitted.', false);
   } catch (err) {
     console.error('[Inventory] Unable to submit inventory:', err);
     setMessage('Unable to submit inventory. Please try again.', true);
@@ -376,10 +464,15 @@ async function handleInventorySubmit(event) {
 document.addEventListener('DOMContentLoaded', () => {
   if (Array.isArray(window._poolsForDuties)) populateFacilitySelect(window._poolsForDuties);
   window.addEventListener('poolpro:pools-ready', (event) => populateFacilitySelect(event.detail?.pools || []));
+  const requestedForm = new URLSearchParams(window.location.search).get('form');
+  if (requestedForm && els.formType?.querySelector(`option[value="${requestedForm}"]`)) {
+    els.formType.value = requestedForm;
+  }
   els.formType?.addEventListener('change', syncFormType);
   els.facility?.addEventListener('change', () => {
     if (els.formType?.value === 'weekly') renderWeeklyFields();
     if (els.formType?.value === 'urgent') renderUrgentFields();
+    if (els.formType?.value === 'chemical') renderChemicalInventoryFields();
   });
   els.addItem?.addEventListener('click', handleAddItem);
   els.form?.addEventListener('submit', handleInventorySubmit);

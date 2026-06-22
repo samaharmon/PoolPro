@@ -519,6 +519,19 @@ function hasFreshSupervisorSession() {
   return false;
 }
 
+function hasTrainingSetupPermission() {
+  if (hasFreshSupervisorSession()) return true;
+  if (typeof window.poolProHasPermission === 'function') {
+    return window.poolProHasPermission('trainingSetup');
+  }
+  try {
+    const profile = JSON.parse(localStorage.getItem('poolproRolePermissionsProfile') || 'null');
+    return profile?.permissions?.trainingSetup === true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function updateCapacityInfo(session, el) {
   if (!el.capacityInfo) return;
 
@@ -2243,7 +2256,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (adminIntent === '1') {
     sessionStorage.removeItem('trainingIntentAdmin');
     // Check all auth sources before showing login modal
-    const alreadyAuth = hasFreshSupervisorSession();
+    const alreadyAuth = hasTrainingSetupPermission();
     if (alreadyAuth) {
       localStorage.setItem(LOGIN_KEY, 'true');
       showSupervisorView();

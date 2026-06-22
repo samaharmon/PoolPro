@@ -364,6 +364,7 @@
 
 .cleanliness-question-row {
   grid-template-columns: minmax(190px, 260px) minmax(220px, 1fr);
+  align-items: start;
   cursor: default;
 }
 
@@ -376,11 +377,28 @@
 }
 
 .cleanliness-question-editable {
+  display: grid;
+  gap: 8px;
   min-width: 0;
 }
 
-.cleanliness-question-label-input {
+.cleanliness-question-label-input,
+.cleanliness-question-instructions-input,
+.cleanliness-new-question-instructions {
   width: 100%;
+}
+
+.cleanliness-min-photo-inline,
+.cleanliness-min-photo-label {
+  display: grid;
+  gap: 6px;
+  color: #fff;
+  font-weight: 700;
+}
+
+.cleanliness-min-photo-inline {
+  grid-template-columns: max-content minmax(90px, 150px);
+  align-items: center;
 }
 
 .cleanliness-add-requirement {

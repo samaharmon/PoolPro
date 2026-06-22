@@ -75,8 +75,9 @@ let accountDeletionInProgress = false;
 let sanitationEditing = false;
 let sanitationMarketFilter = 'all';
 const FEEDBACK_RESPONSES_ENABLED = true;
-const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
+const SESSION_WINDOW_MS = 6 * 60 * 60 * 1000;
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
+const LIFEGUARD_SESSION_EXPIRED_KEY = 'poolproLifeguardSessionExpired';
 const LIFEGUARD_SESSION_VERIFICATION_VERSION = 2;
 const SUPERVISOR_SESSION_VERIFICATION_VERSION = 1;
 const CHEM_AUTO_CONTROLLER_STORAGE = 'firestoreChemControllerPhoto';
@@ -342,7 +343,7 @@ function injectOperationalStatusMenuLinks() {
 
   document.querySelectorAll('.dropdown-menu').forEach((menu) => {
     if (menu.querySelector('[data-nav="operational-status"]')) return;
-    const anchorLink = menu.querySelector('[data-nav="managerial-report"]') || menu.querySelector('[data-nav="duties"]');
+    const anchorLink = menu.querySelector('[data-nav="duties"]');
     if (!anchorLink) return;
 
     const link = document.createElement('a');
@@ -355,21 +356,7 @@ function injectOperationalStatusMenuLinks() {
 }
 
 function injectManagerialReportMenuLinks() {
-  const prefix = getPagePrefix();
-  const isManagerialPage = /\/managerial\/managerial\.html$/i.test(window.location.pathname);
-
-  document.querySelectorAll('.dropdown-menu').forEach((menu) => {
-    if (menu.querySelector('[data-nav="managerial-report"]')) return;
-    const dutiesLink = menu.querySelector('[data-nav="duties"]');
-    if (!dutiesLink) return;
-
-    const link = document.createElement('a');
-    link.href = isManagerialPage ? 'managerial.html' : `${prefix}managerial/managerial.html`;
-    link.className = `dropdown-item${isManagerialPage ? ' active-page' : ''}`;
-    link.dataset.nav = 'managerial-report';
-    link.textContent = 'Managerial Report';
-    dutiesLink.insertAdjacentElement('afterend', link);
-  });
+  document.querySelectorAll('[data-nav="managerial-report"]').forEach((link) => link.remove());
 }
 
 function injectDesLogbooksMenuLinks() {
@@ -546,6 +533,7 @@ function wrapResponsiveTables(root = document) {
       ensureTableScrollShell(existingWrapper);
       bindTableScrollShadow(existingWrapper);
       updateTableScrollShadow(existingWrapper);
+      markStickyTableControls(existingWrapper);
       return;
     }
     if (table.closest('.rules-table')) return;
@@ -558,7 +546,18 @@ function wrapResponsiveTables(root = document) {
     shell.appendChild(wrapper);
     wrapper.appendChild(table);
     bindTableScrollShadow(wrapper);
+    markStickyTableControls(wrapper);
   });
+}
+
+function markStickyTableControls(wrapper) {
+  const shell = ensureTableScrollShell(wrapper) || wrapper;
+  let previous = shell.previousElementSibling;
+  while (previous && previous.matches('script, style')) previous = previous.previousElementSibling;
+  if (!previous) return;
+  const hasControls = previous.matches('.settings-actions, .employee-actions, .sanitation-controls, .resource-actions') ||
+    !!previous.querySelector?.('.editAndSave, .theme-toggle');
+  if (hasControls) previous.classList.add('table-sticky-controls');
 }
 
 function ensureTableScrollShell(wrapper) {
@@ -1222,6 +1221,7 @@ window.logout = async function () {
     clearRequestedAccessMode();
     localStorage.removeItem(ROLE_PERMISSIONS_STORAGE_KEY);
     localStorage.removeItem(LIFEGUARD_SESSION_KEY);
+    localStorage.removeItem(LIFEGUARD_SESSION_EXPIRED_KEY);
     localStorage.removeItem('trainingSupervisorLoggedIn');
     localStorage.removeItem('training_supervisor_logged_in_v1');
     localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
@@ -1287,16 +1287,34 @@ function getStoredLifeguardSession() {
       session?.emailVerified === true &&
       Number(session?.verificationVersion || 0) >= LIFEGUARD_SESSION_VERIFICATION_VERSION &&
       !!session?.verifiedAt;
-    if (!hasIdentity || !hasVerifiedMarker || !expires || Date.now() >= expires) {
+    const expired = !!expires && Date.now() >= expires;
+    if (!hasIdentity || !hasVerifiedMarker || !expires || expired) {
+      if (expired && hasIdentity) {
+        localStorage.setItem(LIFEGUARD_SESSION_EXPIRED_KEY, JSON.stringify({
+          email: session.email || session.employeeId || '',
+          username: session.username || '',
+          accessMode: session.accessMode || localStorage.getItem(ACCESS_MODE_STORAGE_KEY) || 'lifeguard',
+          expiredAt: new Date().toISOString(),
+          path: window.location.pathname + window.location.search + window.location.hash,
+        }));
+      }
       localStorage.removeItem(LIFEGUARD_SESSION_KEY);
       if (localStorage.getItem('chemlogRole') === 'lifeguard') localStorage.removeItem('chemlogRole');
+      sessionStorage.removeItem('chemlogRole');
+      sessionStorage.removeItem('chemlogEmployeeEmail');
+      sessionStorage.removeItem('chemlogEmployeeId');
+      sessionStorage.removeItem('chemlogEmployeeUsername');
+      sessionStorage.removeItem('chemlogEmployeeFirstName');
+      sessionStorage.removeItem('chemlogEmployeeLastName');
+      sessionStorage.removeItem('chemlogEmployeeHomePool');
+      sessionStorage.removeItem('chemlogEmployeePhone');
       if (!hasFreshSupervisorToken()) clearRequestedAccessMode();
       return null;
     }
     return session;
   } catch (_) {
     try {
-      localStorage.removeItem(LIFEGUARD_SESSION_KEY);
+      clearStoredLifeguardSession();
     } catch (err) { /* ignore */ }
     return null;
   }
@@ -1315,10 +1333,195 @@ function restoreLifeguardSessionFromLocalStorage() {
 
 function clearStoredLifeguardSession() {
   try {
+    sessionStorage.removeItem('chemlogRole');
+    sessionStorage.removeItem('chemlogEmployeeEmail');
+    sessionStorage.removeItem('chemlogEmployeeId');
+    sessionStorage.removeItem('chemlogEmployeeUsername');
+    sessionStorage.removeItem('chemlogEmployeeFirstName');
+    sessionStorage.removeItem('chemlogEmployeeLastName');
+    sessionStorage.removeItem('chemlogEmployeeHomePool');
+    sessionStorage.removeItem('chemlogEmployeePhone');
     localStorage.removeItem(LIFEGUARD_SESSION_KEY);
+    localStorage.removeItem(LIFEGUARD_SESSION_EXPIRED_KEY);
     if (localStorage.getItem('chemlogRole') === 'lifeguard') localStorage.removeItem('chemlogRole');
     if (!hasFreshSupervisorToken()) clearRequestedAccessMode();
   } catch (_) { /* ignore */ }
+}
+
+function getExpiredLifeguardSessionMarker() {
+  try {
+    return JSON.parse(localStorage.getItem(LIFEGUARD_SESSION_EXPIRED_KEY) || 'null') || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function hasExpiredLifeguardSessionMarker() {
+  return !!getExpiredLifeguardSessionMarker();
+}
+
+function accountHasEmailVerification(account = {}) {
+  const normalized = normalizeLifeguardAccountRecord(account, account.username || '');
+  return normalized.emailVerificationOverride === true ||
+    normalized.emailVerified === true ||
+    normalized.firebaseEmailVerified === true ||
+    normalized.emailVerificationComplete === true ||
+    !!normalized.lastVerifiedAt ||
+    !!normalized.verifiedAt ||
+    !!normalized.emailVerifiedAt;
+}
+
+function persistCurrentPageLifeguardSession(employee, account, accessMode = 'lifeguard') {
+  const normalizedEmployee = normalizeEmployeeRecord(employee || {});
+  const normalizedAccount = normalizeLifeguardAccountRecord(account || {}, account?.username || normalizedEmployee.username || '');
+  const normalizedAccessMode = persistRequestedAccessMode(accessMode || normalizedAccount.role || normalizedEmployee.role || 'lifeguard');
+  const session = {
+    role: 'lifeguard',
+    accessMode: normalizedAccessMode,
+    emailVerified: true,
+    verificationVersion: LIFEGUARD_SESSION_VERIFICATION_VERSION,
+    verifiedAt: new Date().toISOString(),
+    email: normalizedEmployee.email || normalizedAccount.employeeEmail || normalizedAccount.authEmail || '',
+    employeeId: normalizedEmployee.id || normalizedEmployee.email || normalizedAccount.employeeEmail || normalizedAccount.authEmail || '',
+    username: normalizedEmployee.username || normalizedAccount.username || '',
+    firstName: normalizedEmployee.firstName || normalizedAccount.firstName || '',
+    lastName: normalizedEmployee.lastName || normalizedAccount.lastName || '',
+    homePool: normalizedEmployee.homePool || normalizedAccount.homePool || '',
+    phone: normalizedEmployee.phone || normalizedAccount.phone || '',
+    expires: Date.now() + SESSION_WINDOW_MS,
+  };
+  writeLifeguardSessionToSessionStorage(session);
+  localStorage.setItem('chemlogRole', 'lifeguard');
+  localStorage.setItem(LIFEGUARD_SESSION_KEY, JSON.stringify(session));
+  localStorage.removeItem(LIFEGUARD_SESSION_EXPIRED_KEY);
+  localStorage.removeItem('loginToken');
+  localStorage.removeItem('ChemLogSupervisor');
+  localStorage.removeItem('trainingSupervisorLoggedIn');
+  localStorage.removeItem('training_supervisor_logged_in_v1');
+  localStorage.removeItem('chemlogTrainingSupervisorLoggedIn');
+  return session;
+}
+
+async function findLifeguardAccountForLogin(loginValue) {
+  const login = normalizeIdentityKey(loginValue);
+  if (!login) return null;
+  if (!lifeguardAccountsLoaded) await loadLifeguardAccounts();
+  return lifeguardAccountsData.find((account) => {
+    const normalized = normalizeLifeguardAccountRecord(account, account.username || '');
+    return getLifeguardAccountIdentityKeys(normalized).includes(login) ||
+      normalizeIdentityKey(normalized.authEmail?.split('@')[0] || '') === login ||
+      normalizeIdentityKey(normalized.employeeEmail?.split('@')[0] || '') === login;
+  }) || null;
+}
+
+function findEmployeeForLifeguardAccount(account = {}) {
+  const normalizedAccount = normalizeLifeguardAccountRecord(account, account.username || '');
+  const accountKeys = new Set(getLifeguardAccountIdentityKeys(normalizedAccount).map(normalizeIdentityKey));
+  return employeesData.map(normalizeEmployeeRecord).find((employee) => (
+    getEmployeeIdentityKeys(employee).some((key) => accountKeys.has(key))
+  )) || normalizeEmployeeRecord({
+    email: normalizedAccount.employeeEmail || normalizedAccount.authEmail || '',
+    id: normalizedAccount.employeeEmail || normalizedAccount.authEmail || normalizedAccount.username || '',
+    username: normalizedAccount.username || '',
+    firstName: normalizedAccount.firstName || '',
+    lastName: normalizedAccount.lastName || '',
+    homePool: normalizedAccount.homePool || '',
+    phone: normalizedAccount.phone || '',
+    role: normalizedAccount.role || '',
+    roles: normalizedAccount.roles || [],
+  });
+}
+
+function ensureCurrentPageLoginModal() {
+  let modal = document.getElementById('poolproSessionLoginModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'poolproSessionLoginModal';
+  modal.className = 'poolpro-session-login-modal hidden';
+  modal.innerHTML = `
+    <div class="poolpro-session-login-card" role="dialog" aria-modal="true" aria-labelledby="poolproSessionLoginTitle">
+      <h2 id="poolproSessionLoginTitle">Sign In Again</h2>
+      <p>Your PoolPro session expired. Sign in to continue on this page.</p>
+      <form id="poolproSessionLoginForm" class="poolpro-session-login-form">
+        <label>
+          <span>Email or username</span>
+          <input type="text" id="poolproSessionLoginUser" autocomplete="username" required>
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" id="poolproSessionLoginPassword" autocomplete="current-password" required>
+        </label>
+        <button type="submit" class="submit-btn" id="poolproSessionLoginSubmit">Sign In</button>
+        <p class="form-message" id="poolproSessionLoginMessage"></p>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  const marker = getExpiredLifeguardSessionMarker();
+  const input = modal.querySelector('#poolproSessionLoginUser');
+  if (input && marker) input.value = marker.email || marker.username || '';
+  modal.querySelector('#poolproSessionLoginForm')?.addEventListener('submit', handleCurrentPageLoginSubmit);
+  return modal;
+}
+
+async function handleCurrentPageLoginSubmit(event) {
+  event.preventDefault();
+  const modal = document.getElementById('poolproSessionLoginModal');
+  const loginInput = modal?.querySelector('#poolproSessionLoginUser');
+  const passwordInput = modal?.querySelector('#poolproSessionLoginPassword');
+  const submitButton = modal?.querySelector('#poolproSessionLoginSubmit');
+  const message = modal?.querySelector('#poolproSessionLoginMessage');
+  const login = (loginInput?.value || '').trim();
+  const password = passwordInput?.value || '';
+  if (!login || !password) {
+    if (message) message.textContent = 'Enter your username or email and password.';
+    return;
+  }
+  try {
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = 'Signing in...';
+    }
+    if (message) message.textContent = '';
+    if (!employeesData.length) await loadEmployees();
+    const account = await findLifeguardAccountForLogin(login);
+    const authEmail = account?.authEmail || account?.employeeEmail || (login.includes('@') ? login : '');
+    if (!account || !authEmail) throw new Error('PoolPro could not find an account for that sign-in.');
+    await signInWithEmailAndPassword(auth, authEmail, password);
+    await auth.currentUser?.reload?.();
+    if (!auth.currentUser?.emailVerified && !accountHasEmailVerification(account)) {
+      await signOut(auth).catch(() => {});
+      throw new Error('Verify your email before opening PoolPro.');
+    }
+    const employee = findEmployeeForLifeguardAccount(account);
+    persistCurrentPageLifeguardSession(employee, account, account.role || account.roles?.[0] || getExpiredLifeguardSessionMarker()?.accessMode || 'lifeguard');
+    if (account.username) {
+      await setDoc(doc(db, 'lifeguardAccounts', account.username), {
+        lastVerifiedAt: new Date().toISOString(),
+        lastVerificationMethod: auth.currentUser?.emailVerified ? 'session-refresh' : 'supervisor-email-override',
+      }, { merge: true }).catch(() => {});
+    }
+    await loadRolesPermissions();
+    await enforceAgreementForCurrentUser();
+    modal?.classList.add('hidden');
+    window.setupDropdownVisibility?.();
+    enforceCurrentPageAccess();
+  } catch (err) {
+    console.error('[PoolPro] Current-page sign-in failed:', err);
+    if (message) message.textContent = err.message || 'Unable to sign in right now.';
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = 'Sign In';
+    }
+  }
+}
+
+function maybeShowCurrentPageLoginModal() {
+  if (!hasExpiredLifeguardSessionMarker() || hasActivePoolProSession()) return;
+  const modal = ensureCurrentPageLoginModal();
+  modal.classList.remove('hidden');
+  requestAnimationFrame(() => modal.querySelector('#poolproSessionLoginPassword')?.focus());
 }
 
 function getStoredSupervisorEmail() {
@@ -1476,18 +1679,9 @@ window.goToTrainingSetup = function () {
     alert('You do not have permission to view Training Setup.');
     return;
   }
-  // Employees (non-supervisors) cannot access training setup
-  const isEmployee = !!sessionStorage.getItem('chemlogEmployeeId');
-  if (isEmployee && !isSupervisor()) return;
 
   if (window.showSupervisorView) {
-    // Already on training.html — switch view directly
-    if (isSupervisor()) {
-      window.showSupervisorView();
-    } else {
-      const modal = document.getElementById('trainingLoginModal');
-      if (modal) modal.style.display = 'flex';
-    }
+    window.showSupervisorView();
   } else {
     // On a different page — flag the intent and navigate to training
     sessionStorage.setItem('trainingIntentAdmin', '1');
@@ -2288,6 +2482,8 @@ function hasPermission(permissionKey) {
   return !!cached?.permissions?.[permissionKey];
 }
 
+window.poolProHasPermission = hasPermission;
+
 function canAccessPoolChemistryDashboard() {
   return hasPermission('poolChemistryDashboard');
 }
@@ -2350,6 +2546,10 @@ function pageTitleForPermission(permissionKey) {
 
 function enforceCurrentPageAccess() {
   const permissionKey = getCurrentPagePermissionKey();
+  if (permissionKey && hasExpiredLifeguardSessionMarker() && !hasActivePoolProSession()) {
+    maybeShowCurrentPageLoginModal();
+    return;
+  }
   if (!permissionKey || canAccessPage(permissionKey)) return;
   const title = pageTitleForPermission(permissionKey);
   const container = document.querySelector('.container') || document.querySelector('main') || document.body;
@@ -2474,10 +2674,6 @@ window.setupDropdownVisibility = function () {
     document.querySelectorAll(`[data-nav="${nav}"]`).forEach((el) => {
       const isSupervisorTool = el.classList.contains('supervisor-only');
       if (nav === 'settings' && isSupervisorTool && !sup) {
-        el.style.display = 'none';
-        return;
-      }
-      if (['training-setup', 'employees', 'testing'].includes(nav) && !sup) {
         el.style.display = 'none';
         return;
       }
@@ -7270,7 +7466,7 @@ function renderEmployeesTable() {
 
 function isUnverifiedAccountAttempt(account = {}) {
   const normalized = normalizeLifeguardAccountRecord(account, account.username || '');
-  return normalized.emailVerificationOverride !== true && !normalized.lastVerifiedAt;
+  return !accountHasEmailVerification(normalized);
 }
 
 function getUnverifiedAccountRows() {
@@ -7804,9 +8000,16 @@ function ensureRolesPermissionsSettingsSection() {
     </div>
     <div class="roles-permission-modal hidden" id="rolePermissionModal" aria-hidden="true">
       <div class="roles-permission-modal-card" role="dialog" aria-modal="true" aria-labelledby="rolePermissionModalTitle">
-        <button type="button" class="roles-permission-modal-close" id="rolePermissionModalClose" aria-label="Close permissions">&times;</button>
-        <h4 id="rolePermissionModalTitle">Permissions</h4>
-        <p class="section-subtitle" id="rolePermissionModalSubtitle"></p>
+        <div class="roles-permission-modal-header">
+          <div>
+            <h4 id="rolePermissionModalTitle">Permissions</h4>
+            <p class="section-subtitle" id="rolePermissionModalSubtitle"></p>
+          </div>
+          <div class="roles-permission-modal-actions">
+            <button type="button" class="submit-btn roles-permission-modal-save" id="rolePermissionModalSave">Save</button>
+            <button type="button" class="roles-permission-modal-close" id="rolePermissionModalClose" aria-label="Close permissions">&times;</button>
+          </div>
+        </div>
         <div class="roles-permission-modal-checks" id="rolePermissionModalChecks"></div>
         <p class="roles-permission-modal-message" id="rolePermissionModalMessage"></p>
       </div>
@@ -7972,8 +8175,32 @@ function getIndividualPermissionOverride(memberKey, permissionKey) {
   return !!individual[permissionKey];
 }
 
+function getPermissionStorageKeysForMember(memberKey) {
+  const normalizedMemberKey = normalizeIdentityKey(memberKey);
+  const keys = new Set([normalizedMemberKey]);
+  const employee = findEmployeeByRoleKey(normalizedMemberKey);
+  if (employee) getEmployeeIdentityKeys(employee).forEach((key) => keys.add(normalizeIdentityKey(key)));
+  const account = lifeguardAccountsData.find((item) =>
+    getLifeguardAccountIdentityKeys(normalizeLifeguardAccountRecord(item, item.username || '')).includes(normalizedMemberKey)
+  );
+  if (account) {
+    getLifeguardAccountIdentityKeys(normalizeLifeguardAccountRecord(account, account.username || ''))
+      .forEach((key) => keys.add(normalizeIdentityKey(key)));
+  }
+  return [...keys].filter(Boolean);
+}
+
+function getMergedIndividualPermissionOverride(memberKey, permissionKey) {
+  const values = getPermissionStorageKeysForMember(memberKey)
+    .map((key) => getIndividualPermissionOverride(key, permissionKey))
+    .filter((value) => value !== undefined);
+  if (values.includes(false)) return false;
+  if (values.includes(true)) return true;
+  return undefined;
+}
+
 function getMemberPermissionValue(roleKey, memberKey, permissionKey) {
-  const override = getIndividualPermissionOverride(memberKey, permissionKey);
+  const override = getMergedIndividualPermissionOverride(memberKey, permissionKey);
   return override === undefined ? getRoleDefaultPermission(roleKey, permissionKey) : override;
 }
 
@@ -8013,6 +8240,7 @@ function openRolePermissionModal(roleKey, memberKey) {
   const subtitle = document.getElementById('rolePermissionModalSubtitle');
   const checks = document.getElementById('rolePermissionModalChecks');
   const message = document.getElementById('rolePermissionModalMessage');
+  const saveButton = document.getElementById('rolePermissionModalSave');
   if (!modal || !title || !subtitle || !checks) return;
 
   const employee = findEmployeeByRoleKey(memberKey);
@@ -8022,10 +8250,16 @@ function openRolePermissionModal(roleKey, memberKey) {
   subtitle.textContent = `Checked boxes inherit the ${roleLabel} defaults unless you change them here. Unchecking a default permission removes it for this person only.`;
   if (message) message.textContent = '';
   checks.innerHTML = '';
+  const storageKeys = getPermissionStorageKeysForMember(memberKey);
+  const draftOverrides = {};
+  PERMISSION_DEFINITIONS.forEach(({ key }) => {
+    const override = getMergedIndividualPermissionOverride(memberKey, key);
+    if (override !== undefined) draftOverrides[key] = override;
+  });
 
   PERMISSION_DEFINITIONS.forEach(({ key, label }) => {
     const roleDefault = getRoleDefaultPermission(roleKey, key);
-    const override = getIndividualPermissionOverride(memberKey, key);
+    const override = Object.prototype.hasOwnProperty.call(draftOverrides, key) ? draftOverrides[key] : undefined;
     const row = document.createElement('label');
     row.className = 'roles-modal-check';
 
@@ -8033,18 +8267,13 @@ function openRolePermissionModal(roleKey, memberKey) {
     checkbox.type = 'checkbox';
     checkbox.className = 'market-filter-checkbox';
     checkbox.checked = override === undefined ? roleDefault : override;
-    checkbox.addEventListener('change', async () => {
-      if (!rolesPermissionsData.individualPermissions[memberKey]) {
-        rolesPermissionsData.individualPermissions[memberKey] = {};
-      }
+    checkbox.addEventListener('change', () => {
       if (checkbox.checked === roleDefault) {
-        delete rolesPermissionsData.individualPermissions[memberKey][key];
+        delete draftOverrides[key];
       } else {
-        rolesPermissionsData.individualPermissions[memberKey][key] = checkbox.checked;
+        draftOverrides[key] = checkbox.checked;
       }
-      cleanupIndividualPermissionOverrides(memberKey);
-      await saveRolesPermissions();
-      if (message) message.textContent = 'Saved.';
+      if (message) message.textContent = 'Unsaved changes.';
     });
 
     const text = document.createElement('span');
@@ -8056,6 +8285,30 @@ function openRolePermissionModal(roleKey, memberKey) {
     row.appendChild(inherited);
     checks.appendChild(row);
   });
+
+  if (saveButton) {
+    saveButton.disabled = false;
+    saveButton.textContent = 'Save';
+    saveButton.onclick = async () => {
+      saveButton.disabled = true;
+      saveButton.textContent = 'Saving...';
+      try {
+        storageKeys.forEach((identityKey) => {
+          if (!identityKey) return;
+          rolesPermissionsData.individualPermissions[identityKey] = { ...draftOverrides };
+          cleanupIndividualPermissionOverrides(identityKey);
+        });
+        await saveRolesPermissionsAndSyncEmployeeRole(memberKey);
+        if (message) message.textContent = 'Saved.';
+      } catch (err) {
+        console.error('[PoolPro] Unable to save individual permissions:', err);
+        if (message) message.textContent = 'Unable to save. Try again.';
+      } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = 'Save';
+      }
+    };
+  }
 
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
@@ -10565,7 +10818,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.setupDropdownVisibility();
         return;
       }
-      // Enforce fresh email auth every 5 hours.
+      // Enforce fresh email auth every 6 hours.
       const stillFresh = hasFreshSupervisorToken();
       if (!stillFresh) {
         signOut(auth).catch(() => {});
@@ -10614,6 +10867,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSecuritySettings();
   await loadAlertsRemindersSettings();
   await loadEmployees();
+  maybeShowCurrentPageLoginModal();
   ensureRolesPermissionsSettingsSection();
   await loadResourcesDocuments();
   setupEmployeeManagement();

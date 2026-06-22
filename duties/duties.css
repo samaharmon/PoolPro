@@ -361,7 +361,6 @@ body.dark-mode .duties-manager-section.duties-section:last-of-type {
 
 .duties-custom-requirement-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
   gap: 10px;
   align-items: start;
   padding: 10px 12px;
@@ -372,8 +371,26 @@ body.dark-mode .duties-manager-section.duties-section:last-of-type {
   line-height: 1.35;
 }
 
+.duties-custom-requirement-checkline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+
 .duties-custom-requirement-check {
   margin-top: 2px;
+}
+
+.duties-custom-requirement-instructions {
+  margin: 0 0 0 28px;
+  color: #555;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.duties-custom-upload-wrap {
+  margin-left: 28px;
 }
 
 .duties-clear-btn {

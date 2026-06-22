@@ -55,14 +55,14 @@ const SUPPLY_SECTIONS = [
   },
 ];
 const CLEANLINESS_REPORT_QUESTION_TYPES = [
-  { id: 'deck', label: 'Deck photos' },
-  { id: 'pool', label: 'Pool photos' },
-  { id: 'skimmers', label: 'Skimmer photos' },
-  { id: 'damaged', label: 'Damaged equipment photos and notes' },
-  { id: 'bleachFeeders', label: 'Bleach feeder photos' },
-  { id: 'desLogbooks', label: 'DES logbook photos' },
-  { id: 'fillLines', label: 'Fill line photos' },
-  { id: 'otherNotes', label: 'Other notes' },
+  { id: 'deck', label: 'Deck photos', instructions: 'Submit clear photos showing the full deck area.', minPhotos: 2 },
+  { id: 'pool', label: 'Pool photos', instructions: 'Submit clear photos showing the pool water and surrounding edge.', minPhotos: 2 },
+  { id: 'skimmers', label: 'Skimmer photos', instructions: 'Submit photos of the skimmer baskets and skimmer areas.', minPhotos: 2 },
+  { id: 'damaged', label: 'Damaged equipment photos and notes', instructions: 'Document any damaged, unsafe, or missing equipment.', minPhotos: 0 },
+  { id: 'bleachFeeders', label: 'Bleach feeder photos', instructions: 'Submit photos of each bleach feeder.', minPhotos: 1 },
+  { id: 'desLogbooks', label: 'DES logbook photos', instructions: 'Submit photos where the whole DES logbook page is clearly visible.', minPhotos: 0 },
+  { id: 'fillLines', label: 'Fill line photos', instructions: 'Submit photos showing pool fill line conditions.', minPhotos: 0 },
+  { id: 'otherNotes', label: 'Other notes', instructions: 'Add any other notes that should be included with this report.', minPhotos: 0 },
 ];
 const CLEANLINESS_REPORT_SETTINGS_DOC_ID = 'cleanlinessReport';
 const CLEANLINESS_REPORT_SHIFTS = [
@@ -925,9 +925,14 @@ function normalizeCleanlinessQuestionBank(items = []) {
     if (!label) return;
     const id = normalizeCleanlinessQuestionId(item.id || label);
     const builtIn = CLEANLINESS_BUILT_IN_IDS.has(id);
+    const existing = byId.get(id) || {};
+    const minPhotos = Number.isFinite(Number(item?.minPhotos)) ? Math.max(0, Number(item.minPhotos)) : Number(existing.minPhotos || 0);
     byId.set(id, {
+      ...existing,
       id,
       label,
+      instructions: String(item?.instructions ?? existing.instructions ?? '').trim(),
+      minPhotos,
       builtIn,
       custom: !builtIn,
     });
@@ -947,10 +952,35 @@ async function loadCleanlinessQuestionBank() {
 }
 
 async function saveCleanlinessQuestionBank() {
+  syncCleanlinessQuestionBankFromEditor();
   const questionBank = normalizeCleanlinessQuestionBank(cleanlinessQuestionBank)
     .filter((item) => item.custom || !CLEANLINESS_BUILT_IN_IDS.has(item.id))
-    .map(({ id, label, custom }) => ({ id, label, custom: custom !== false }));
+    .map(({ id, label, instructions, minPhotos, custom }) => ({ id, label, instructions: instructions || '', minPhotos: Number(minPhotos || 0), custom: custom !== false }));
   await setDoc(doc(db, 'settings', CLEANLINESS_REPORT_SETTINGS_DOC_ID), { questionBank }, { merge: true });
+}
+
+function syncCleanlinessQuestionBankFromEditor() {
+  const rowsById = new Map();
+  document.querySelectorAll('.cleanliness-question-row').forEach((row) => {
+    const checkbox = row.querySelector('.cleanliness-question-enabled');
+    const questionId = checkbox?.dataset.cleanlinessQuestion;
+    if (!questionId || rowsById.has(questionId)) return;
+    rowsById.set(questionId, row);
+  });
+  cleanlinessQuestionBank = normalizeCleanlinessQuestionBank(getCleanlinessQuestionBank().map((item) => {
+    if (!item.custom) return item;
+    const row = rowsById.get(item.id);
+    if (!row) return item;
+    const label = row.querySelector('.cleanliness-question-label-input')?.value?.trim() || item.label;
+    const instructions = row.querySelector('.cleanliness-question-instructions-input')?.value?.trim() ?? item.instructions ?? '';
+    const minPhotos = Math.max(0, Number(row.querySelector('.cleanliness-question-min-photos-input')?.value || item.minPhotos || 0));
+    return {
+      ...item,
+      label,
+      instructions,
+      minPhotos: Number.isFinite(minPhotos) ? minPhotos : Number(item.minPhotos || 0),
+    };
+  }));
 }
 
 function isCleanlinessBuiltInQuestion(questionId) {
@@ -972,6 +1002,8 @@ function getDefaultCleanlinessShiftSettings() {
   return {
     enabledQuestionTypes,
     questionLabels: {},
+    questionInstructions: {},
+    questionMinPhotos: {},
     requireBathroomPhotos: false,
   };
 }
@@ -987,8 +1019,10 @@ function normalizeCleanlinessShiftSettings(source = {}, legacySource = null) {
   const fallback = legacySource && typeof legacySource === 'object' ? legacySource : null;
   const enabledSource = source.enabledQuestionTypes || source.questionTypes || fallback?.enabledQuestionTypes || fallback?.questionTypes || {};
   const labelSource = source.questionLabels || source.labels || {};
+  const instructionSource = source.questionInstructions || source.instructions || {};
+  const photoSource = source.questionMinPhotos || source.minPhotos || {};
 
-  getCleanlinessQuestionBank().forEach(({ id }) => {
+  getCleanlinessQuestionBank().forEach(({ id, instructions, minPhotos }) => {
     if (Object.prototype.hasOwnProperty.call(enabledSource, id)) {
       defaults.enabledQuestionTypes[id] = enabledSource[id] !== false;
     } else if (Object.prototype.hasOwnProperty.call(source, id)) {
@@ -998,6 +1032,14 @@ function normalizeCleanlinessShiftSettings(source = {}, legacySource = null) {
     }
     const label = String(labelSource[id] || '').trim();
     if (label) defaults.questionLabels[id] = label;
+    const instruction = String(instructionSource[id] ?? '').trim();
+    if (instruction) defaults.questionInstructions[id] = instruction;
+    if (Object.prototype.hasOwnProperty.call(photoSource, id)) {
+      const parsedMin = Number(photoSource[id]);
+      if (Number.isFinite(parsedMin) && parsedMin >= 0 && parsedMin !== Number(minPhotos || 0)) {
+        defaults.questionMinPhotos[id] = parsedMin;
+      }
+    }
   });
 
   defaults.requireBathroomPhotos =
@@ -1063,6 +1105,14 @@ function renderCleanlinessReportSettings(poolDoc = {}) {
             <span>Requirement Text</span>
             <input type="text" class="cleanliness-new-question-input" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" placeholder="Type a new question or requirement">
           </label>
+          <label class="cleanliness-add-label">
+            <span>Instructions</span>
+            <textarea class="cleanliness-new-question-instructions" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" rows="3" placeholder="Add instructions shown below the title"></textarea>
+          </label>
+          <label class="cleanliness-add-label cleanliness-min-photo-label">
+            <span>Minimum Photos</span>
+            <input type="number" class="cleanliness-new-question-min-photos" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" min="0" step="1" value="0">
+          </label>
           <fieldset class="cleanliness-pool-assignment">
             <legend>Require For</legend>
             <label class="cleanliness-pool-option">
@@ -1080,6 +1130,11 @@ function renderCleanlinessReportSettings(poolDoc = {}) {
 
     const list = shiftCard.querySelector('.cleanliness-question-list');
     getCleanlinessQuestionBank().forEach((item) => {
+      const currentLabel = shiftSettings.questionLabels[item.id] || item.label;
+      const currentInstructions = shiftSettings.questionInstructions[item.id] ?? item.instructions ?? '';
+      const currentMinPhotos = Object.prototype.hasOwnProperty.call(shiftSettings.questionMinPhotos || {}, item.id)
+        ? shiftSettings.questionMinPhotos[item.id]
+        : Number(item.minPhotos || 0);
       const row = document.createElement('div');
       row.className = 'supply-info-row cleanliness-info-row cleanliness-question-row';
       row.innerHTML = `
@@ -1088,7 +1143,12 @@ function renderCleanlinessReportSettings(poolDoc = {}) {
           <span class="supply-info-name">${escapeHtmlUnsafe(item.label)}</span>
         </label>
         <span class="cleanliness-question-editable">
-          <input type="text" class="cleanliness-question-label-input" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" value="${escapeHtmlUnsafe(shiftSettings.questionLabels[item.id] || item.label)}" aria-label="${escapeHtmlUnsafe(label)} ${escapeHtmlUnsafe(item.label)} label">
+          <input type="text" class="cleanliness-question-label-input" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" value="${escapeHtmlUnsafe(currentLabel)}" aria-label="${escapeHtmlUnsafe(label)} ${escapeHtmlUnsafe(item.label)} label">
+          <textarea class="cleanliness-question-instructions-input" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" rows="2" aria-label="${escapeHtmlUnsafe(label)} ${escapeHtmlUnsafe(item.label)} instructions" placeholder="Instructions shown below the question title">${escapeHtmlUnsafe(currentInstructions)}</textarea>
+          <label class="cleanliness-min-photo-inline">
+            <span>Minimum photos</span>
+            <input type="number" class="cleanliness-question-min-photos-input" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" min="0" step="1" value="${escapeHtmlUnsafe(currentMinPhotos)}">
+          </label>
         </span>
       `;
       list.appendChild(row);
@@ -1120,6 +1180,22 @@ function collectCleanlinessReportSettings() {
     const bankLabel = getCleanlinessQuestionBank().find((item) => item.id === questionId)?.label || '';
     const label = String(input.value || '').trim();
     if (label && label !== bankLabel) settings[shiftKey].questionLabels[questionId] = label;
+  });
+  document.querySelectorAll('.cleanliness-question-instructions-input').forEach((input) => {
+    const questionId = input.dataset.cleanlinessQuestion;
+    const shiftKey = input.dataset.cleanlinessShift;
+    if (!questionId || !settings[shiftKey]) return;
+    const bankInstructions = getCleanlinessQuestionBank().find((item) => item.id === questionId)?.instructions || '';
+    const instructions = String(input.value || '').trim();
+    if (instructions && instructions !== bankInstructions) settings[shiftKey].questionInstructions[questionId] = instructions;
+  });
+  document.querySelectorAll('.cleanliness-question-min-photos-input').forEach((input) => {
+    const questionId = input.dataset.cleanlinessQuestion;
+    const shiftKey = input.dataset.cleanlinessShift;
+    if (!questionId || !settings[shiftKey]) return;
+    const bankMin = Number(getCleanlinessQuestionBank().find((item) => item.id === questionId)?.minPhotos || 0);
+    const minPhotos = Math.max(0, Number(input.value || 0));
+    if (Number.isFinite(minPhotos) && minPhotos !== bankMin) settings[shiftKey].questionMinPhotos[questionId] = minPhotos;
   });
   document.querySelectorAll('.cleanliness-bathroom-required').forEach((checkbox) => {
     const shiftKey = checkbox.dataset.cleanlinessShift;
@@ -1209,17 +1285,21 @@ function queueCleanlinessQuestionForPools(questionId, shiftKey, poolIds = []) {
 function handleAddCleanlinessQuestion(shiftKey) {
   if (!CLEANLINESS_REPORT_SHIFTS.some((shift) => shift.key === shiftKey)) return;
   const input = document.querySelector(`.cleanliness-new-question-input[data-cleanliness-shift="${shiftKey}"]`);
+  const instructionInput = document.querySelector(`.cleanliness-new-question-instructions[data-cleanliness-shift="${shiftKey}"]`);
+  const minPhotosInput = document.querySelector(`.cleanliness-new-question-min-photos[data-cleanliness-shift="${shiftKey}"]`);
   const label = String(input?.value || '').trim();
   if (!label) {
     showMessage('Type the question or requirement before adding it.', 'error');
     input?.focus();
     return;
   }
+  const instructions = String(instructionInput?.value || '').trim();
+  const minPhotos = Math.max(0, Number(minPhotosInput?.value || 0));
 
   const questionId = createUniqueCleanlinessQuestionId(label);
   cleanlinessQuestionBank = normalizeCleanlinessQuestionBank([
     ...getCleanlinessQuestionBank(),
-    { id: questionId, label, custom: true },
+    { id: questionId, label, instructions, minPhotos: Number.isFinite(minPhotos) ? minPhotos : 0, custom: true },
   ]);
 
   const currentSettings = collectCleanlinessReportSettings();

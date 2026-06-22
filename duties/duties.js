@@ -10,14 +10,14 @@ const DUTY_UPLOAD_IMAGE_QUALITY = 0.66;
 const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 750 * 1024;
 const DUTY_UPLOAD_CONCURRENCY = 3;
 const CLEANLINESS_REPORT_QUESTION_TYPES = [
-  { id: 'deck', label: 'Deck photos' },
-  { id: 'pool', label: 'Pool photos' },
-  { id: 'skimmers', label: 'Skimmer photos' },
-  { id: 'damaged', label: 'Damaged equipment photos and notes' },
-  { id: 'bleachFeeders', label: 'Bleach feeder photos' },
-  { id: 'desLogbooks', label: 'DES logbook photos' },
-  { id: 'fillLines', label: 'Fill line photos' },
-  { id: 'otherNotes', label: 'Other notes' },
+  { id: 'deck', label: 'Deck photos', instructions: 'Submit clear photos showing the full deck area.', minPhotos: 2 },
+  { id: 'pool', label: 'Pool photos', instructions: 'Submit clear photos showing the pool water and surrounding edge.', minPhotos: 2 },
+  { id: 'skimmers', label: 'Skimmer photos', instructions: 'Submit photos of the skimmer baskets and skimmer areas.', minPhotos: 2 },
+  { id: 'damaged', label: 'Damaged equipment photos and notes', instructions: 'Document any damaged, unsafe, or missing equipment.', minPhotos: 0 },
+  { id: 'bleachFeeders', label: 'Bleach feeder photos', instructions: 'Submit photos of each bleach feeder.', minPhotos: 1 },
+  { id: 'desLogbooks', label: 'DES logbook photos', instructions: 'Submit photos where the whole DES logbook page is clearly visible.', minPhotos: 0 },
+  { id: 'fillLines', label: 'Fill line photos', instructions: 'Submit photos showing pool fill line conditions.', minPhotos: 0 },
+  { id: 'otherNotes', label: 'Other notes', instructions: 'Add any other notes that should be included with this report.', minPhotos: 0 },
 ];
 const CLEANLINESS_REPORT_SETTINGS_DOC_ID = 'cleanlinessReport';
 const CLEANLINESS_REPORT_SHIFTS = [
@@ -221,7 +221,17 @@ function normalizeCleanlinessQuestionBank(items = []) {
     if (!label) return;
     const id = normalizeCleanlinessQuestionId(item.id || label);
     const builtIn = CLEANLINESS_BUILT_IN_IDS.has(id);
-    byId.set(id, { id, label, builtIn, custom: !builtIn });
+    const existing = byId.get(id) || {};
+    const minPhotos = Number.isFinite(Number(item?.minPhotos)) ? Math.max(0, Number(item.minPhotos)) : Number(existing.minPhotos || 0);
+    byId.set(id, {
+      ...existing,
+      id,
+      label,
+      instructions: String(item?.instructions ?? existing.instructions ?? '').trim(),
+      minPhotos,
+      builtIn,
+      custom: !builtIn,
+    });
   });
   return Array.from(byId.values());
 }
@@ -251,6 +261,8 @@ function getDefaultCleanlinessShiftSettings() {
   return {
     enabledQuestionTypes,
     questionLabels: {},
+    questionInstructions: {},
+    questionMinPhotos: {},
     requireBathroomPhotos: false,
   };
 }
@@ -260,8 +272,10 @@ function normalizeCleanlinessShiftSettings(source = {}, legacySource = null) {
   const fallback = legacySource && typeof legacySource === 'object' ? legacySource : null;
   const enabledSource = source.enabledQuestionTypes || source.questionTypes || fallback?.enabledQuestionTypes || fallback?.questionTypes || {};
   const labelSource = source.questionLabels || source.labels || {};
+  const instructionSource = source.questionInstructions || source.instructions || {};
+  const photoSource = source.questionMinPhotos || source.minPhotos || {};
 
-  getCleanlinessQuestionBank().forEach(({ id }) => {
+  getCleanlinessQuestionBank().forEach(({ id, minPhotos }) => {
     if (Object.prototype.hasOwnProperty.call(enabledSource, id)) {
       defaults.enabledQuestionTypes[id] = enabledSource[id] !== false;
     } else if (Object.prototype.hasOwnProperty.call(source, id)) {
@@ -271,6 +285,14 @@ function normalizeCleanlinessShiftSettings(source = {}, legacySource = null) {
     }
     const label = String(labelSource[id] || '').trim();
     if (label) defaults.questionLabels[id] = label;
+    const instructions = String(instructionSource[id] ?? '').trim();
+    if (instructions) defaults.questionInstructions[id] = instructions;
+    if (Object.prototype.hasOwnProperty.call(photoSource, id)) {
+      const parsedMin = Number(photoSource[id]);
+      if (Number.isFinite(parsedMin) && parsedMin >= 0 && parsedMin !== Number(minPhotos || 0)) {
+        defaults.questionMinPhotos[id] = parsedMin;
+      }
+    }
   });
 
   defaults.requireBathroomPhotos =
@@ -338,6 +360,20 @@ function getCleanlinessQuestionLabel(questionId, settings) {
   return getCleanlinessQuestionBank().find((item) => item.id === questionId)?.label || questionId;
 }
 
+function getCleanlinessQuestionInstructions(questionId, settings) {
+  const override = String(settings?.questionInstructions?.[questionId] || '').trim();
+  if (override) return override;
+  return getCleanlinessQuestionBank().find((item) => item.id === questionId)?.instructions || '';
+}
+
+function getCleanlinessQuestionMinPhotos(questionId, settings) {
+  if (Object.prototype.hasOwnProperty.call(settings?.questionMinPhotos || {}, questionId)) {
+    const parsed = Number(settings.questionMinPhotos[questionId]);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return Number(getCleanlinessQuestionBank().find((item) => item.id === questionId)?.minPhotos || 0);
+}
+
 function toCleanlinessGroupTitle(label) {
   return String(label || '')
     .replace(/\s+photos?(?:\s+and\s+notes)?$/i, '')
@@ -354,15 +390,36 @@ function updateCleanlinessGroupTitle(config, label) {
   if (badge) title.appendChild(badge);
 }
 
-function setCleanlinessPhotoGroup(config, visible) {
+function updateCleanlinessGroupInstructions(config, instructions) {
+  const wrapper = document.getElementById(config.wrapperId);
+  const desc = wrapper?.querySelector('.duties-group-desc');
+  if (desc && instructions) desc.textContent = instructions;
+}
+
+function updateCleanlinessGroupBadge(config, minPhotos, maxPhotos) {
+  const wrapper = document.getElementById(config.wrapperId);
+  const badge = wrapper?.querySelector('.duties-opt-badge');
+  if (!badge) return;
+  const min = Number(minPhotos || 0);
+  const max = Number(maxPhotos || 0);
+  badge.textContent = min > 0
+    ? `${min} required${max > min ? `, ${max} max` : ''}`
+    : 'optional';
+}
+
+function setCleanlinessPhotoGroup(config, visible, options = {}) {
   const wrapper = document.getElementById(config.wrapperId);
   if (!wrapper) return;
   wrapper.classList.toggle('hidden', !visible);
 
+  const minPhotos = Number.isFinite(Number(options.minPhotos)) ? Math.max(0, Number(options.minPhotos)) : Number(config.min || 0);
+  const maxPhotos = Math.max(Number(config.max || minPhotos || 1), minPhotos || 0);
+  updateCleanlinessGroupBadge(config, minPhotos, maxPhotos);
+
   if (config.uploadId) {
     resetPhotoGroup(config.uploadId, visible
-      ? { min: config.min, max: config.max, initialSlots: config.initialSlots }
-      : { min: 0, max: config.max, empty: true });
+      ? { min: minPhotos, max: maxPhotos, initialSlots: Math.max(Number(config.initialSlots || 0), minPhotos || 1) }
+      : { min: 0, max: maxPhotos, empty: true });
   }
 
   if (!visible && Array.isArray(config.noteIds)) {
@@ -379,6 +436,23 @@ function setSpecialPhotoGroupHidden(groupId, uploadId, max = 2) {
   resetPhotoGroup(uploadId, { min: 0, max, empty: true });
 }
 
+function applySpecialCleanlinessOverrides(questionId, settings, groupId, uploadId, descId, badgeId) {
+  const wrapper = document.getElementById(groupId);
+  const upload = document.getElementById(uploadId);
+  if (!wrapper || !upload || wrapper.classList.contains('hidden')) return;
+  if (Object.prototype.hasOwnProperty.call(settings?.questionInstructions || {}, questionId)) {
+    const desc = document.getElementById(descId);
+    if (desc) desc.textContent = getCleanlinessQuestionInstructions(questionId, settings);
+  }
+  if (Object.prototype.hasOwnProperty.call(settings?.questionMinPhotos || {}, questionId)) {
+    const min = getCleanlinessQuestionMinPhotos(questionId, settings);
+    const max = Math.max(min, parseInt(upload.dataset.max || String(min || 1), 10));
+    const badge = document.getElementById(badgeId);
+    if (badge) badge.textContent = min > 0 ? `${min} required${max > min ? `, ${max} max` : ''}` : 'optional';
+    resetPhotoGroup(uploadId, min > 0 ? { min, max, initialSlots: min } : { min: 0, max, empty: true });
+  }
+}
+
 function updateBathroomPhotoRequirement(required) {
   const wrapper = document.getElementById('bathroomsGroup');
   if (!wrapper) return;
@@ -392,11 +466,16 @@ function updateCleanlinessReportFields(poolValue) {
   const settings = getCleanlinessReportSettings(poolValue);
   Object.entries(CLEANLINESS_REPORT_PHOTO_GROUPS).forEach(([key, config]) => {
     updateCleanlinessGroupTitle(config, getCleanlinessQuestionLabel(key, settings));
-    setCleanlinessPhotoGroup(config, settings.enabledQuestionTypes[key] !== false);
+    updateCleanlinessGroupInstructions(config, getCleanlinessQuestionInstructions(key, settings));
+    setCleanlinessPhotoGroup(config, settings.enabledQuestionTypes[key] !== false, {
+      minPhotos: getCleanlinessQuestionMinPhotos(key, settings),
+    });
   });
 
   updateFillLinesFields(poolValue);
   updateDESLogbooksFields(poolValue);
+  applySpecialCleanlinessOverrides('fillLines', settings, 'fillLinesGroup', 'fillLinesUpload', 'fillLinesDesc', 'fillLinesBadge');
+  applySpecialCleanlinessOverrides('desLogbooks', settings, 'desLogbooksGroup', 'desLogbooksUpload', 'desLogbooksDesc', 'desLogbooksBadge');
 
   if (settings.enabledQuestionTypes.fillLines === false) {
     setSpecialPhotoGroupHidden('fillLinesGroup', 'fillLinesUpload', 2);
@@ -420,13 +499,31 @@ function updateCustomCleanlinessRequirements(settings) {
   wrapper.classList.toggle('hidden', customItems.length === 0);
   customItems.forEach((item) => {
     const label = getCleanlinessQuestionLabel(item.id, settings);
-    const row = document.createElement('label');
+    const instructions = getCleanlinessQuestionInstructions(item.id, settings);
+    const minPhotos = getCleanlinessQuestionMinPhotos(item.id, settings);
+    const uploadId = `customUpload_${item.id.replace(/[^a-z0-9_-]/gi, '_')}`;
+    const row = document.createElement('div');
     row.className = 'duties-custom-requirement-row';
+    row.dataset.requirementId = item.id;
+    row.dataset.uploadId = uploadId;
     row.innerHTML = `
-      <input type="checkbox" class="duties-custom-requirement-check" data-requirement-id="${escapeHtmlUnsafe(item.id)}">
-      <span>${escapeHtmlUnsafe(label)}</span>
+      <label class="duties-custom-requirement-checkline">
+        <input type="checkbox" class="duties-custom-requirement-check" data-requirement-id="${escapeHtmlUnsafe(item.id)}">
+        <span>${escapeHtmlUnsafe(label)}</span>
+      </label>
+      ${instructions ? `<p class="duties-custom-requirement-instructions">${escapeHtmlUnsafe(instructions)}</p>` : ''}
+      ${minPhotos > 0 ? `
+        <div class="duties-custom-upload-wrap">
+          <div class="duties-multi-upload duties-custom-upload" id="${escapeHtmlUnsafe(uploadId)}" data-category="customRequirements" data-min="${escapeHtmlUnsafe(minPhotos)}" data-max="${escapeHtmlUnsafe(Math.max(minPhotos, 10))}"></div>
+          <button type="button" class="duties-add-photo-btn duties-custom-add-photo" data-upload-id="${escapeHtmlUnsafe(uploadId)}">+ Add Photo</button>
+        </div>
+      ` : ''}
     `;
     rows.appendChild(row);
+    if (minPhotos > 0) {
+      resetPhotoGroup(uploadId, { min: minPhotos, max: Math.max(minPhotos, 10), initialSlots: minPhotos });
+      row.querySelector('.duties-custom-add-photo')?.addEventListener('click', () => addPhotoSlot(uploadId));
+    }
   });
 }
 
@@ -841,11 +938,15 @@ function collectCustomCleanlinessRequirements() {
   const rows = Array.from(document.querySelectorAll('#customCleanlinessRequirementsRows .duties-custom-requirement-row'));
   return rows.map((row) => {
     const checkbox = row.querySelector('.duties-custom-requirement-check');
-    const label = row.querySelector('span')?.textContent?.trim() || '';
+    const label = row.querySelector('.duties-custom-requirement-checkline span')?.textContent?.trim() || '';
+    const uploadId = row.dataset.uploadId || '';
+    const minPhotos = uploadId ? parseInt(document.getElementById(uploadId)?.dataset.min || '0', 10) : 0;
     return {
       id: checkbox?.dataset.requirementId || '',
       label,
       completed: checkbox?.checked === true,
+      minPhotos,
+      photoKey: uploadId ? `custom_${checkbox?.dataset.requirementId || ''}` : '',
     };
   }).filter((item) => item.id || item.label);
 }
@@ -1148,6 +1249,13 @@ window.submitDutiesForm = async function () {
     });
   }
 
+  document.querySelectorAll('.duties-custom-upload').forEach((upload) => {
+    const row = upload.closest('.duties-custom-requirement-row');
+    const label = row?.querySelector('.duties-custom-requirement-checkline span')?.textContent?.trim() || 'Additional Requirement';
+    const min = parseInt(upload.dataset.min || '0', 10);
+    if (min > 0) requiredGroups.push({ id: upload.id, label, min });
+  });
+
   for (const g of requiredGroups) {
     const photos = collectPhotosFromGroup(g.id);
     if (photos.length < g.min) {
@@ -1182,6 +1290,17 @@ window.submitDutiesForm = async function () {
       { groupId: 'desLogbooksUpload', category: 'desLogbooks', resultKey: 'desLogbooks', label: 'DES Logbooks' },
       { groupId: 'fillLinesUpload', category: 'fillLines', resultKey: 'fillLines', label: 'Fill Lines' },
       { groupId: 'bleachUpload', category: 'bleach', resultKey: 'bleach', label: 'Managers Only' },
+      ...Array.from(document.querySelectorAll('.duties-custom-upload')).map((upload) => {
+        const row = upload.closest('.duties-custom-requirement-row');
+        const requirementId = row?.dataset.requirementId || upload.id;
+        const label = row?.querySelector('.duties-custom-requirement-checkline span')?.textContent?.trim() || 'Additional Requirement';
+        return {
+          groupId: upload.id,
+          category: `customRequirements/${requirementId}`,
+          resultKey: `custom_${requirementId}`,
+          label,
+        };
+      }),
     ].map((group) => ({
       ...group,
       files: collectPhotosFromGroup(group.groupId),
@@ -1248,6 +1367,11 @@ window.submitDutiesForm = async function () {
         fillLines: uploadedPhotos.fillLines || [],
         bleach: uploadedPhotos.bleach || [],
       },
+      customRequirementPhotos: Object.fromEntries(
+        Object.entries(uploadedPhotos)
+          .filter(([key]) => key.startsWith('custom_'))
+          .map(([key, value]) => [key.replace(/^custom_/, ''), value])
+      ),
       damagedNotes: document.getElementById('damagedEquipmentGroup')?.classList.contains('hidden') ? '' : (document.getElementById('damagedNotes')?.value?.trim() || ''),
       otherNotes: document.getElementById('otherNotesGroup')?.classList.contains('hidden') ? '' : (document.getElementById('dutiesOtherNotes')?.value?.trim() || ''),
       customRequirements: managerialPage ? [] : customRequirements,

@@ -40,7 +40,6 @@
             <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
             <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
-            <a href="../managerial/managerial.html" class="dropdown-item" data-nav="managerial-report">Managerial Report</a>
             <a href="../operational/operational.html" class="dropdown-item" data-nav="operational-status">Operational Status Log</a>
             <a href="inventory.html" class="dropdown-item active-page" data-nav="inventory">Inventory</a>
             <a href="../resources/resources.html" class="dropdown-item" data-nav="resources">Resources</a>
@@ -70,6 +69,7 @@
             <option value="">Select</option>
             <option value="weekly">Weekly Inventory Form</option>
             <option value="urgent">Urgent Supply Needs</option>
+            <option value="chemical">Chemical Inventory</option>
           </select>
         </div>
       </div>
@@ -86,6 +86,7 @@
         <p class="inventory-directions" id="inventoryDirections"></p>
         <div id="weeklyInventoryFields" class="inventory-supply-sections"></div>
         <div id="urgentInventoryFields" class="inventory-urgent-list hidden"></div>
+        <div id="chemicalInventoryFields" class="inventory-chemical-fields hidden"></div>
         <button type="button" class="editAndSave hidden" id="inventoryAddItemBtn">Add Item</button>
         <div class="inventory-submit-row">
           <button type="submit" class="submit-btn" id="inventorySubmitBtn">Submit</button>
