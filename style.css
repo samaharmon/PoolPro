@@ -5430,6 +5430,61 @@ body.dark-mode .alerts-reminder-list-meta {
   min-width: max-content;
 }
 
+.dashboard-compliance-note {
+  color: #d8d8d8;
+  font-weight: 700;
+  margin: 0 0 18px;
+}
+
+.dashboard-compliance-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 0 0 22px;
+}
+
+.dashboard-compliance-table {
+  --table-min-width: 980px;
+}
+
+.dashboard-compliance-table th,
+.dashboard-compliance-table td {
+  min-width: 150px;
+}
+
+.dashboard-compliance-table th:first-child,
+.dashboard-compliance-table td:first-child {
+  min-width: 230px;
+}
+
+.dashboard-compliance-staff-input {
+  width: 130px;
+  max-width: 100%;
+  background: #595959;
+  color: #fff;
+  border: 2px solid #ddd;
+  border-bottom: 4px solid #ddd;
+  padding: 10px 12px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.dashboard-compliance-score-good {
+  color: #7ccf91;
+  font-weight: 900;
+}
+
+.dashboard-compliance-score-warn {
+  color: #f2c94c;
+  font-weight: 900;
+}
+
+.dashboard-compliance-score-bad {
+  color: #ff7a7e;
+  font-weight: 900;
+}
+
 .dashboard-form-link {
   color: #ff9b92;
   text-decoration: underline;

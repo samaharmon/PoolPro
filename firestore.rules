@@ -96,6 +96,19 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Facility to-do list tasks and Firestore-backed proof photos
+    match /facilityTasks/{taskId} {
+      allow read, write: if true;
+    }
+
+    match /taskProofMedia/{taskId}/photos/{photoId} {
+      allow read, write: if true;
+    }
+
+    match /taskProofMedia/{taskId}/photos/{photoId}/chunks/{chunkId} {
+      allow read, write: if true;
+    }
+
     // Lifeguard employees who can log in via home screen
     match /employees/{employeeId} {
       allow read, write: if true;

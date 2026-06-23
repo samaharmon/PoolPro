@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>PoolPro</title>
+
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PoolPro">
+  <meta name="theme-color" content="#000000">
+
+  <link rel="icon" href="../Images/Logos/favicon.ico" />
+  <link rel="icon" type="image/png" href="../Images/Logos/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="../Images/Logos/favicon.svg" />
+  <link rel="shortcut icon" href="../Images/Logos/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/Images/Logos/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+
+  <link rel="stylesheet" href="../style.css" />
+  <link rel="stylesheet" href="todo.css" />
+</head>
+<body>
+  <div class="header">
+    <div class="header-content">
+      <div class="header-left">
+        <div class="header-title-block">
+          <h1>PoolPro</h1>
+          <p>Capital City Aquatics &amp; Upstate Pool Management</p>
+        </div>
+        <img id="logo" src="../Images/Logos/logo.png" alt="PoolPro logo" />
+        <div class="menu-container">
+          <button class="menu-btn" onclick="toggleMenu(this)">
+            <span>≡</span>
+            <span>Menu</span>
+          </button>
+          <div class="dropdown-menu" id="dropdownMenu">
+            <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
+            <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
+            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
+            <a href="../operational/operational.html" class="dropdown-item" data-nav="operational-status">Operational Status Log</a>
+            <a href="../inventory/inventory.html" class="dropdown-item" data-nav="inventory">Inventory</a>
+            <a href="todo.html" class="dropdown-item active-page" data-nav="todo-list">To Do List</a>
+            <a href="../resources/resources.html" class="dropdown-item" data-nav="resources">Resources</a>
+            <a href="../des/des.html" class="dropdown-item" data-nav="des-pre-inspection">DES Pre-Inspection</a>
+            <a href="../chem/chem.html#supervisorDashboard" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
+            <a href="../Training/training.html" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
+            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
+            <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+            <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
+            <a href="#" class="dropdown-item logout" data-nav="logout" onclick="logout(); return false;">Logout</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <h2 class="page-content-title">To Do List</h2>
+
+    <div class="form-container todo-page">
+      <section class="section todo-pool-section">
+        <h2>Facility Tasks</h2>
+        <div class="form-group todo-pool-select-wrap">
+          <label for="todoPoolSelect">Pool</label>
+          <select id="todoPoolSelect" class="training-filter-select">
+            <option value="">Loading pools...</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="section todo-list-section">
+        <div class="todo-section-heading">
+          <h2>Tasks</h2>
+          <span id="todoTaskCount" class="todo-muted"></span>
+        </div>
+        <div id="todoList" class="todo-list"></div>
+      </section>
+
+      <section class="section todo-generator-section">
+        <h2>Task Generator</h2>
+        <form id="todoTaskForm" class="todo-task-form">
+          <input type="hidden" id="todoEditingTaskId">
+
+          <div class="todo-form-grid">
+            <label class="form-group">
+              <span>Title</span>
+              <input type="text" id="todoTaskTitle" required>
+            </label>
+            <label class="form-group">
+              <span>Urgency</span>
+              <select id="todoTaskUrgency" class="training-filter-select">
+                <option value="high">High</option>
+                <option value="medium" selected>Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label class="form-group">
+              <span>Required Completion Time</span>
+              <input type="datetime-local" id="todoTaskDue" required>
+            </label>
+            <label class="form-group todo-checkbox-field">
+              <input type="checkbox" id="todoTaskExpires">
+              <span>Expire when completion time passes</span>
+            </label>
+          </div>
+
+          <label class="form-group">
+            <span>Description</span>
+            <textarea id="todoTaskDescription" rows="4"></textarea>
+          </label>
+
+          <fieldset class="todo-fieldset">
+            <legend>Repetition</legend>
+            <div class="todo-form-grid">
+              <label class="form-group">
+                <span>Repeat</span>
+                <select id="todoTaskRepeatMode" class="training-filter-select">
+                  <option value="none">None</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="custom">Custom Dates</option>
+                </select>
+              </label>
+              <label class="form-group">
+                <span>Number of repetitions</span>
+                <input type="number" id="todoTaskRepeatCount" min="0" step="1" value="0">
+              </label>
+            </div>
+            <label class="form-group todo-custom-repeat-field">
+              <span>Custom dates and times</span>
+              <textarea id="todoTaskCustomDates" rows="3" placeholder="One date/time per line, for example: 2026-06-25 7:00 PM"></textarea>
+            </label>
+          </fieldset>
+
+          <fieldset class="todo-fieldset">
+            <legend>Proof of Completion</legend>
+            <div class="todo-form-grid">
+              <label class="form-group">
+                <span>Requirement</span>
+                <select id="todoTaskProofType" class="training-filter-select">
+                  <option value="none">No proof required</option>
+                  <option value="images">Images</option>
+                  <option value="explanation">Explanation</option>
+                  <option value="form">Form Submission</option>
+                </select>
+              </label>
+              <label class="form-group">
+                <span>Required Form</span>
+                <select id="todoTaskProofForm" class="training-filter-select">
+                  <option value="">Select</option>
+                  <option value="poolChemistry">Pool Chemistry Log</option>
+                  <option value="inventory">Inventory Form</option>
+                  <option value="chemicalInventory">Chemical Inventory Form</option>
+                  <option value="cleanlinessOpening">Opening Cleanliness Report</option>
+                  <option value="cleanlinessClosing">Closing Cleanliness Report</option>
+                  <option value="desLogbooks">DES Logbook Form</option>
+                  <option value="desPreInspection">DES Pre-Inspection</option>
+                  <option value="operationalStatus">Operational Status Log</option>
+                </select>
+              </label>
+            </div>
+          </fieldset>
+
+          <div class="todo-form-actions">
+            <button type="submit" class="submit-btn" id="todoSaveTaskBtn">Save Task</button>
+            <button type="button" class="editAndSave" id="todoClearTaskBtn">Clear</button>
+            <p id="todoFormMessage" class="form-message"></p>
+          </div>
+        </form>
+      </section>
+
+      <section class="section todo-history-section">
+        <h2>Favorite Tasks</h2>
+        <div id="todoFavoritesTable" class="todo-table-host"></div>
+      </section>
+
+      <section class="section todo-history-section">
+        <h2>Task History</h2>
+        <div id="todoHistoryTable" class="todo-table-host"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="footer">
+    <em>Developed by Sam Harmon | 2025<br>v1.0</em>
+  </div>
+
+  <div class="modal-overlay" id="settingsOverlay"></div>
+  <div id="settingsModal">
+    <div class="modal-content settings-modal-content">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <span class="close" onclick="closeSettings()">&times;</span>
+      </div>
+      <div class="settings-section">
+        <h3>Website Setup</h3>
+        <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="todoProofModal" class="todo-proof-modal hidden" aria-hidden="true">
+    <div class="todo-proof-card" role="dialog" aria-modal="true" aria-labelledby="todoProofTitle">
+      <button type="button" class="todo-proof-close" id="todoProofClose" aria-label="Close proof modal">&times;</button>
+      <h2 id="todoProofTitle">Proof of Completion</h2>
+      <p id="todoProofSummary" class="todo-muted"></p>
+      <label class="form-group todo-proof-explanation">
+        <span>Explanation</span>
+        <textarea id="todoProofExplanation" rows="4"></textarea>
+      </label>
+      <label class="form-group todo-proof-images">
+        <span>Images</span>
+        <input type="file" id="todoProofImages" accept="image/*" multiple>
+      </label>
+      <div class="todo-form-actions">
+        <button type="button" class="submit-btn" id="todoProofSubmit">Complete Task</button>
+        <p id="todoProofMessage" class="form-message"></p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="../script.js"></script>
+  <script type="module" src="todo.js"></script>
+</body>
+</html>
