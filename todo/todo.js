@@ -241,8 +241,13 @@ function renderTaskList() {
     const isFormProof = task.proofType === 'form';
     const canEdit = canManageTasks();
     card.innerHTML = `
-      <div class="todo-card-header">
-        <div>
+      <div class="todo-card-top">
+        <label class="todo-status-toggle${task.completed ? ' is-complete' : ''}${isFormProof && !task.completed ? ' is-disabled' : ''}" title="${isFormProof && !task.completed ? 'This task completes automatically after the required form is submitted.' : ''}">
+          <input type="checkbox" data-todo-complete="${escapeHtml(task.id)}" ${task.completed ? 'checked' : ''} ${isFormProof && !task.completed ? 'disabled' : ''}>
+          <span>Incomplete</span>
+          <span>Complete</span>
+        </label>
+        <div class="todo-card-main">
           <h3 class="todo-card-title">${escapeHtml(task.title || 'Untitled Task')}</h3>
           <div class="todo-card-meta">
             <span class="todo-chip urgency-${escapeHtml(task.urgency)}">${escapeHtml(task.urgency || 'medium')}</span>
@@ -251,17 +256,15 @@ function renderTaskList() {
             <span class="todo-chip">${escapeHtml(proofLabel)}</span>
           </div>
         </div>
-        <div class="todo-card-actions">
-          <label class="todo-status-toggle${task.completed ? ' is-complete' : ''}${isFormProof && !task.completed ? ' is-disabled' : ''}" title="${isFormProof && !task.completed ? 'This task completes automatically after the required form is submitted.' : ''}">
-            <input type="checkbox" data-todo-complete="${escapeHtml(task.id)}" ${task.completed ? 'checked' : ''} ${isFormProof && !task.completed ? 'disabled' : ''}>
-            <span>Incomplete</span>
-            <span>Complete</span>
-          </label>
-          <button type="button" class="todo-action-btn" data-todo-edit="${escapeHtml(task.id)}" ${canEdit ? '' : 'disabled'}>Edit</button>
-          <button type="button" class="todo-action-btn" data-todo-delete="${escapeHtml(task.id)}" ${canEdit ? '' : 'disabled'}>Delete</button>
-        </div>
       </div>
       ${task.description ? `<p class="todo-card-desc">${escapeHtml(task.description)}</p>` : ''}
+      ${canEdit ? `
+        <div class="todo-card-manage">
+          <div class="todo-action-toggle" role="group" aria-label="Task actions">
+            <button type="button" data-todo-edit="${escapeHtml(task.id)}">Edit</button>
+            <button type="button" data-todo-delete="${escapeHtml(task.id)}">Delete</button>
+          </div>
+        </div>` : ''}
     `;
     els.list.appendChild(card);
   });
@@ -278,6 +281,11 @@ function renderTaskList() {
 }
 
 function renderTaskTables() {
+  if (!canManageTasks()) {
+    if (els.favoritesTable) els.favoritesTable.innerHTML = '';
+    if (els.historyTable) els.historyTable.innerHTML = '';
+    return;
+  }
   renderTaskTable(els.favoritesTable, getTasksForSelectedPool().filter((task) => task.favorite), true);
   renderTaskTable(els.historyTable, getTasksForSelectedPool(), false);
 }
@@ -313,13 +321,15 @@ function renderTaskTable(host, tasks, favoritesOnly) {
         ${sorted.map((task) => `
           <tr>
             <td>
-              <button type="button" class="todo-heart-btn${task.favorite ? ' is-favorite' : ''}" data-todo-favorite="${escapeHtml(task.id)}" ${canManageTasks() ? '' : 'disabled'} aria-label="Favorite task">${task.favorite ? '♥' : '♡'}</button>
+              <button type="button" class="todo-heart-btn${task.favorite ? ' is-favorite' : ''}" data-todo-favorite="${escapeHtml(task.id)}" aria-label="${task.favorite ? 'Remove favorite' : 'Favorite task'}">
+                <span class="todo-heart-icon" aria-hidden="true">♥</span>
+              </button>
             </td>
             <td>${escapeHtml(task.title || 'Untitled Task')}</td>
             <td>${escapeHtml(task.urgency || 'medium')}</td>
             <td>${escapeHtml(formatDueDate(toDate(task.requiredCompletionAtIso)))}</td>
             <td>${task.completed ? 'Complete' : 'Incomplete'}</td>
-            <td>${escapeHtml(getProofLabel(task))}</td>
+            <td>${getTaskProofHistoryHtml(task)}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -333,6 +343,13 @@ function renderTaskTable(host, tasks, favoritesOnly) {
 
 function updateFormPermissions() {
   const canManage = canManageTasks();
+  document.querySelectorAll('.todo-manager-only-section').forEach((section) => {
+    section.hidden = !canManage;
+    section.classList.toggle('hidden', !canManage);
+  });
+  els.form?.querySelectorAll('input, select, textarea, button').forEach((control) => {
+    control.disabled = !canManage;
+  });
   document.querySelectorAll('[data-todo-edit], [data-todo-delete], [data-todo-favorite]').forEach((button) => {
     button.disabled = !canManage;
   });
@@ -341,6 +358,10 @@ function updateFormPermissions() {
 async function handleTaskFormSubmit(event) {
   event.preventDefault();
   setFormMessage('');
+  if (!canManageTasks()) {
+    setFormMessage('Only managers and supervisors can save tasks.', true);
+    return;
+  }
   if (!state.selectedPool) {
     setFormMessage('Select a pool before saving a task.', true);
     return;
@@ -473,7 +494,7 @@ async function updateTaskCompletion(task, complete, extra = {}) {
 function openProofModal(task) {
   state.pendingProofTask = task;
   if (!els.proofModal) return;
-  els.proofTitle.textContent = `Complete ${task.title || 'Task'}`;
+  els.proofTitle.textContent = `Complete this task: ${task.title || 'Untitled Task'}`;
   els.proofSummary.textContent = task.proofType === 'images'
     ? `Upload at least ${getMinimumPhotoCount(task)} image${getMinimumPhotoCount(task) === 1 ? '' : 's'} to complete this task.`
     : 'Enter an explanation to complete this task.';
@@ -732,6 +753,35 @@ function getProofLabel(task) {
   if (task.proofType === 'explanation') return 'Explanation required';
   if (task.proofType === 'form') return FORM_PROOF_CONFIG[task.proofForm]?.label || 'Form submission required';
   return 'No proof required';
+}
+
+function getTaskProofHistoryHtml(task) {
+  if (!task.completed) return escapeHtml(getProofLabel(task));
+  const proof = task.proof && typeof task.proof === 'object' ? task.proof : {};
+  if (proof.type === 'images') {
+    const refs = Array.isArray(proof.photoRefs) ? proof.photoRefs : [];
+    const fileNames = refs.map((ref) => ref?.fileName).filter(Boolean);
+    const count = refs.length || getMinimumPhotoCount(task);
+    return `<div class="todo-proof-summary">
+      <strong>${escapeHtml(`${count} image${count === 1 ? '' : 's'} submitted`)}</strong>
+      ${fileNames.length ? `<span>${escapeHtml(fileNames.join(', '))}</span>` : ''}
+    </div>`;
+  }
+  if (proof.type === 'explanation') {
+    const explanation = String(proof.explanation || '').trim();
+    return `<div class="todo-proof-summary">
+      <strong>Explanation submitted</strong>
+      ${explanation ? `<span>${escapeHtml(explanation)}</span>` : ''}
+    </div>`;
+  }
+  if (proof.type === 'form') {
+    const formLabel = FORM_PROOF_CONFIG[proof.form || task.proofForm]?.label || 'Required form';
+    return `<div class="todo-proof-summary">
+      <strong>${escapeHtml(formLabel)}</strong>
+      <span>Form submission completed this task.</span>
+    </div>`;
+  }
+  return '<span class="todo-proof-summary">Completed with no proof required.</span>';
 }
 
 function getMinimumPhotoCount(task = {}) {
