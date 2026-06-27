@@ -4466,3 +4466,102 @@ body {
     flex-direction: column;
   }
 }
+
+/* iPhone-safe attendance roster modal */
+.attendance-modal {
+  align-items: center;
+  justify-content: center;
+  padding:
+    calc(10px + env(safe-area-inset-top, 0px))
+    10px
+    calc(10px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+
+.attendance-modal .modal-content.large {
+  width: min(1100px, calc(100vw - 20px));
+  max-width: calc(100vw - 20px);
+  height: auto;
+  max-height: calc(100dvh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  margin: 0 auto;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.attendance-modal .modal-header {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 14px 18px;
+  border-bottom: 2px solid #fff;
+}
+
+.attendance-modal .modal-header h2 {
+  padding: 0;
+  margin: 0;
+}
+
+.attendance-modal .attendance-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.attendance-modal .attendance-modal-actions {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  margin: -16px -18px 0;
+  padding: 12px 18px;
+  background: #2e2e2e;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.attendance-modal .attendance-table-wrapper {
+  flex: 0 0 auto;
+  max-height: min(42dvh, 420px);
+}
+
+.attendance-modal .attendance-add-row {
+  flex: 0 0 auto;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 700px), (max-height: 700px) {
+  .attendance-modal {
+    align-items: stretch;
+  }
+
+  .attendance-modal .modal-content.large {
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  }
+
+  .attendance-modal .attendance-modal-body {
+    padding: 14px 14px calc(28px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .attendance-modal .attendance-modal-actions {
+    margin: -14px -14px 0;
+    padding: 12px 14px;
+  }
+
+  .attendance-modal .attendance-table-wrapper {
+    max-height: 34dvh;
+  }
+
+  .attendance-modal .attendance-add-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .attendance-modal #attendanceAddBtn {
+    width: 100%;
+  }
+}

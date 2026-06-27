@@ -536,7 +536,7 @@ function getResponsiveTableMinWidth(table) {
   if (table.matches('.dashboard-cleanliness-table')) return '520px';
   if (table.matches('.dashboard-detail-table')) return '760px';
   if (table.matches('.dashboard-pool-table, .pool-table')) return '1200px';
-  if (table.matches('.dashboard-compliance-table')) return '980px';
+  if (table.matches('.dashboard-compliance-table')) return '760px';
   if (table.matches('.training-schedule-table')) return '760px';
   if (table.matches('.attendance-table, .test-rubric-table')) return '900px';
   if (table.matches('.employee-unverified-table')) return '1260px';
@@ -5023,6 +5023,7 @@ let dashboardChemPage = 1;
 let dashboardChemPageByTable = {};
 let dashboardJobPage = 1;
 let dashboardManagerialPage = 1;
+let dashboardCleanlinessShiftFilter = 'opening';
 let dashboardOperationalPage = 1;
 let dashboardDataLoaded = false;
 const DASHBOARD_PAGE_SIZE = 10;
@@ -11194,6 +11195,42 @@ function getDutyReportTitle(sub) {
   return sub?.reportType === 'managerial' ? 'Managerial Report' : 'Cleanliness Report';
 }
 
+function getDashboardCleanlinessShift(sub) {
+  const raw = String(sub?.shift || sub?.shiftKey || sub?.reportShift || sub?.shiftLabel || '').trim().toLowerCase();
+  if (raw.includes('closing')) return 'closing';
+  if (raw.includes('opening')) return 'opening';
+  return 'opening';
+}
+
+function renderDashboardCleanlinessShiftTabs(container, rerender) {
+  const tabBar = document.createElement('div');
+  tabBar.className = 'dashboard-tab-bar dashboard-report-shift-tabs';
+  tabBar.setAttribute('role', 'tablist');
+  tabBar.setAttribute('aria-label', 'Cleanliness report shift');
+
+  [
+    { key: 'opening', label: 'Opening' },
+    { key: 'closing', label: 'Closing' },
+  ].forEach(({ key, label }) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `dashboard-tab-btn${dashboardCleanlinessShiftFilter === key ? ' active' : ''}`;
+    button.dataset.cleanlinessShift = key;
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', dashboardCleanlinessShiftFilter === key ? 'true' : 'false');
+    button.textContent = label;
+    button.addEventListener('click', () => {
+      if (dashboardCleanlinessShiftFilter === key) return;
+      dashboardCleanlinessShiftFilter = key;
+      dashboardJobPage = 1;
+      rerender();
+    });
+    tabBar.appendChild(button);
+  });
+
+  container.appendChild(tabBar);
+}
+
 function createDutyFormLink(sub, label = getDutyReportTitle(sub)) {
   const formLink = document.createElement('a');
   formLink.href = '#';
@@ -11213,11 +11250,20 @@ function renderReportSubmissions(submissions, container, {
   container.innerHTML = '';
 
   renderDashboardFilterBar(container, () => renderReportSubmissions(submissions, container, { kind, emptyMessage }));
+  if (kind === 'cleanliness') {
+    renderDashboardCleanlinessShiftTabs(
+      container,
+      () => renderReportSubmissions(submissions, container, { kind, emptyMessage })
+    );
+  }
 
   const reportLabel = kind === 'managerial' ? 'Managerial Report' : 'Cleanliness Report';
   const marketMap = getDashboardMarketMap({ docs: false });
   const marketsToShow = getVisibleDashboardMarkets(marketMap);
-  const submissionsForDate = submissions.filter((sub) => isDashboardDate(sub.timestamp, dashboardDateFilter));
+  let submissionsForDate = submissions.filter((sub) => isDashboardDate(sub.timestamp, dashboardDateFilter));
+  if (kind === 'cleanliness') {
+    submissionsForDate = submissionsForDate.filter((sub) => getDashboardCleanlinessShift(sub) === dashboardCleanlinessShiftFilter);
+  }
 
   if (!marketsToShow.length) {
     container.insertAdjacentHTML('beforeend', '<p style="padding:16px;color:#666;">No markets selected. Enable markets in Settings.</p>');

@@ -95,6 +95,7 @@ const els = {};
 document.addEventListener('DOMContentLoaded', () => {
   cacheElements();
   bindEvents();
+  syncProofControls();
   loadPools();
   subscribeTasks();
 });
@@ -114,6 +115,7 @@ function cacheElements() {
   els.repeatCount = document.getElementById('todoTaskRepeatCount');
   els.customDates = document.getElementById('todoTaskCustomDates');
   els.proofType = document.getElementById('todoTaskProofType');
+  els.minPhotos = document.getElementById('todoTaskMinPhotos');
   els.proofForm = document.getElementById('todoTaskProofForm');
   els.saveBtn = document.getElementById('todoSaveTaskBtn');
   els.clearBtn = document.getElementById('todoClearTaskBtn');
@@ -140,6 +142,7 @@ function bindEvents() {
 
   els.form?.addEventListener('submit', handleTaskFormSubmit);
   els.clearBtn?.addEventListener('click', clearTaskForm);
+  els.proofType?.addEventListener('change', syncProofControls);
   els.proofClose?.addEventListener('click', closeProofModal);
   els.proofModal?.addEventListener('click', (event) => {
     if (event.target === els.proofModal) closeProofModal();
@@ -346,6 +349,7 @@ async function handleTaskFormSubmit(event) {
   const dueDate = parseDateTimeLocal(els.due.value);
   const proofType = els.proofType.value || 'none';
   const proofForm = els.proofForm.value || '';
+  const minimumPhotos = Math.max(1, Number.parseInt(els.minPhotos?.value, 10) || 1);
   if (!title || !dueDate) {
     setFormMessage('Title and required completion time are required.', true);
     return;
@@ -367,6 +371,7 @@ async function handleTaskFormSubmit(event) {
     expiresAfterDue: !!els.expires.checked,
     proofType,
     proofForm: proofType === 'form' ? proofForm : '',
+    minimumPhotos: proofType === 'images' ? minimumPhotos : 0,
     repetition: {
       mode: els.repeatMode.value || 'none',
       count: Math.max(0, Number.parseInt(els.repeatCount.value, 10) || 0),
@@ -470,7 +475,7 @@ function openProofModal(task) {
   if (!els.proofModal) return;
   els.proofTitle.textContent = `Complete ${task.title || 'Task'}`;
   els.proofSummary.textContent = task.proofType === 'images'
-    ? 'Upload at least one image to complete this task.'
+    ? `Upload at least ${getMinimumPhotoCount(task)} image${getMinimumPhotoCount(task) === 1 ? '' : 's'} to complete this task.`
     : 'Enter an explanation to complete this task.';
   els.proofExplanation.value = '';
   els.proofImages.value = '';
@@ -499,8 +504,8 @@ async function submitProofAndCompleteTask() {
     setProofMessage('Enter an explanation before completing this task.', true);
     return;
   }
-  if (task.proofType === 'images' && !files.length) {
-    setProofMessage('Upload at least one image before completing this task.', true);
+  if (task.proofType === 'images' && files.length < getMinimumPhotoCount(task)) {
+    setProofMessage(`Upload at least ${getMinimumPhotoCount(task)} image${getMinimumPhotoCount(task) === 1 ? '' : 's'} before completing this task.`, true);
     return;
   }
 
@@ -576,7 +581,9 @@ function editTask(taskId) {
   els.repeatCount.value = String(task.repetition?.count || 0);
   els.customDates.value = (task.repetition?.customDates || []).map((value) => toDateTimeLocalInputValue(toDate(value))).filter(Boolean).join('\n');
   els.proofType.value = task.proofType || 'none';
+  if (els.minPhotos) els.minPhotos.value = String(getMinimumPhotoCount(task));
   els.proofForm.value = task.proofForm || '';
+  syncProofControls();
   els.saveBtn.textContent = 'Save Changes';
   els.title.focus();
   setFormMessage('Editing task.');
@@ -608,7 +615,9 @@ function clearTaskForm({ keepMessage = false } = {}) {
   if (els.repeatMode) els.repeatMode.value = 'none';
   if (els.repeatCount) els.repeatCount.value = '0';
   if (els.proofType) els.proofType.value = 'none';
+  if (els.minPhotos) els.minPhotos.value = '1';
   if (els.proofForm) els.proofForm.value = '';
+  syncProofControls();
   if (els.saveBtn) els.saveBtn.textContent = 'Save Task';
   if (!keepMessage) setFormMessage('');
 }
@@ -709,16 +718,32 @@ function normalizeTask(task) {
     favorite: !!task.favorite,
     proofType: ['none', 'images', 'explanation', 'form'].includes(task.proofType) ? task.proofType : 'none',
     proofForm: String(task.proofForm || ''),
+    minimumPhotos: Math.max(0, Number.parseInt(task.minimumPhotos, 10) || 0),
     requiredCompletionAtIso: task.requiredCompletionAtIso || '',
     createdAtIso: task.createdAtIso || getIsoFromTimestamp(task.createdAt) || '',
   };
 }
 
 function getProofLabel(task) {
-  if (task.proofType === 'images') return 'Images required';
+  if (task.proofType === 'images') {
+    const minimum = getMinimumPhotoCount(task);
+    return `${minimum} image${minimum === 1 ? '' : 's'} required`;
+  }
   if (task.proofType === 'explanation') return 'Explanation required';
   if (task.proofType === 'form') return FORM_PROOF_CONFIG[task.proofForm]?.label || 'Form submission required';
   return 'No proof required';
+}
+
+function getMinimumPhotoCount(task = {}) {
+  return Math.max(1, Number.parseInt(task.minimumPhotos, 10) || 1);
+}
+
+function syncProofControls() {
+  const proofType = els.proofType?.value || 'none';
+  const minPhotosField = document.querySelector('.todo-min-photos-field');
+  const proofFormField = els.proofForm?.closest('.form-group');
+  if (minPhotosField) minPhotosField.classList.toggle('hidden', proofType !== 'images');
+  if (proofFormField) proofFormField.classList.toggle('hidden', proofType !== 'form');
 }
 
 function getSubmissionFacilityKey(data, fields) {

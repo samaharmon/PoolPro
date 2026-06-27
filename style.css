@@ -5445,21 +5445,52 @@ body.dark-mode .alerts-reminder-list-meta {
 }
 
 .dashboard-compliance-table {
-  --table-min-width: 980px;
+  --table-min-width: 760px;
+  table-layout: fixed;
+  width: 100% !important;
+  min-width: 0 !important;
 }
 
 .dashboard-compliance-table th,
 .dashboard-compliance-table td {
-  min-width: 150px;
+  width: auto !important;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding: 9px 10px;
 }
 
 .dashboard-compliance-table th:first-child,
 .dashboard-compliance-table td:first-child {
-  min-width: 230px;
+  width: 24% !important;
+  min-width: 120px;
+}
+
+.table-scroll-wrap > .dashboard-compliance-table {
+  width: 100% !important;
+  min-width: min(100%, 760px) !important;
+}
+
+.dashboard-compliance-table th:nth-child(2),
+.dashboard-compliance-table td:nth-child(2),
+.dashboard-compliance-table th:nth-child(5),
+.dashboard-compliance-table td:nth-child(5),
+.dashboard-compliance-table th:nth-child(6),
+.dashboard-compliance-table td:nth-child(6) {
+  width: 13% !important;
+  text-align: center;
+}
+
+.dashboard-compliance-table th:nth-child(3),
+.dashboard-compliance-table td:nth-child(3),
+.dashboard-compliance-table th:nth-child(4),
+.dashboard-compliance-table td:nth-child(4) {
+  width: 18.5% !important;
+  text-align: center;
 }
 
 .dashboard-compliance-staff-input {
-  width: 130px;
+  width: 88px;
   max-width: 100%;
   background: #595959;
   color: #fff;
@@ -5468,6 +5499,21 @@ body.dark-mode .alerts-reminder-list-meta {
   padding: 10px 12px;
   font-size: 1rem;
   font-weight: 800;
+}
+
+.dashboard-report-shift-tabs {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+  margin: 12px 0 18px;
+  border-bottom: 3px solid rgba(255, 128, 128, 0.9);
+}
+
+.dashboard-report-shift-tabs .dashboard-tab-btn {
+  min-width: 130px;
+  text-align: center;
 }
 
 .dashboard-compliance-score-good {
@@ -6624,7 +6670,8 @@ body.dark-mode .dash-value-popover {
 /* ============================================================
    Cleanliness report detail modal
    ============================================================ */
-#dutyFormModal.duty-report-modal {
+#dutyFormModal.duty-report-modal,
+#desInspectionModal.duty-report-modal {
   position: fixed;
   inset: 0;
   display: none;
@@ -7130,25 +7177,30 @@ body,
 #settingsModal,
 .feedback-modal,
 #dutyFormModal.duty-report-modal,
+#desInspectionModal.duty-report-modal,
 .modal-overlay {
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
-#dutyFormModal.duty-report-modal {
+#dutyFormModal.duty-report-modal,
+#desInspectionModal.duty-report-modal {
   opacity: 0;
 }
 
-#dutyFormModal.duty-report-modal.visible {
+#dutyFormModal.duty-report-modal.visible,
+#desInspectionModal.duty-report-modal.visible {
   opacity: 1;
 }
 
-#dutyFormModal .duty-report-modal-card {
+#dutyFormModal .duty-report-modal-card,
+#desInspectionModal .duty-report-modal-card {
   transform: translateY(10px);
   transition: opacity 0.25s ease, transform 0.25s ease;
   opacity: 0;
 }
 
-#dutyFormModal.visible .duty-report-modal-card {
+#dutyFormModal.visible .duty-report-modal-card,
+#desInspectionModal.visible .duty-report-modal-card {
   transform: translateY(0);
   opacity: 1;
 }
