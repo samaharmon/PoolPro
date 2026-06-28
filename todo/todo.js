@@ -20,6 +20,7 @@ const SELECTED_POOL_KEY_BASE = 'poolproTodoSelectedPool';
 const ACCESS_MODE_STORAGE_KEY = 'poolproAccessMode';
 const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 const PROOF_CHUNK_SIZE = 350000;
+const SELECTED_POOL_FALLBACK_MS = 6 * 60 * 60 * 1000;
 const URGENCY_RANK = { high: 0, medium: 1, low: 2 };
 
 const FORM_PROOF_CONFIG = {
@@ -1002,7 +1003,10 @@ function normalizeAccessMode(value) {
 function rememberSelectedPool(poolName) {
   if (!poolName) return;
   try {
-    localStorage.setItem(getSelectedPoolStorageKey(), poolName);
+    localStorage.setItem(getSelectedPoolStorageKey(), JSON.stringify({
+      poolName,
+      expires: getActiveSessionExpiration(),
+    }));
   } catch (_) {
     /* ignore */
   }
@@ -1010,16 +1014,47 @@ function rememberSelectedPool(poolName) {
 
 function getRememberedSelectedPool() {
   try {
-    return localStorage.getItem(getSelectedPoolStorageKey()) || localStorage.getItem(SELECTED_POOL_KEY_BASE) || '';
+    const keys = [getSelectedPoolStorageKey(), SELECTED_POOL_KEY_BASE];
+    for (const key of keys) {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      let parsed = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (_) {
+        localStorage.removeItem(key);
+        continue;
+      }
+      const expires = Number(parsed?.expires || 0);
+      const poolName = String(parsed?.poolName || '').trim();
+      if (poolName && expires && Date.now() < expires) return poolName;
+      localStorage.removeItem(key);
+    }
   } catch (_) {
-    return '';
+    /* ignore */
   }
+  return '';
 }
 
 function getSelectedPoolStorageKey() {
   const user = getCurrentUserInfo();
   const identity = normalizeFacilityName(user.email || user.username || 'shared');
   return `${SELECTED_POOL_KEY_BASE}:${identity}`;
+}
+
+function getActiveSessionExpiration() {
+  const expirations = [];
+  try {
+    const token = JSON.parse(localStorage.getItem('loginToken') || 'null');
+    const expires = Number(token?.expires || 0);
+    if (expires > Date.now()) expirations.push(expires);
+  } catch (_) {
+    /* ignore */
+  }
+  const lifeguardSession = getStoredLifeguardSession();
+  const lifeguardExpires = Number(lifeguardSession?.expires || 0);
+  if (lifeguardExpires > Date.now()) expirations.push(lifeguardExpires);
+  return expirations.length ? Math.min(...expirations) : Date.now() + SELECTED_POOL_FALLBACK_MS;
 }
 
 function groupPoolsByMarket(pools) {
