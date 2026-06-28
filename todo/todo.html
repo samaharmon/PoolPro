@@ -98,6 +98,10 @@
               <span>Required Completion Time</span>
               <input type="datetime-local" id="todoTaskDue" required>
             </label>
+            <label class="form-group todo-start-field">
+              <span>Beginning Time</span>
+              <input type="datetime-local" id="todoTaskStart">
+            </label>
             <label class="form-group todo-checkbox-field">
               <input type="checkbox" id="todoTaskExpires">
               <span>Expire when completion time passes</span>
@@ -168,7 +172,7 @@
 
           <div class="todo-form-actions">
             <button type="submit" class="submit-btn" id="todoSaveTaskBtn">Save Task</button>
-            <button type="button" class="editAndSave" id="todoClearTaskBtn">Clear</button>
+            <button type="button" class="submit-btn" id="todoClearTaskBtn">Clear</button>
             <p id="todoFormMessage" class="form-message"></p>
           </div>
         </form>

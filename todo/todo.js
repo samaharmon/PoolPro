@@ -4,6 +4,7 @@ import {
   collection,
   doc,
   setDoc,
+  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -110,6 +111,7 @@ function cacheElements() {
   els.title = document.getElementById('todoTaskTitle');
   els.urgency = document.getElementById('todoTaskUrgency');
   els.due = document.getElementById('todoTaskDue');
+  els.start = document.getElementById('todoTaskStart');
   els.expires = document.getElementById('todoTaskExpires');
   els.description = document.getElementById('todoTaskDescription');
   els.repeatMode = document.getElementById('todoTaskRepeatMode');
@@ -251,13 +253,13 @@ function renderTaskList() {
         </label>
         <div class="todo-card-main">
           <h3 class="todo-card-title">${escapeHtml(task.title || 'Untitled Task')}</h3>
-          <div class="todo-card-meta">
-            <span class="todo-chip urgency-${escapeHtml(task.urgency)}">${escapeHtml(formatUrgency(task.urgency))}</span>
-            <span class="todo-chip">${escapeHtml(formatDueDate(due))}</span>
-            <span class="todo-chip">${escapeHtml(getTimeRemainingLabel(due, task.completed))}</span>
-            <span class="todo-chip">${escapeHtml(proofLabel)}</span>
-          </div>
         </div>
+      </div>
+      <div class="todo-card-meta">
+        <span class="todo-chip urgency-${escapeHtml(task.urgency)}">${escapeHtml(formatUrgency(task.urgency))}</span>
+        <span class="todo-chip">${escapeHtml(formatDueDate(due))}</span>
+        <span class="todo-chip">${escapeHtml(getTimeRemainingLabel(due, task.completed))}</span>
+        <span class="todo-chip">${escapeHtml(proofLabel)}</span>
       </div>
       ${task.description ? `<p class="todo-card-desc">${escapeHtml(task.description)}</p>` : ''}
       ${canEdit ? `
@@ -292,13 +294,13 @@ function renderTaskTables() {
     if (els.historyTable) els.historyTable.innerHTML = '';
     return;
   }
-  renderTaskTable(els.favoritesTable, getTasksForSelectedPool().filter((task) => task.favorite), true);
+  renderTaskTable(els.favoritesTable, getGlobalFavoriteTasks(), true);
   renderTaskTable(els.historyTable, getTasksForSelectedPool(), false);
 }
 
 function renderTaskTable(host, tasks, favoritesOnly) {
   if (!host) return;
-  if (!state.selectedPool) {
+  if (!favoritesOnly && !state.selectedPool) {
     host.innerHTML = '<p class="todo-table-empty">Select a pool.</p>';
     return;
   }
@@ -317,6 +319,8 @@ function renderTaskTable(host, tasks, favoritesOnly) {
         <tr>
           <th>Favorite</th>
           <th>Title</th>
+          <th>Facility</th>
+          <th>Starts</th>
           <th>Urgency</th>
           <th>Due</th>
           <th>Status</th>
@@ -332,6 +336,8 @@ function renderTaskTable(host, tasks, favoritesOnly) {
               </button>
             </td>
             <td>${escapeHtml(task.title || 'Untitled Task')}</td>
+            <td>${escapeHtml(task.facilityName || 'All facilities')}</td>
+            <td>${escapeHtml(formatStartDate(toDate(task.startsAtIso)))}</td>
             <td>${escapeHtml(formatUrgency(task.urgency))}</td>
             <td>${escapeHtml(formatDueDate(toDate(task.requiredCompletionAtIso)))}</td>
             <td>${task.completed ? 'Complete' : 'Incomplete'}</td>
@@ -343,6 +349,9 @@ function renderTaskTable(host, tasks, favoritesOnly) {
   `;
   host.querySelectorAll('[data-todo-favorite]').forEach((button) => {
     button.addEventListener('click', () => toggleFavorite(button.dataset.todoFavorite));
+  });
+  host.querySelectorAll('[data-todo-proof-image]').forEach((button) => {
+    button.addEventListener('click', () => openProofImageFromButton(button));
   });
   wrapTodoTables(host);
 }
@@ -374,11 +383,16 @@ async function handleTaskFormSubmit(event) {
   }
   const title = els.title.value.trim();
   const dueDate = parseDateTimeLocal(els.due.value);
+  const startDate = parseDateTimeLocal(els.start?.value || '');
   const proofType = els.proofType.value || 'none';
   const proofForm = els.proofForm.value || '';
   const minimumPhotos = Math.max(1, Number.parseInt(els.minPhotos?.value, 10) || 1);
   if (!title || !dueDate) {
     setFormMessage('Title and required completion time are required.', true);
+    return;
+  }
+  if (startDate && startDate > dueDate) {
+    setFormMessage('Beginning time must be before the required completion time.', true);
     return;
   }
   if (proofType === 'form' && !proofForm) {
@@ -394,6 +408,7 @@ async function handleTaskFormSubmit(event) {
     title,
     description: els.description.value.trim(),
     urgency: els.urgency.value || 'medium',
+    startsAtIso: startDate ? startDate.toISOString() : '',
     requiredCompletionAtIso: dueDate.toISOString(),
     expiresAfterDue: !!els.expires.checked,
     proofType,
@@ -404,9 +419,11 @@ async function handleTaskFormSubmit(event) {
       count: Math.max(0, Number.parseInt(els.repeatCount.value, 10) || 0),
       customDates: parseCustomRepeatDates(els.customDates.value).map((date) => date.toISOString()),
     },
+    favoriteKey: '',
     updatedAt: serverTimestamp(),
     updatedAtIso: nowIso,
   };
+  baseTask.favoriteKey = getTaskFavoriteKey(baseTask);
 
   try {
     els.saveBtn.disabled = true;
@@ -443,6 +460,7 @@ async function createRepeatedTasks(baseTask, baseTaskId) {
   const repetition = baseTask.repetition || {};
   const due = toDate(baseTask.requiredCompletionAtIso);
   if (!due) return;
+  const start = toDate(baseTask.startsAtIso);
 
   const repeats = [];
   if (repetition.mode === 'custom') {
@@ -456,10 +474,14 @@ async function createRepeatedTasks(baseTask, baseTaskId) {
 
   await Promise.all(repeats.map(async (repeatDate) => {
     const repeatRef = doc(collection(db, TASKS_COLLECTION));
+    const repeatStartsAtIso = start
+      ? new Date(start.getTime() + (repeatDate.getTime() - due.getTime())).toISOString()
+      : '';
     await setDoc(repeatRef, {
       ...baseTask,
       id: repeatRef.id,
       baseTaskId,
+      startsAtIso: repeatStartsAtIso,
       requiredCompletionAtIso: repeatDate.toISOString(),
       completed: false,
       favorite: false,
@@ -602,6 +624,7 @@ function editTask(taskId) {
   els.editingTaskId.value = task.id;
   els.title.value = task.title || '';
   els.urgency.value = task.urgency || 'medium';
+  if (els.start) els.start.value = toDateTimeLocalInputValue(toDate(task.startsAtIso));
   els.due.value = toDateTimeLocalInputValue(toDate(task.requiredCompletionAtIso));
   els.expires.checked = !!task.expiresAfterDue;
   els.description.value = task.description || '';
@@ -629,11 +652,16 @@ async function toggleFavorite(taskId) {
   if (!canManageTasks()) return;
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
-  await setDoc(doc(db, TASKS_COLLECTION, taskId), {
-    favorite: !task.favorite,
+  const favoriteKey = getTaskFavoriteKey(task);
+  const nextFavorite = !task.favorite;
+  const nowIso = new Date().toISOString();
+  const matchingTasks = state.tasks.filter((item) => getTaskFavoriteKey(item) === favoriteKey);
+  await Promise.all(matchingTasks.map((item) => setDoc(doc(db, TASKS_COLLECTION, item.id), {
+    favorite: nextFavorite,
+    favoriteKey,
     updatedAt: serverTimestamp(),
-    updatedAtIso: new Date().toISOString(),
-  }, { merge: true });
+    updatedAtIso: nowIso,
+  }, { merge: true })));
 }
 
 async function forceCompleteTask(taskId) {
@@ -653,6 +681,7 @@ function clearTaskForm({ keepMessage = false } = {}) {
   els.form?.reset();
   if (els.editingTaskId) els.editingTaskId.value = '';
   if (els.urgency) els.urgency.value = 'medium';
+  if (els.start) els.start.value = '';
   if (els.repeatMode) els.repeatMode.value = 'none';
   if (els.repeatCount) els.repeatCount.value = '0';
   if (els.proofType) els.proofType.value = 'none';
@@ -728,6 +757,7 @@ function getVisibleTasksForSelectedPool() {
   const now = Date.now();
   const incompleteTasks = getTasksForSelectedPool()
     .filter((task) => !task.completed)
+    .filter((task) => !task.startsAtIso || !(toDate(task.startsAtIso)?.getTime() > now))
     .filter((task) => !task.expiresAfterDue || !(toDate(task.requiredCompletionAtIso)?.getTime() < now));
   const grouped = new Map();
   incompleteTasks.forEach((task) => {
@@ -745,6 +775,27 @@ function getVisibleTasksForSelectedPool() {
 function getTasksForSelectedPool() {
   const key = normalizeFacilityName(state.selectedPool);
   return state.tasks.filter((task) => task.facilityKey === key);
+}
+
+function getGlobalFavoriteTasks() {
+  const byKey = new Map();
+  state.tasks
+    .filter((task) => task.favorite)
+    .forEach((task) => {
+      const key = getTaskFavoriteKey(task);
+      const list = byKey.get(key) || [];
+      list.push(task);
+      byKey.set(key, list);
+    });
+  return Array.from(byKey.values()).map((tasks) => {
+    const sorted = [...tasks].sort((a, b) => (toDate(b.updatedAtIso)?.getTime() || 0) - (toDate(a.updatedAtIso)?.getTime() || 0));
+    const representative = sorted[0];
+    const facilityCount = new Set(tasks.map((task) => task.facilityKey || normalizeFacilityName(task.facilityName)).filter(Boolean)).size;
+    return {
+      ...representative,
+      facilityName: facilityCount > 1 ? `${facilityCount} facilities` : representative.facilityName,
+    };
+  });
 }
 
 function compareTasks(a, b) {
@@ -825,12 +876,15 @@ function normalizeTask(task) {
     urgency: ['high', 'medium', 'low'].includes(task.urgency) ? task.urgency : 'medium',
     completed: !!task.completed,
     favorite: !!task.favorite,
+    favoriteKey: String(task.favoriteKey || getTaskFavoriteKey(task)),
     proofType: ['none', 'images', 'explanation', 'form'].includes(task.proofType) ? task.proofType : 'none',
     proofForm: String(task.proofForm || ''),
     proof: task.proof && typeof task.proof === 'object' ? task.proof : null,
     minimumPhotos: Math.max(0, Number.parseInt(task.minimumPhotos, 10) || 0),
+    startsAtIso: task.startsAtIso || '',
     requiredCompletionAtIso: task.requiredCompletionAtIso || '',
     createdAtIso: task.createdAtIso || getIsoFromTimestamp(task.createdAt) || '',
+    updatedAtIso: task.updatedAtIso || getIsoFromTimestamp(task.updatedAt) || '',
   };
 }
 
@@ -847,6 +901,22 @@ function getProofLabel(task) {
 function formatUrgency(value) {
   const normalized = ['high', 'medium', 'low'].includes(value) ? value : 'medium';
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function formatStartDate(date) {
+  return date ? formatDueDate(date) : 'Immediate';
+}
+
+function getTaskFavoriteKey(task = {}) {
+  if (task.favoriteKey) return String(task.favoriteKey);
+  return [
+    normalizeFacilityName(task.title),
+    normalizeFacilityName(task.description),
+    task.proofType || 'none',
+    task.proofForm || '',
+    String(getMinimumPhotoCount(task)),
+    task.repetition?.mode || 'none',
+  ].join('::');
 }
 
 function hasTaskProof(task = {}) {
@@ -872,11 +942,14 @@ function getTaskProofHistoryHtml(task) {
   const proof = task.proof && typeof task.proof === 'object' ? task.proof : {};
   if (proof.type === 'images') {
     const refs = Array.isArray(proof.photoRefs) ? proof.photoRefs : [];
-    const fileNames = refs.map((ref) => ref?.fileName).filter(Boolean);
     const count = refs.length || getMinimumPhotoCount(task);
     return `<div class="todo-proof-summary">
       <strong>${escapeHtml(`${count} image${count === 1 ? '' : 's'} submitted`)}</strong>
-      ${fileNames.length ? `<span>${escapeHtml(fileNames.join(', '))}</span>` : ''}
+      ${refs.length ? `<span class="todo-proof-image-list">${refs.map((ref, index) => `
+        <button type="button" class="todo-proof-image-link" data-todo-proof-image="true" data-todo-proof-task="${escapeHtml(ref?.taskId || task.id)}" data-todo-proof-photo="${escapeHtml(ref?.photoId || '')}">
+          ${escapeHtml(ref?.fileName || `Image ${index + 1}`)}
+        </button>
+      `).join('')}</span>` : ''}
     </div>`;
   }
   if (proof.type === 'explanation') {
@@ -901,6 +974,77 @@ function getTaskProofHistoryHtml(task) {
     </div>`;
   }
   return '<span class="todo-proof-summary">Completed with no proof required.</span>';
+}
+
+async function openProofImageFromButton(button) {
+  const taskId = button?.dataset.todoProofTask || '';
+  const photoId = button?.dataset.todoProofPhoto || '';
+  if (!taskId || !photoId) return;
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Loading...';
+  try {
+    const dataUrl = await getProofImageDataUrl(taskId, photoId);
+    showProofImageModal(dataUrl, originalText.trim() || 'Task proof image');
+  } catch (error) {
+    console.error('[PoolPro] Unable to load task proof image:', error);
+    window.alert('Unable to load that proof image right now.');
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
+async function getProofImageDataUrl(taskId, photoId) {
+  const metaSnap = await getDoc(doc(db, TASK_MEDIA_COLLECTION, taskId, 'photos', photoId));
+  if (!metaSnap.exists()) throw new Error('Proof image metadata was not found.');
+  const meta = metaSnap.data() || {};
+  const chunksSnap = await getDocs(collection(db, TASK_MEDIA_COLLECTION, taskId, 'photos', photoId, 'chunks'));
+  const chunks = chunksSnap.docs
+    .map((chunkDoc) => ({
+      id: chunkDoc.id,
+      index: Number(chunkDoc.data()?.index ?? chunkDoc.id),
+      data: String(chunkDoc.data()?.data || ''),
+    }))
+    .sort((a, b) => a.index - b.index || a.id.localeCompare(b.id));
+  const base64 = chunks.map((chunk) => chunk.data).join('');
+  if (!base64) throw new Error('Proof image data was not found.');
+  return `${meta.dataUrlPrefix || 'data:image/jpeg;base64'},${base64}`;
+}
+
+function showProofImageModal(dataUrl, title) {
+  const modal = ensureProofImageModal();
+  modal.querySelector('.todo-proof-image-modal-title').textContent = title;
+  modal.querySelector('.todo-proof-image-preview').src = dataUrl;
+  modal.classList.remove('hidden');
+  requestAnimationFrame(() => modal.classList.add('visible'));
+}
+
+function ensureProofImageModal() {
+  let modal = document.getElementById('todoProofImageModal');
+  if (modal) return modal;
+  modal = document.createElement('div');
+  modal.id = 'todoProofImageModal';
+  modal.className = 'todo-proof-image-modal hidden';
+  modal.innerHTML = `
+    <div class="todo-proof-image-card" role="dialog" aria-modal="true" aria-labelledby="todoProofImageTitle">
+      <button type="button" class="todo-proof-image-close" aria-label="Close image preview">&times;</button>
+      <h2 id="todoProofImageTitle" class="todo-proof-image-modal-title">Task proof image</h2>
+      <img class="todo-proof-image-preview" alt="Task proof image">
+    </div>
+  `;
+  const close = () => {
+    modal.classList.remove('visible');
+    setTimeout(() => {
+      if (!modal.classList.contains('visible')) modal.classList.add('hidden');
+    }, 180);
+  };
+  modal.querySelector('.todo-proof-image-close')?.addEventListener('click', close);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) close();
+  });
+  document.body.appendChild(modal);
+  return modal;
 }
 
 function getMinimumPhotoCount(task = {}) {

@@ -111,19 +111,21 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
-  align-items: start;
+  align-items: center;
 }
 
 .todo-card-main {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  align-items: center;
   min-width: 0;
+  min-height: 48px;
 }
 
 .todo-card-title {
   margin: 0;
   color: #fff;
   font-size: clamp(1.2rem, 2vw, 1.55rem);
+  line-height: 1.15;
 }
 
 .todo-card-desc {
@@ -176,8 +178,8 @@
 }
 
 .todo-heart-btn {
-  border: 1px solid #7b1510;
-  background: #383838;
+  border: 0;
+  background: transparent;
   color: #fff;
   min-height: 42px;
   padding: 8px 12px;
@@ -186,7 +188,7 @@
 }
 
 .todo-heart-btn:hover {
-  background: #4a4a4a;
+  background: transparent;
 }
 
 .todo-heart-btn:disabled {
@@ -260,14 +262,14 @@
 }
 
 .todo-heart-btn {
-  width: 46px;
-  height: 46px;
-  min-width: 46px;
+  width: 58px;
+  height: 48px;
+  min-width: 58px;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.42rem;
+  font-size: 1.82rem;
   line-height: 1;
 }
 
@@ -279,12 +281,13 @@
   -webkit-text-stroke: 2px #fff;
   text-stroke: 2px #fff;
   line-height: 1;
+  transform: scaleX(1.24);
+  transform-origin: center;
   transition: color 180ms ease, -webkit-text-stroke-color 180ms ease, transform 180ms ease, opacity 180ms ease;
 }
 
 .todo-heart-btn.is-favorite {
   color: #ff7aa9;
-  border-color: #ff7aa9;
 }
 
 .todo-heart-btn.is-favorite .todo-heart-icon {
@@ -365,7 +368,8 @@
   margin-bottom: 6px;
 }
 
-.todo-due-field {
+.todo-due-field,
+.todo-start-field {
   max-width: 390px;
 }
 
@@ -483,6 +487,9 @@
 }
 
 .todo-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   background: linear-gradient(90deg, #7b1510, #1e2230);
 }
 
@@ -495,9 +502,8 @@
 }
 
 .todo-table th {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  position: relative;
+  z-index: 1;
   background: transparent;
   text-align: left;
 }
@@ -516,6 +522,30 @@
   color: #d8d8d8;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.todo-proof-image-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.todo-proof-image-link {
+  border: 1px solid rgba(255, 122, 126, 0.65);
+  background: transparent;
+  color: #fff;
+  padding: 5px 8px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.todo-proof-image-link:hover,
+.todo-proof-image-link:focus-visible {
+  background: rgba(123, 21, 16, 0.42);
 }
 
 .todo-table-empty {
@@ -544,6 +574,70 @@
 
 .todo-proof-modal.hidden {
   display: none;
+}
+
+.todo-proof-image-modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.74);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+  z-index: 10060;
+}
+
+.todo-proof-image-modal.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.todo-proof-image-modal.hidden {
+  display: none;
+}
+
+.todo-proof-image-card {
+  position: relative;
+  width: min(920px, 100%);
+  max-height: min(88vh, 920px);
+  overflow: auto;
+  border: 2px solid #7b1510;
+  background: #2c2c2c;
+  color: #fff;
+  padding: 28px;
+  display: grid;
+  gap: 16px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.5);
+}
+
+.todo-proof-image-card h2 {
+  margin: 0 54px 0 0;
+  line-height: 1.15;
+}
+
+.todo-proof-image-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 2.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.todo-proof-image-preview {
+  max-width: 100%;
+  max-height: 72vh;
+  object-fit: contain;
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.18);
 }
 
 .todo-proof-card {
@@ -645,11 +739,11 @@
 @keyframes todoHeartFade {
   0% {
     opacity: 0.45;
-    transform: scale(0.94);
+    transform: scaleX(1.24) scale(0.94);
   }
   100% {
     opacity: 1;
-    transform: scale(1);
+    transform: scaleX(1.24) scale(1);
   }
 }
 
@@ -672,6 +766,7 @@
   }
 
   .todo-due-field,
+  .todo-start-field,
   .todo-repeat-count-field {
     max-width: none;
   }
