@@ -1046,7 +1046,13 @@ function setupMobileModalFocusGuards() {
 }
 
 function getDestinationPath() {
-  return pendingTarget ? DESTINATIONS[pendingTarget] : DESTINATIONS.chem;
+  if (pendingTarget && DESTINATIONS[pendingTarget]) return DESTINATIONS[pendingTarget];
+  const storedMode = normalizeAccessMode(
+    sessionStorage.getItem(ACCESS_MODE_STORAGE_KEY) ||
+    localStorage.getItem(ACCESS_MODE_STORAGE_KEY) ||
+    currentRole
+  );
+  return storedMode === 'supervisor' ? DESTINATIONS.supervisor : DESTINATIONS.chem;
 }
 
 function populatePoolOptions() {
@@ -2323,7 +2329,7 @@ async function activateHomeMenuButton(btn, event) {
   showHomeActionLoadingOverlay();
 
   const requestedMode = normalizeAccessMode(btn.dataset.accessRole || btn.dataset.target);
-  pendingTarget = 'chem';
+  pendingTarget = requestedMode === 'supervisor' ? 'supervisor' : 'chem';
 
   if (hasFreshSupervisorSession()) {
     try {

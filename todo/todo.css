@@ -99,6 +99,8 @@
   padding: 18px;
   display: grid;
   gap: 14px;
+  animation: todoFadeIn 220ms ease both;
+  transition: border-color 180ms ease, background-color 180ms ease, opacity 180ms ease, transform 180ms ease;
 }
 
 .todo-card.is-complete {
@@ -194,6 +196,9 @@
 
 .todo-card-manage {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
   justify-content: flex-start;
   margin-top: 2px;
 }
@@ -235,6 +240,25 @@
   background: #4b0f0c;
 }
 
+.todo-force-complete-btn {
+  min-height: 44px;
+  border: 2px solid #8a1b14;
+  border-radius: 0;
+  background: #383838;
+  color: #fff;
+  padding: 8px 14px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, opacity 160ms ease;
+}
+
+.todo-force-complete-btn:hover,
+.todo-force-complete-btn:focus-visible {
+  background: #7b1510;
+}
+
 .todo-heart-btn {
   width: 46px;
   height: 46px;
@@ -255,6 +279,7 @@
   -webkit-text-stroke: 2px #fff;
   text-stroke: 2px #fff;
   line-height: 1;
+  transition: color 180ms ease, -webkit-text-stroke-color 180ms ease, transform 180ms ease, opacity 180ms ease;
 }
 
 .todo-heart-btn.is-favorite {
@@ -266,6 +291,7 @@
   color: #ff7aa9;
   -webkit-text-stroke: 2px #ff7aa9;
   text-stroke: 2px #ff7aa9;
+  animation: todoHeartFade 220ms ease both;
 }
 
 .todo-status-toggle {
@@ -476,6 +502,10 @@
   text-align: left;
 }
 
+.todo-table tbody tr {
+  animation: todoFadeIn 220ms ease both;
+}
+
 .todo-proof-summary {
   display: grid;
   gap: 4px;
@@ -599,6 +629,28 @@
 
 .todo-success {
   color: #7ccf91;
+}
+
+@keyframes todoFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes todoHeartFade {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @media (max-width: 760px) {

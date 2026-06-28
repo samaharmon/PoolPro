@@ -240,6 +240,7 @@ function renderTaskList() {
     const due = toDate(task.requiredCompletionAtIso);
     const isFormProof = task.proofType === 'form';
     const canEdit = canManageTasks();
+    const canForceComplete = canForceCompleteTask(task);
     card.innerHTML = `
       <div class="todo-card-top">
         <label class="todo-status-toggle${task.completed ? ' is-complete' : ''}${isFormProof && !task.completed ? ' is-disabled' : ''}" title="${isFormProof && !task.completed ? 'This task completes automatically after the required form is submitted.' : ''}">
@@ -250,7 +251,7 @@ function renderTaskList() {
         <div class="todo-card-main">
           <h3 class="todo-card-title">${escapeHtml(task.title || 'Untitled Task')}</h3>
           <div class="todo-card-meta">
-            <span class="todo-chip urgency-${escapeHtml(task.urgency)}">${escapeHtml(task.urgency || 'medium')}</span>
+            <span class="todo-chip urgency-${escapeHtml(task.urgency)}">${escapeHtml(formatUrgency(task.urgency))}</span>
             <span class="todo-chip">${escapeHtml(formatDueDate(due))}</span>
             <span class="todo-chip">${escapeHtml(getTimeRemainingLabel(due, task.completed))}</span>
             <span class="todo-chip">${escapeHtml(proofLabel)}</span>
@@ -264,6 +265,7 @@ function renderTaskList() {
             <button type="button" data-todo-edit="${escapeHtml(task.id)}">Edit</button>
             <button type="button" data-todo-delete="${escapeHtml(task.id)}">Delete</button>
           </div>
+          ${canForceComplete ? `<button type="button" class="todo-force-complete-btn" data-todo-force-complete="${escapeHtml(task.id)}">Force Complete</button>` : ''}
         </div>` : ''}
     `;
     els.list.appendChild(card);
@@ -277,6 +279,9 @@ function renderTaskList() {
   });
   els.list.querySelectorAll('[data-todo-delete]').forEach((button) => {
     button.addEventListener('click', () => deleteTask(button.dataset.todoDelete));
+  });
+  els.list.querySelectorAll('[data-todo-force-complete]').forEach((button) => {
+    button.addEventListener('click', () => forceCompleteTask(button.dataset.todoForceComplete));
   });
 }
 
@@ -326,7 +331,7 @@ function renderTaskTable(host, tasks, favoritesOnly) {
               </button>
             </td>
             <td>${escapeHtml(task.title || 'Untitled Task')}</td>
-            <td>${escapeHtml(task.urgency || 'medium')}</td>
+            <td>${escapeHtml(formatUrgency(task.urgency))}</td>
             <td>${escapeHtml(formatDueDate(toDate(task.requiredCompletionAtIso)))}</td>
             <td>${task.completed ? 'Complete' : 'Incomplete'}</td>
             <td>${getTaskProofHistoryHtml(task)}</td>
@@ -350,7 +355,7 @@ function updateFormPermissions() {
   els.form?.querySelectorAll('input, select, textarea, button').forEach((control) => {
     control.disabled = !canManage;
   });
-  document.querySelectorAll('[data-todo-edit], [data-todo-delete], [data-todo-favorite]').forEach((button) => {
+  document.querySelectorAll('[data-todo-edit], [data-todo-delete], [data-todo-favorite], [data-todo-force-complete]').forEach((button) => {
     button.disabled = !canManage;
   });
 }
@@ -413,6 +418,7 @@ async function handleTaskFormSubmit(event) {
       const createdTask = {
         ...baseTask,
         id: taskRef.id,
+        baseTaskId: taskRef.id,
         completed: false,
         favorite: false,
         createdBy,
@@ -629,6 +635,19 @@ async function toggleFavorite(taskId) {
   }, { merge: true });
 }
 
+async function forceCompleteTask(taskId) {
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!canForceCompleteTask(task)) return;
+  await updateTaskCompletion(task, true, {
+    proof: {
+      type: 'force',
+      note: 'Supervisor force completed this task without uploaded or submitted proof.',
+      submittedAtIso: new Date().toISOString(),
+      submittedBy: getCurrentUserInfo(),
+    },
+  });
+}
+
 function clearTaskForm({ keepMessage = false } = {}) {
   els.form?.reset();
   if (els.editingTaskId) els.editingTaskId.value = '';
@@ -706,8 +725,19 @@ function getTaskCompletionPeriod(task) {
 
 function getVisibleTasksForSelectedPool() {
   const now = Date.now();
-  return getTasksForSelectedPool()
-    .filter((task) => task.completed || !task.expiresAfterDue || !(toDate(task.requiredCompletionAtIso)?.getTime() < now))
+  const incompleteTasks = getTasksForSelectedPool()
+    .filter((task) => !task.completed)
+    .filter((task) => !task.expiresAfterDue || !(toDate(task.requiredCompletionAtIso)?.getTime() < now));
+  const grouped = new Map();
+  incompleteTasks.forEach((task) => {
+    const key = getTaskSeriesKey(task);
+    const list = grouped.get(key) || [];
+    list.push(task);
+    grouped.set(key, list);
+  });
+  return Array.from(grouped.values())
+    .map(selectVisibleTaskForSeries)
+    .filter(Boolean)
     .sort(compareTasks);
 }
 
@@ -717,19 +747,76 @@ function getTasksForSelectedPool() {
 }
 
 function compareTasks(a, b) {
-  if (!!a.completed !== !!b.completed) return a.completed ? 1 : -1;
-  const urgencyDiff = (URGENCY_RANK[a.urgency] ?? 1) - (URGENCY_RANK[b.urgency] ?? 1);
-  if (!a.completed && urgencyDiff) return urgencyDiff;
+  const rankDiff = getTaskDisplayRank(a) - getTaskDisplayRank(b);
+  if (rankDiff) return rankDiff;
   const aDue = toDate(a.requiredCompletionAtIso)?.getTime() || Number.MAX_SAFE_INTEGER;
   const bDue = toDate(b.requiredCompletionAtIso)?.getTime() || Number.MAX_SAFE_INTEGER;
   if (aDue !== bDue) return aDue - bDue;
+  const urgencyDiff = (URGENCY_RANK[a.urgency] ?? 1) - (URGENCY_RANK[b.urgency] ?? 1);
+  if (urgencyDiff) return urgencyDiff;
   return String(a.title || '').localeCompare(String(b.title || ''));
+}
+
+function getTaskSeriesKey(task) {
+  return String(task.baseTaskId || task.id || [
+    task.facilityKey,
+    task.title,
+    task.proofType,
+    task.proofForm,
+  ].join('::'));
+}
+
+function selectVisibleTaskForSeries(tasks) {
+  const sorted = [...tasks].sort((a, b) => {
+    const aDue = toDate(a.requiredCompletionAtIso)?.getTime() || Number.MAX_SAFE_INTEGER;
+    const bDue = toDate(b.requiredCompletionAtIso)?.getTime() || Number.MAX_SAFE_INTEGER;
+    return aDue - bDue;
+  });
+  const now = new Date();
+  const nowMs = now.getTime();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+
+  const overdue = sorted
+    .filter((task) => {
+      const due = toDate(task.requiredCompletionAtIso);
+      return due && due.getTime() < nowMs;
+    })
+    .sort((a, b) => (toDate(b.requiredCompletionAtIso)?.getTime() || 0) - (toDate(a.requiredCompletionAtIso)?.getTime() || 0));
+  if (overdue.length) return overdue[0];
+
+  const today = sorted.find((task) => {
+    const due = toDate(task.requiredCompletionAtIso);
+    return due && due >= todayStart && due < tomorrowStart;
+  });
+  if (today) return today;
+
+  return sorted.find((task) => {
+    const due = toDate(task.requiredCompletionAtIso);
+    return due && due >= tomorrowStart;
+  }) || sorted[0] || null;
+}
+
+function getTaskDisplayRank(task) {
+  const due = toDate(task.requiredCompletionAtIso);
+  if (!due) return 3;
+  const now = new Date();
+  if (due.getTime() < now.getTime()) return 0;
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+  if (due >= todayStart && due < tomorrowStart) return 1;
+  return 2;
 }
 
 function normalizeTask(task) {
   return {
     ...task,
     id: String(task.id || ''),
+    baseTaskId: String(task.baseTaskId || ''),
     facilityName: String(task.facilityName || ''),
     facilityKey: String(task.facilityKey || normalizeFacilityName(task.facilityName)),
     title: String(task.title || ''),
@@ -739,6 +826,7 @@ function normalizeTask(task) {
     favorite: !!task.favorite,
     proofType: ['none', 'images', 'explanation', 'form'].includes(task.proofType) ? task.proofType : 'none',
     proofForm: String(task.proofForm || ''),
+    proof: task.proof && typeof task.proof === 'object' ? task.proof : null,
     minimumPhotos: Math.max(0, Number.parseInt(task.minimumPhotos, 10) || 0),
     requiredCompletionAtIso: task.requiredCompletionAtIso || '',
     createdAtIso: task.createdAtIso || getIsoFromTimestamp(task.createdAt) || '',
@@ -753,6 +841,29 @@ function getProofLabel(task) {
   if (task.proofType === 'explanation') return 'Explanation required';
   if (task.proofType === 'form') return FORM_PROOF_CONFIG[task.proofForm]?.label || 'Form submission required';
   return 'No proof required';
+}
+
+function formatUrgency(value) {
+  const normalized = ['high', 'medium', 'low'].includes(value) ? value : 'medium';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function hasTaskProof(task = {}) {
+  const proof = task.proof && typeof task.proof === 'object' ? task.proof : null;
+  if (!proof?.type) return false;
+  if (proof.type === 'images') return Array.isArray(proof.photoRefs) && proof.photoRefs.length > 0;
+  if (proof.type === 'explanation') return !!String(proof.explanation || '').trim();
+  if (proof.type === 'form') return true;
+  if (proof.type === 'force') return true;
+  return false;
+}
+
+function canForceCompleteTask(task = {}) {
+  return getAccessMode() === 'supervisor' &&
+    !task.completed &&
+    task.proofType &&
+    task.proofType !== 'none' &&
+    !hasTaskProof(task);
 }
 
 function getTaskProofHistoryHtml(task) {
@@ -779,6 +890,13 @@ function getTaskProofHistoryHtml(task) {
     return `<div class="todo-proof-summary">
       <strong>${escapeHtml(formLabel)}</strong>
       <span>Form submission completed this task.</span>
+    </div>`;
+  }
+  if (proof.type === 'force') {
+    const by = proof.submittedBy?.name || proof.submittedBy?.email || 'Supervisor';
+    return `<div class="todo-proof-summary">
+      <strong>Force completed</strong>
+      <span>${escapeHtml(by)} completed this task without proof.</span>
     </div>`;
   }
   return '<span class="todo-proof-summary">Completed with no proof required.</span>';

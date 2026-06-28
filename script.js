@@ -5094,6 +5094,9 @@ const POOL_CLOSURE_TODOS = {
 let operationalStatusLogs = [];
 let operationalStatusLatestMap = {};
 let operationalStatusPageReady = false;
+let operationalAutosaveTimer = null;
+let operationalAutosaveInProgress = false;
+let operationalAutosaveQueued = false;
 let dashboardMetricsFilters = {
   market: 'all',
   pool: 'all',
@@ -6690,7 +6693,6 @@ function canEditWeeklyBackwashCompletion() {
 
 function renderOperationalStatusLog() {
   const cards = document.getElementById('operationalStatusCards');
-  const submitBtn = document.getElementById('operationalStatusSubmit');
   const panel = document.getElementById('operationalStatusPanel');
   if (!cards) return;
 
@@ -6701,12 +6703,10 @@ function renderOperationalStatusLog() {
   if (!poolDoc) {
     if (panel) panel.hidden = true;
     cards.innerHTML = '<p class="operational-empty-state">Select a facility to update fill line, hose, and bleach feeder statuses.</p>';
-    if (submitBtn) submitBtn.disabled = true;
     return;
   }
 
   if (panel) panel.hidden = false;
-  if (submitBtn) submitBtn.disabled = false;
   const facilityName = getPoolName(poolDoc);
   const poolCount = Math.max(1, Number(poolDoc.numPools || poolDoc.poolCount || 1));
   const canEditBackwash = canEditWeeklyBackwashCompletion();
@@ -6804,13 +6804,36 @@ function renderOperationalStatusLog() {
     card.appendChild(closureBlock);
     cards.appendChild(card);
   }
+
+  bindOperationalAutosaveInputs();
+}
+
+function bindOperationalAutosaveInputs() {
+  const cards = document.getElementById('operationalStatusCards');
+  if (!cards) return;
+  cards.querySelectorAll('input[type="radio"]').forEach((input) => {
+    if (input.dataset.operationalAutosaveBound === 'true') return;
+    input.dataset.operationalAutosaveBound = 'true';
+    input.addEventListener('change', scheduleOperationalStatusAutosave);
+  });
+}
+
+function scheduleOperationalStatusAutosave() {
+  window.clearTimeout(operationalAutosaveTimer);
+  operationalAutosaveTimer = window.setTimeout(() => {
+    saveOperationalStatusLog();
+  }, 250);
 }
 
 async function saveOperationalStatusLog() {
-  const submitBtn = document.getElementById('operationalStatusSubmit');
+  if (operationalAutosaveInProgress) {
+    operationalAutosaveQueued = true;
+    return;
+  }
+
   const poolDoc = getOperationalSelectedFacility();
   if (!poolDoc) {
-    setOperationalMessage('Select a facility before submitting operational status.', true);
+    setOperationalMessage('Select a facility before saving operational status.', true);
     return;
   }
 
@@ -6822,11 +6845,8 @@ async function saveOperationalStatusLog() {
   const writes = [];
 
   try {
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Submitting...';
-    }
-    setOperationalMessage('Submitting status updates...');
+    operationalAutosaveInProgress = true;
+    setOperationalMessage('Saving changes...');
 
     for (let idx = 0; idx < poolCount; idx++) {
       const fillStatus = document.querySelector(`input[name="operational_fill_${idx}"]:checked`)?.value || '';
@@ -6879,7 +6899,7 @@ async function saveOperationalStatusLog() {
     }
 
     if (!writes.length) {
-      setOperationalMessage('No operational status changes to submit.');
+      setOperationalMessage('All changes saved.');
       return;
     }
 
@@ -6889,28 +6909,27 @@ async function saveOperationalStatusLog() {
     if (allLogs.length && document.getElementById('supervisorDashboard')?.classList.contains('show')) {
       renderDashboard(allLogs);
     }
-    setOperationalMessage('Operational status submitted successfully.');
+    setOperationalMessage('Changes saved.');
   } catch (err) {
     console.error('[PoolPro] Unable to save operational status:', err);
-    setOperationalMessage('Unable to submit operational status right now.', true);
+    setOperationalMessage('Unable to save operational status right now.', true);
   } finally {
-    if (submitBtn) {
-      submitBtn.disabled = !getOperationalSelectedFacility();
-      submitBtn.textContent = 'Submit Status';
+    operationalAutosaveInProgress = false;
+    if (operationalAutosaveQueued) {
+      operationalAutosaveQueued = false;
+      scheduleOperationalStatusAutosave();
     }
   }
 }
 
 function setupOperationalStatusLog() {
   const select = document.getElementById('operationalPoolLocation');
-  const submitBtn = document.getElementById('operationalStatusSubmit');
-  if (!select || !submitBtn || operationalStatusPageReady) return;
+  if (!select || operationalStatusPageReady) return;
   operationalStatusPageReady = true;
   document.getElementById('operationalClosureCloseBtn')?.addEventListener('click', closeOperationalClosureModal);
   document.getElementById('operationalClosureConfirmBtn')?.addEventListener('click', closeOperationalClosureModal);
   document.getElementById('operationalClosureOverlay')?.addEventListener('click', closeOperationalClosureModal);
   select.addEventListener('change', renderOperationalStatusLog);
-  submitBtn.addEventListener('click', saveOperationalStatusLog);
   loadOperationalStatusLogs().then(renderOperationalStatusLog);
 }
 

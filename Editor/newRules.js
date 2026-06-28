@@ -1004,6 +1004,7 @@ function getDefaultCleanlinessShiftSettings() {
     questionLabels: {},
     questionInstructions: {},
     questionMinPhotos: {},
+    hiddenQuestionTypes: {},
     requireBathroomPhotos: false,
   };
 }
@@ -1021,8 +1022,13 @@ function normalizeCleanlinessShiftSettings(source = {}, legacySource = null) {
   const labelSource = source.questionLabels || source.labels || {};
   const instructionSource = source.questionInstructions || source.instructions || {};
   const photoSource = source.questionMinPhotos || source.minPhotos || {};
+  const hiddenSource = source.hiddenQuestionTypes || source.deletedQuestionTypes || source.removedQuestionTypes || {};
 
   getCleanlinessQuestionBank().forEach(({ id, instructions, minPhotos }) => {
+    if (hiddenSource[id] === true) {
+      defaults.hiddenQuestionTypes[id] = true;
+      defaults.enabledQuestionTypes[id] = false;
+    }
     if (Object.prototype.hasOwnProperty.call(enabledSource, id)) {
       defaults.enabledQuestionTypes[id] = enabledSource[id] !== false;
     } else if (Object.prototype.hasOwnProperty.call(source, id)) {
@@ -1039,6 +1045,9 @@ function normalizeCleanlinessShiftSettings(source = {}, legacySource = null) {
       if (Number.isFinite(parsedMin) && parsedMin >= 0 && parsedMin !== Number(minPhotos || 0)) {
         defaults.questionMinPhotos[id] = parsedMin;
       }
+    }
+    if (defaults.hiddenQuestionTypes[id] === true) {
+      defaults.enabledQuestionTypes[id] = false;
     }
   });
 
@@ -1130,16 +1139,20 @@ function renderCleanlinessReportSettings(poolDoc = {}) {
 
     const list = shiftCard.querySelector('.cleanliness-question-list');
     getCleanlinessQuestionBank().forEach((item) => {
+      const isHidden = shiftSettings.hiddenQuestionTypes?.[item.id] === true;
       const currentLabel = shiftSettings.questionLabels[item.id] || item.label;
       const currentInstructions = shiftSettings.questionInstructions[item.id] ?? item.instructions ?? '';
       const currentMinPhotos = Object.prototype.hasOwnProperty.call(shiftSettings.questionMinPhotos || {}, item.id)
         ? shiftSettings.questionMinPhotos[item.id]
         : Number(item.minPhotos || 0);
       const row = document.createElement('div');
-      row.className = 'supply-info-row cleanliness-info-row cleanliness-question-row';
+      row.className = `supply-info-row cleanliness-info-row cleanliness-question-row${isHidden ? ' is-deleted' : ''}`;
+      row.dataset.cleanlinessShift = key;
+      row.dataset.cleanlinessQuestion = item.id;
       row.innerHTML = `
+        <input type="hidden" class="cleanliness-question-hidden" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" value="${isHidden ? 'true' : 'false'}">
         <label class="cleanliness-question-check">
-          <input type="checkbox" class="market-filter-checkbox cleanliness-question-enabled" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" ${shiftSettings.enabledQuestionTypes[item.id] ? 'checked' : ''}>
+          <input type="checkbox" class="market-filter-checkbox cleanliness-question-enabled" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" ${shiftSettings.enabledQuestionTypes[item.id] && !isHidden ? 'checked' : ''}>
           <span class="supply-info-name">${escapeHtmlUnsafe(item.label)}</span>
         </label>
         <span class="cleanliness-question-editable">
@@ -1149,6 +1162,7 @@ function renderCleanlinessReportSettings(poolDoc = {}) {
             <span>Minimum photos</span>
             <input type="number" class="cleanliness-question-min-photos-input" data-cleanliness-shift="${escapeHtmlUnsafe(key)}" data-cleanliness-question="${escapeHtmlUnsafe(item.id)}" min="0" step="1" value="${escapeHtmlUnsafe(currentMinPhotos)}">
           </label>
+          <button type="button" class="cleanliness-requirement-save-btn submit-btn">Save</button>
         </span>
       `;
       list.appendChild(row);
@@ -1162,6 +1176,7 @@ function renderCleanlinessReportSettings(poolDoc = {}) {
   });
 
   bindCleanlinessQuestionEditorEvents();
+  bindCleanlinessRequirementRowEvents();
   setCleanlinessReportEnabled(false);
 }
 
@@ -1172,6 +1187,17 @@ function collectCleanlinessReportSettings() {
     const shiftKey = checkbox.dataset.cleanlinessShift;
     if (!questionId || !settings[shiftKey]) return;
     settings[shiftKey].enabledQuestionTypes[questionId] = !!checkbox.checked;
+  });
+  document.querySelectorAll('.cleanliness-question-hidden').forEach((input) => {
+    const questionId = input.dataset.cleanlinessQuestion;
+    const shiftKey = input.dataset.cleanlinessShift;
+    if (!questionId || !settings[shiftKey]) return;
+    if (input.value === 'true') {
+      settings[shiftKey].hiddenQuestionTypes[questionId] = true;
+      settings[shiftKey].enabledQuestionTypes[questionId] = false;
+    } else {
+      delete settings[shiftKey].hiddenQuestionTypes[questionId];
+    }
   });
   document.querySelectorAll('.cleanliness-question-label-input').forEach((input) => {
     const questionId = input.dataset.cleanlinessQuestion;
@@ -1202,6 +1228,181 @@ function collectCleanlinessReportSettings() {
     if (settings[shiftKey]) settings[shiftKey].requireBathroomPhotos = checkbox.checked === true;
   });
   return normalizeCleanlinessReportSettings(settings);
+}
+
+function isCleanlinessReportEditing() {
+  const saveBtn = document.getElementById('saveCleanlinessReportBtn');
+  return !!saveBtn && !saveBtn.disabled;
+}
+
+function ensureCleanlinessReportEditing() {
+  if (isCleanlinessReportEditing()) return;
+  const editBtn = document.getElementById('editCleanlinessReportBtn');
+  const saveBtn = document.getElementById('saveCleanlinessReportBtn');
+  setCleanlinessReportEnabled(true);
+  if (editBtn) editBtn.disabled = true;
+  if (saveBtn) saveBtn.disabled = false;
+  syncCleanlinessToggleFromButtons();
+}
+
+function getCleanlinessRequirementKey(row) {
+  return `${row?.dataset.cleanlinessShift || ''}::${row?.dataset.cleanlinessQuestion || ''}`;
+}
+
+function closeCleanlinessRequirementActions(exceptRow = null) {
+  document.querySelectorAll('.cleanliness-requirement-popover').forEach((popover) => {
+    const row = popover.closest('.cleanliness-question-row');
+    if (exceptRow && row === exceptRow) return;
+    popover.remove();
+    if (!row?.classList.contains('is-row-editing') && !row?.classList.contains('is-delete-pending')) {
+      row?.classList.remove('cleanliness-requirement-active');
+    }
+  });
+}
+
+function openCleanlinessRequirementActions(row) {
+  if (!row || row.classList.contains('is-deleted') || row.classList.contains('is-delete-pending')) return;
+  closeCleanlinessRequirementActions(row);
+  row.classList.add('cleanliness-requirement-active');
+  let popover = row.querySelector('.cleanliness-requirement-popover');
+  if (!popover) {
+    popover = document.createElement('div');
+    popover.className = 'cleanliness-requirement-popover';
+    row.appendChild(popover);
+  }
+  popover.innerHTML = `
+    <button type="button" class="cleanliness-requirement-action-btn" data-cleanliness-requirement-edit>Edit</button>
+    <button type="button" class="cleanliness-requirement-action-btn delete" data-cleanliness-requirement-delete>Delete</button>
+  `;
+  popover.querySelector('[data-cleanliness-requirement-edit]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    enterCleanlinessRequirementEdit(row);
+  });
+  popover.querySelector('[data-cleanliness-requirement-delete]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    showCleanlinessDeleteConfirmation(row);
+  });
+}
+
+function enterCleanlinessRequirementEdit(row) {
+  if (!row) return;
+  ensureCleanlinessReportEditing();
+  closeCleanlinessRequirementActions(row);
+  row.classList.add('cleanliness-requirement-active', 'is-row-editing');
+  row.querySelectorAll('input, textarea, select').forEach((field) => {
+    if (field.type === 'hidden') return;
+    field.disabled = false;
+  });
+  const saveBtn = row.querySelector('.cleanliness-requirement-save-btn');
+  if (saveBtn) saveBtn.style.display = 'inline-flex';
+}
+
+function exitCleanlinessRequirementEdit(row) {
+  if (!row) return;
+  row.classList.remove('cleanliness-requirement-active', 'is-row-editing');
+  const saveBtn = row.querySelector('.cleanliness-requirement-save-btn');
+  if (saveBtn) saveBtn.style.display = '';
+}
+
+async function saveCleanlinessRequirementRow(row) {
+  if (!row) return;
+  ensureCleanlinessReportEditing();
+  const saveBtn = row.querySelector('.cleanliness-requirement-save-btn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  const success = await attemptSave();
+  if (success) {
+    exitCleanlinessRequirementEdit(row);
+    showMessage('Requirement saved.', 'success');
+  }
+  if (saveBtn) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+  }
+}
+
+function showCleanlinessDeleteConfirmation(row) {
+  if (!row) return;
+  row.classList.add('cleanliness-requirement-active');
+  const popover = row.querySelector('.cleanliness-requirement-popover');
+  if (!popover) return;
+  popover.innerHTML = `
+    <span class="cleanliness-delete-copy">Delete this requirement?</span>
+    <button type="button" class="cleanliness-requirement-action-btn delete" data-cleanliness-confirm-delete>Confirm Delete</button>
+    <button type="button" class="cleanliness-requirement-action-btn" data-cleanliness-cancel-delete>Cancel</button>
+  `;
+  popover.querySelector('[data-cleanliness-confirm-delete]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    deleteCleanlinessRequirementRow(row);
+  });
+  popover.querySelector('[data-cleanliness-cancel-delete]')?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeCleanlinessRequirementActions();
+  });
+}
+
+function deleteCleanlinessRequirementRow(row) {
+  if (!row) return;
+  ensureCleanlinessReportEditing();
+  const key = getCleanlinessRequirementKey(row);
+  const hiddenInput = row.querySelector('.cleanliness-question-hidden');
+  const enabledInput = row.querySelector('.cleanliness-question-enabled');
+  if (hiddenInput) hiddenInput.value = 'true';
+  if (enabledInput) enabledInput.checked = false;
+  closeCleanlinessRequirementActions(row);
+  row.classList.remove('is-row-editing');
+  row.classList.add('cleanliness-requirement-active', 'is-delete-pending');
+
+  let undoBtn = row.querySelector('.cleanliness-delete-undo');
+  if (!undoBtn) {
+    undoBtn = document.createElement('button');
+    undoBtn.type = 'button';
+    undoBtn.className = 'cleanliness-delete-undo editAndSave';
+    undoBtn.textContent = 'Undo';
+    row.appendChild(undoBtn);
+  }
+
+  window.clearTimeout(deleteCleanlinessRequirementRow.timers?.get(key));
+  deleteCleanlinessRequirementRow.timers ||= new Map();
+
+  undoBtn.onclick = (event) => {
+    event.stopPropagation();
+    window.clearTimeout(deleteCleanlinessRequirementRow.timers.get(key));
+    deleteCleanlinessRequirementRow.timers.delete(key);
+    if (hiddenInput) hiddenInput.value = 'false';
+    if (enabledInput) enabledInput.checked = true;
+    undoBtn.remove();
+    row.classList.remove('is-delete-pending', 'cleanliness-requirement-active');
+    showMessage('Requirement restored. Save to keep it visible.', 'info');
+  };
+
+  const timer = window.setTimeout(async () => {
+    deleteCleanlinessRequirementRow.timers.delete(key);
+    row.classList.remove('is-delete-pending', 'cleanliness-requirement-active');
+    row.classList.add('is-deleted');
+    undoBtn.remove();
+    await attemptSave();
+    showMessage('Requirement deleted.', 'success');
+  }, 15000);
+  deleteCleanlinessRequirementRow.timers.set(key, timer);
+  showMessage('Requirement deleted. Undo is available for 15 seconds.', 'info');
+}
+
+function bindCleanlinessRequirementRowEvents() {
+  document.querySelectorAll('.cleanliness-question-row').forEach((row) => {
+    if (row.dataset.cleanlinessActionsBound === 'true') return;
+    row.dataset.cleanlinessActionsBound = 'true';
+    row.addEventListener('click', (event) => {
+      if (event.target.closest('input, textarea, select, button, a, .cleanliness-requirement-popover')) return;
+      openCleanlinessRequirementActions(row);
+    });
+    row.querySelector('.cleanliness-requirement-save-btn')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      saveCleanlinessRequirementRow(row);
+    });
+  });
 }
 
 function buildCleanlinessPoolAssignmentOptions() {
