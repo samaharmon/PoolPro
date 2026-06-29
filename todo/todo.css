@@ -513,6 +513,56 @@
   animation: todoFadeIn 220ms ease both;
 }
 
+.todo-table-row {
+  cursor: pointer;
+}
+
+.todo-table-row.is-actions-visible {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.todo-table-title-cell {
+  min-width: 210px;
+}
+
+.todo-table-title-text {
+  font-weight: 800;
+}
+
+.todo-table-row-actions {
+  display: none;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.todo-table-row.is-actions-visible .todo-table-row-actions {
+  display: flex;
+  animation: todoFadeIn 180ms ease both;
+}
+
+.todo-table-row-actions button {
+  border: 1px solid #8a1b14;
+  background: #353535;
+  color: #fff;
+  padding: 5px 9px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.todo-table-row-actions button:hover,
+.todo-table-row-actions button:focus-visible {
+  background: #7b1510;
+}
+
+.todo-table-row-actions [data-todo-table-delete]:hover,
+.todo-table-row-actions [data-todo-table-delete]:focus-visible {
+  background: #9a1b14;
+}
+
 .todo-proof-summary {
   display: grid;
   gap: 4px;

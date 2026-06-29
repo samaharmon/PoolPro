@@ -1,14 +1,23 @@
 // duties.js — Daily Pool Cleanliness Report
 import { db, auth, collection, serverTimestamp, doc, getDoc, setDoc, writeBatch } from '../firebase.js';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
 
 const SITE_DEVELOPER_EMAIL = 'samaharmon@icloud.com';
 const ROLE_PERMISSIONS_DOC_ID = 'rolesPermissions';
 const DUTY_FIRESTORE_STORAGE = 'firestoreDutyPhoto';
-const DUTY_FIRESTORE_CHUNK_SIZE = 350000;
-const DUTY_UPLOAD_IMAGE_MAX_SIDE = 1024;
-const DUTY_UPLOAD_IMAGE_QUALITY = 0.66;
-const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 750 * 1024;
-const DUTY_UPLOAD_CONCURRENCY = 3;
+const DUTY_STORAGE_SOURCE = 'firebaseStorage';
+const DUTY_FIRESTORE_CHUNK_SIZE = 700000;
+const DUTY_FIRESTORE_BATCH_SIZE = 120;
+const DUTY_UPLOAD_IMAGE_MAX_SIDE = 960;
+const DUTY_UPLOAD_IMAGE_QUALITY = 0.58;
+const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 250 * 1024;
+const DUTY_UPLOAD_CONCURRENCY = 1;
+const DUTY_STORAGE_UPLOAD_TIMEOUT_MS = 12000;
 const CLEANLINESS_REPORT_QUESTION_TYPES = [
   { id: 'deck', label: 'Deck photos', instructions: 'Submit clear photos showing the full deck area.', minPhotos: 2 },
   { id: 'pool', label: 'Pool photos', instructions: 'Submit clear photos showing the pool water and surrounding edge.', minPhotos: 2 },
@@ -969,6 +978,44 @@ function readFileAsDataURL(file) {
   });
 }
 
+function loadImageElementFromSource(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => resolve({
+      image,
+      width: image.naturalWidth || image.width || 1,
+      height: image.naturalHeight || image.height || 1,
+      cleanup: () => {},
+    });
+    image.onerror = () => reject(new Error('Unable to prepare image preview.'));
+    image.src = src;
+  });
+}
+
+async function loadImageForCompression(file, objectUrl) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      return {
+        image: bitmap,
+        width: bitmap.width || 1,
+        height: bitmap.height || 1,
+        cleanup: () => bitmap.close?.(),
+      };
+    } catch (_) {
+      /* Fall back to browser image decoding below. */
+    }
+  }
+
+  try {
+    return await loadImageElementFromSource(objectUrl);
+  } catch (_) {
+    const dataUrl = await readFileAsDataURL(file);
+    return loadImageElementFromSource(dataUrl);
+  }
+}
+
 async function prepareDutyPhotoForUpload(file) {
   if (!file || !(file.type || '').startsWith('image/')) {
     return {
@@ -978,16 +1025,10 @@ async function prepareDutyPhotoForUpload(file) {
   }
 
   const objectUrl = URL.createObjectURL(file);
+  let loadedImage = null;
   try {
-    const image = await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Unable to prepare image preview.'));
-      img.src = objectUrl;
-    });
-
-    const sourceWidth = image.naturalWidth || image.width || 1;
-    const sourceHeight = image.naturalHeight || image.height || 1;
+    loadedImage = await loadImageForCompression(file, objectUrl);
+    const { image, width: sourceWidth, height: sourceHeight } = loadedImage;
     const largestSide = Math.max(sourceWidth, sourceHeight);
     if (file.size <= DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES && largestSide <= DUTY_UPLOAD_IMAGE_MAX_SIDE) {
       return {
@@ -997,8 +1038,8 @@ async function prepareDutyPhotoForUpload(file) {
     }
 
     const scale = Math.min(1, DUTY_UPLOAD_IMAGE_MAX_SIDE / largestSide);
-    const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
-    const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -1006,6 +1047,12 @@ async function prepareDutyPhotoForUpload(file) {
     if (!ctx) throw new Error('Canvas is unavailable for image compression.');
     ctx.drawImage(image, 0, 0, width, height);
     const blob = await canvasToBlob(canvas, 'image/jpeg', DUTY_UPLOAD_IMAGE_QUALITY);
+    if (blob.size && file.size && blob.size >= file.size && file.size <= DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES) {
+      return {
+        body: file,
+        contentType: file.type || 'image/jpeg',
+      };
+    }
     return {
       body: blob,
       contentType: 'image/jpeg',
@@ -1017,6 +1064,7 @@ async function prepareDutyPhotoForUpload(file) {
       contentType: file.type || 'application/octet-stream',
     };
   } finally {
+    loadedImage?.cleanup?.();
     URL.revokeObjectURL(objectUrl);
   }
 }
@@ -1077,11 +1125,59 @@ function hideDutiesUploadProgress(delay = 0) {
   }, delay);
 }
 
-async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
-  const safeName = String(file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
-  const uploadPayload = await prepareDutyPhotoForUpload(file);
-  const uniqueId = window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const photoId = `${Date.now()}_${category}_${index}_${uniqueId}_${safeName}`;
+function timeoutAfter(ms, label) {
+  return new Promise((_, reject) => {
+    window.setTimeout(() => reject(new Error(`${label} timed out.`)), ms);
+  });
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function isRetriableFirestoreUploadError(err) {
+  const text = `${err?.code || ''} ${err?.message || ''}`.toLowerCase();
+  return text.includes('resource-exhausted') ||
+    text.includes('unavailable') ||
+    text.includes('deadline-exceeded') ||
+    text.includes('maximum allowed queued writes') ||
+    text.includes('backoff');
+}
+
+async function commitDutyUploadBatch(batch, label, attempt = 1) {
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (attempt >= 4 || !isRetriableFirestoreUploadError(err)) throw err;
+    await wait(650 * attempt);
+    await commitDutyUploadBatch(batch, label, attempt + 1);
+  }
+}
+
+async function uploadDutyPhotoToStorage({ submissionId, pool, category, file, index, safeName, photoId, uploadPayload }) {
+  const path = `dutySubmissionMedia/${submissionId}/photos/${photoId}/${safeName}`;
+  const refObj = storageRef(getStorage(), path);
+  await Promise.race([
+    uploadBytes(refObj, uploadPayload.body, { contentType: uploadPayload.contentType }),
+    timeoutAfter(DUTY_STORAGE_UPLOAD_TIMEOUT_MS, 'Cleanliness photo upload'),
+  ]);
+  const url = await getDownloadURL(refObj);
+  return {
+    index,
+    url,
+    name: file.name || safeName,
+    storagePath: path,
+    source: DUTY_STORAGE_SOURCE,
+    pool,
+    category,
+    contentType: uploadPayload.contentType,
+    size: uploadPayload.body?.size || file.size || 0,
+    photoId,
+    submissionId,
+  };
+}
+
+async function uploadDutyPhotoToFirestore({ submissionId, pool, category, file, index, safeName, photoId, uploadPayload }) {
   const photoDoc = doc(db, 'dutySubmissionMedia', submissionId, 'photos', photoId);
   const dataUrl = await readFileAsDataURL(uploadPayload.body);
   const [prefix, encoded = ''] = String(dataUrl || '').split(',');
@@ -1104,9 +1200,9 @@ async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
     storedAt: serverTimestamp(),
   });
 
-  for (let i = 0; i < chunks.length; i += 400) {
+  for (let i = 0; i < chunks.length; i += DUTY_FIRESTORE_BATCH_SIZE) {
     const batch = writeBatch(db);
-    chunks.slice(i, i + 400).forEach((chunk, offset) => {
+    chunks.slice(i, i + DUTY_FIRESTORE_BATCH_SIZE).forEach((chunk, offset) => {
       const chunkIndex = i + offset;
       const chunkId = String(chunkIndex).padStart(4, '0');
       batch.set(doc(db, 'dutySubmissionMedia', submissionId, 'photos', photoId, 'chunks', chunkId), {
@@ -1114,13 +1210,13 @@ async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
         data: chunk,
       });
     });
-    await batch.commit();
+    await commitDutyUploadBatch(batch, `${photoId} chunks ${i + 1}-${Math.min(i + DUTY_FIRESTORE_BATCH_SIZE, chunks.length)}`);
   }
 
   return {
     index,
     url: `${DUTY_FIRESTORE_STORAGE}:${submissionId}:${photoId}`,
-    name: file.name,
+    name: file.name || safeName,
     storagePath: '',
     source: DUTY_FIRESTORE_STORAGE,
     contentType: uploadPayload.contentType,
@@ -1129,6 +1225,38 @@ async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
     photoId,
     submissionId,
   };
+}
+
+async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
+  const safeName = String(file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const uploadPayload = await prepareDutyPhotoForUpload(file);
+  const uniqueId = window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const photoId = `${Date.now()}_${category}_${index}_${uniqueId}_${safeName}`;
+
+  try {
+    return await uploadDutyPhotoToStorage({
+      submissionId,
+      pool,
+      category,
+      file,
+      index,
+      safeName,
+      photoId,
+      uploadPayload,
+    });
+  } catch (err) {
+    console.warn('[Duties] Firebase Storage upload failed; using Firestore fallback.', err);
+    return uploadDutyPhotoToFirestore({
+      submissionId,
+      pool,
+      category,
+      file,
+      index,
+      safeName,
+      photoId,
+      uploadPayload,
+    });
+  }
 }
 
 async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgress }) {

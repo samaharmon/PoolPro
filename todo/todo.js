@@ -329,13 +329,20 @@ function renderTaskTable(host, tasks, favoritesOnly) {
       </thead>
       <tbody>
         ${sorted.map((task) => `
-          <tr>
+          <tr class="todo-table-row" data-todo-table-row="${escapeHtml(task.id)}">
             <td>
               <button type="button" class="todo-heart-btn${task.favorite ? ' is-favorite' : ''}" data-todo-favorite="${escapeHtml(task.id)}" aria-label="${task.favorite ? 'Remove favorite' : 'Favorite task'}">
                 <span class="todo-heart-icon" aria-hidden="true">♥</span>
               </button>
             </td>
-            <td>${escapeHtml(task.title || 'Untitled Task')}</td>
+            <td class="todo-table-title-cell">
+              <div class="todo-table-title-text">${escapeHtml(task.title || 'Untitled Task')}</div>
+              <div class="todo-table-row-actions" aria-label="Task actions">
+                <button type="button" data-todo-table-edit="${escapeHtml(task.id)}">Edit</button>
+                <button type="button" data-todo-table-delete="${escapeHtml(task.id)}">Delete</button>
+                <button type="button" data-todo-table-redeploy="${escapeHtml(task.id)}">Redeploy</button>
+              </div>
+            </td>
             <td>${escapeHtml(task.facilityName || 'All facilities')}</td>
             <td>${escapeHtml(formatStartDate(toDate(task.startsAtIso)))}</td>
             <td>${escapeHtml(formatUrgency(task.urgency))}</td>
@@ -353,7 +360,31 @@ function renderTaskTable(host, tasks, favoritesOnly) {
   host.querySelectorAll('[data-todo-proof-image]').forEach((button) => {
     button.addEventListener('click', () => openProofImageFromButton(button));
   });
+  host.querySelectorAll('[data-todo-table-row]').forEach((row) => {
+    row.addEventListener('click', (event) => {
+      if (event.target.closest('button, a, input, select, textarea')) return;
+      toggleTableRowActions(row);
+    });
+  });
+  host.querySelectorAll('[data-todo-table-edit]').forEach((button) => {
+    button.addEventListener('click', () => editTask(button.dataset.todoTableEdit));
+  });
+  host.querySelectorAll('[data-todo-table-delete]').forEach((button) => {
+    button.addEventListener('click', () => deleteTask(button.dataset.todoTableDelete));
+  });
+  host.querySelectorAll('[data-todo-table-redeploy]').forEach((button) => {
+    button.addEventListener('click', () => redeployTask(button.dataset.todoTableRedeploy));
+  });
   wrapTodoTables(host);
+}
+
+function toggleTableRowActions(row) {
+  if (!row) return;
+  const wasOpen = row.classList.contains('is-actions-visible');
+  row.closest('tbody')?.querySelectorAll('.todo-table-row.is-actions-visible').forEach((openRow) => {
+    if (openRow !== row) openRow.classList.remove('is-actions-visible');
+  });
+  row.classList.toggle('is-actions-visible', !wasOpen);
 }
 
 function updateFormPermissions() {
@@ -365,7 +396,7 @@ function updateFormPermissions() {
   els.form?.querySelectorAll('input, select, textarea, button').forEach((control) => {
     control.disabled = !canManage;
   });
-  document.querySelectorAll('[data-todo-edit], [data-todo-delete], [data-todo-favorite], [data-todo-force-complete]').forEach((button) => {
+  document.querySelectorAll('[data-todo-edit], [data-todo-delete], [data-todo-favorite], [data-todo-force-complete], [data-todo-table-edit], [data-todo-table-delete], [data-todo-table-redeploy]').forEach((button) => {
     button.disabled = !canManage;
   });
 }
@@ -621,7 +652,29 @@ function editTask(taskId) {
   if (!canManageTasks()) return;
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
-  els.editingTaskId.value = task.id;
+  fillTaskForm(task, { mode: 'edit' });
+}
+
+function redeployTask(taskId) {
+  if (!canManageTasks()) return;
+  const task = state.tasks.find((item) => item.id === taskId);
+  if (!task) return;
+  fillTaskForm(task, { mode: 'redeploy' });
+}
+
+function syncSelectedPoolForTask(task) {
+  const facilityName = String(task?.facilityName || '').trim();
+  if (!facilityName || !els.poolSelect) return;
+  const matchingOption = Array.from(els.poolSelect.options).find((option) => option.value === facilityName);
+  if (!matchingOption) return;
+  state.selectedPool = facilityName;
+  els.poolSelect.value = facilityName;
+  rememberSelectedPool(facilityName);
+}
+
+function fillTaskForm(task, { mode = 'edit' } = {}) {
+  syncSelectedPoolForTask(task);
+  els.editingTaskId.value = mode === 'edit' ? task.id : '';
   els.title.value = task.title || '';
   els.urgency.value = task.urgency || 'medium';
   if (els.start) els.start.value = toDateTimeLocalInputValue(toDate(task.startsAtIso));
@@ -635,9 +688,12 @@ function editTask(taskId) {
   if (els.minPhotos) els.minPhotos.value = String(getMinimumPhotoCount(task));
   els.proofForm.value = task.proofForm || '';
   syncProofControls();
-  els.saveBtn.textContent = 'Save Changes';
+  els.saveBtn.textContent = mode === 'redeploy' ? 'Redeploy Task' : 'Save Changes';
+  renderTaskList();
+  renderTaskTables();
   els.title.focus();
-  setFormMessage('Editing task.');
+  els.form?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  setFormMessage(mode === 'redeploy' ? 'Redeploying task template. Adjust the facility or dates if needed, then save.' : 'Editing task.');
 }
 
 async function deleteTask(taskId) {
