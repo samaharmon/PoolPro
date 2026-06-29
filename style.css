@@ -1,5 +1,5 @@
 html {
-  --poolpro-accent-gradient: linear-gradient(135deg, rgba(105, 20, 14, 0.92), rgba(32, 40, 52, 0.92));
+  --poolpro-accent-gradient: linear-gradient(135deg, #69140e, #202834);
   background-color: #000;
   min-height: 100%;
 }
@@ -135,6 +135,7 @@ body.dark-mode .page-content-title {
 .header {
     background: var(--poolpro-accent-gradient);
     color: white;
+    opacity: 1 !important;
     padding: calc(16px + env(safe-area-inset-top, 0px)) 20px 16px;
     position: relative;
     z-index: 1250;
@@ -149,6 +150,7 @@ body.dark-mode .page-content-title {
 .app-header {
     position: relative;
     z-index: 1250;
+    opacity: 1 !important;
 }
 
 .header-content {
@@ -156,6 +158,7 @@ body.dark-mode .page-content-title {
     justify-content: space-between;
     align-items: center;
     width: 100%;
+    opacity: 1 !important;
 }
 
 #logo {
@@ -248,7 +251,7 @@ body.dark-mode .page-content-title {
 }
 
 .floating-header.visible {
-    opacity: 1;
+    opacity: 1 !important;
     visibility: visible;
     pointer-events: auto;
     transform: translateY(0);
@@ -1283,6 +1286,7 @@ html.dashboard-hash-pending #supervisorDashboard {
     position: sticky;
     top: 0;
     z-index: 12;
+    opacity: 1 !important;
 }
 
 .table-sticky-controls {
@@ -1291,6 +1295,7 @@ html.dashboard-hash-pending #supervisorDashboard {
     z-index: 30;
     background: #000;
     padding: 8px 0;
+    opacity: 1 !important;
 }
 
 .table-scroll-wrap::before,
@@ -1342,6 +1347,7 @@ html.dashboard-hash-pending #supervisorDashboard {
 .sanitation-table thead,
 .training-schedule-table thead {
     background: var(--poolpro-accent-gradient);
+    opacity: 1 !important;
 }
 
 .data-table thead th,
@@ -6616,6 +6622,7 @@ body.dark-mode .dash-value-popover {
   top: 0;
   z-index: 7;
   background: var(--poolpro-accent-gradient) !important;
+  opacity: 1 !important;
 }
 
 .sanitation-settings-scroll > .sanitation-table--settings thead tr {

@@ -491,6 +491,7 @@
   top: 0;
   z-index: 4;
   background: linear-gradient(90deg, #7b1510, #1e2230);
+  opacity: 1 !important;
 }
 
 .todo-table th,

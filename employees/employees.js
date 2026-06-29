@@ -3,7 +3,7 @@
 import {
   db, auth,
   getDoc, setDoc, getDocs,
-  doc, collection,
+  doc, collection, query, orderBy, limit, serverTimestamp,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -21,6 +21,9 @@ let trainingSessions = []; // [{id, trainingType, date, market, attendees: [{emp
 let poolsData = [];        // [{id, name, markets: []}]
 let testingResults = [];   // [{ rubricKey, date, employeeId, poolName, questionResults[] }]
 let questionTypeMap = {};  // { [rubricKey]: { [questionNumber]: "Topic label" } }
+let facilityTasks = [];
+let trainingSignups = [];
+let facilityComplianceStaffSizes = {};
 let typedRescuerAssignment = null;
 let pageInitialized = false;
 
@@ -42,6 +45,7 @@ let trainingFilters = { market: 'all', pool: 'all', completion: 'all' };
 let setFilters = { market: 'all', pool: 'all' };
 let overallFilters = { market: 'all', pool: 'all' };
 let metricsFilters = { market: 'all', pool: 'all', week: 'all' };
+let complianceFilters = { market: 'all', pool: 'all' };
 let graphFilters = {
   test: 'all',
   market: 'all',
@@ -191,6 +195,9 @@ async function init() {
     loadPerformanceData(),
     loadTestingResults(),
     loadQuestionTypeMap(),
+    loadFacilityTasks(),
+    loadTrainingSignups(),
+    loadComplianceStaffSizes(),
   ]);
 
   buildPoolToMarket();
@@ -282,6 +289,44 @@ async function loadQuestionTypeMap() {
   } catch (err) {
     console.error('[Employees] Error loading question types:', err);
     questionTypeMap = {};
+  }
+}
+
+async function loadFacilityTasks() {
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'facilityTasks'),
+      orderBy('createdAt', 'desc'),
+      limit(1000)
+    ));
+    facilityTasks = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error('[Employees] Error loading facility tasks:', err);
+    facilityTasks = [];
+  }
+}
+
+async function loadTrainingSignups() {
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'trainingSignups'),
+      orderBy('signedUpAt', 'desc'),
+      limit(1000)
+    ));
+    trainingSignups = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (err) {
+    console.error('[Employees] Error loading training signups:', err);
+    trainingSignups = [];
+  }
+}
+
+async function loadComplianceStaffSizes() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'facilityComplianceStaffSizes'));
+    facilityComplianceStaffSizes = snap.exists() ? (snap.data().sizes || {}) : {};
+  } catch (err) {
+    console.error('[Employees] Error loading facility compliance staff sizes:', err);
+    facilityComplianceStaffSizes = {};
   }
 }
 
@@ -692,8 +737,13 @@ function setupPageTabs() {
       const panelId =
         btn.dataset.tab === 'training' ? 'trainingSection' :
         btn.dataset.tab === 'set' ? 'setSection' :
-        'setMetricsSection';
+        btn.dataset.tab === 'set-metrics' ? 'setMetricsSection' :
+        btn.dataset.tab === 'facility-compliance' ? 'facilityComplianceSection' :
+        'trainingSection';
       document.getElementById(panelId)?.classList.remove('hidden');
+      if (btn.dataset.tab === 'facility-compliance') {
+        renderFacilityComplianceScores();
+      }
     });
   });
 }
@@ -708,6 +758,313 @@ function renderAll() {
   renderOverallPerformance();
   renderQuestionMetrics();
   renderPerformanceGraph();
+  renderFacilityComplianceScores();
+}
+
+// ============================================================
+// FACILITY COMPLIANCE SCORES
+// ============================================================
+
+function normalizeComplianceFacilityKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getComplianceRecordFacilityKey(record = {}) {
+  return normalizeComplianceFacilityKey(
+    record.facilityName ||
+    record.pool ||
+    record.poolLocation ||
+    record.poolName ||
+    record.homePool ||
+    record.facilityId ||
+    ''
+  );
+}
+
+function toComplianceDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatComplianceDateInput(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function isSameComplianceDay(value, date = new Date()) {
+  const recordDate = toComplianceDate(value);
+  if (!recordDate) return false;
+  return formatComplianceDateInput(recordDate) === formatComplianceDateInput(date);
+}
+
+function getComplianceIdentityKey(record = {}) {
+  return String(
+    record.employeeId ||
+    record.email ||
+    record.respondentEmail ||
+    record.submitterEmail ||
+    record.username ||
+    [record.firstName, record.lastName].filter(Boolean).join(' ') ||
+    record.id ||
+    ''
+  ).trim().toLowerCase();
+}
+
+function getPoolName(poolDoc = {}) {
+  return String(poolDoc.name || poolDoc.id || '').trim();
+}
+
+function getComplianceMarketMap() {
+  const marketMap = {};
+  poolsData.forEach((pool) => {
+    const markets = Array.isArray(pool.markets) && pool.markets.length
+      ? pool.markets
+      : (pool.market ? [pool.market] : ['Other']);
+    const market = markets[0] || 'Other';
+    if (!marketMap[market]) marketMap[market] = [];
+    marketMap[market].push(pool);
+  });
+
+  Object.values(marketMap).forEach((pools) => {
+    pools.sort((a, b) => getPoolName(a).localeCompare(getPoolName(b)));
+  });
+
+  return marketMap;
+}
+
+function getCompliancePoolsByMarket() {
+  const marketMap = getComplianceMarketMap();
+  const markets = Object.keys(marketMap)
+    .sort()
+    .filter((market) => complianceFilters.market === 'all' || market === complianceFilters.market);
+
+  return markets.map((market) => ({
+    market,
+    pools: (marketMap[market] || []).filter((pool) => {
+      const name = getPoolName(pool);
+      return complianceFilters.pool === 'all' || name === complianceFilters.pool;
+    }),
+  })).filter((entry) => entry.pools.length);
+}
+
+function getComplianceStats(facilityName) {
+  const facilityKey = normalizeComplianceFacilityKey(facilityName);
+  const todayTasks = facilityTasks.filter((task) =>
+    getComplianceRecordFacilityKey(task) === facilityKey &&
+    isSameComplianceDay(task.requiredCompletionAtIso || task.createdAtIso || task.createdAt)
+  );
+  const completedTasks = todayTasks.filter((task) => !!task.completed).length;
+  const taskTotal = todayTasks.length;
+  const taskScore = taskTotal ? Math.round((completedTasks / taskTotal) * 100) : null;
+
+  const signedUpKeys = new Set();
+  trainingSignups.forEach((signup) => {
+    if (getComplianceRecordFacilityKey(signup) !== facilityKey) return;
+    const key = getComplianceIdentityKey(signup);
+    if (key) signedUpKeys.add(key);
+  });
+
+  const completedKeys = new Set();
+  trainingSessions.forEach((session) => {
+    (Array.isArray(session.attendees) ? session.attendees : []).forEach((attendee) => {
+      if (!attendee?.attended) return;
+      if (getComplianceRecordFacilityKey(attendee) !== facilityKey) return;
+      const key = getComplianceIdentityKey(attendee);
+      if (key) completedKeys.add(key);
+    });
+  });
+
+  return {
+    taskTotal,
+    completedTasks,
+    taskScore,
+    trainingSignedUp: signedUpKeys.size,
+    trainingCompleted: completedKeys.size,
+  };
+}
+
+function renderComplianceFilterBar(container) {
+  const marketMap = getComplianceMarketMap();
+  const markets = Object.keys(marketMap).sort();
+  if (complianceFilters.market !== 'all' && !markets.includes(complianceFilters.market)) {
+    complianceFilters.market = 'all';
+  }
+  const visiblePools = [...new Set((complianceFilters.market === 'all'
+    ? Object.values(marketMap).flat()
+    : (marketMap[complianceFilters.market] || [])
+  ).map(getPoolName).filter(Boolean))].sort();
+  if (complianceFilters.pool !== 'all' && !visiblePools.includes(complianceFilters.pool)) {
+    complianceFilters.pool = 'all';
+  }
+
+  const filterBar = document.createElement('div');
+  filterBar.className = 'emp-global-filter-bar';
+  filterBar.innerHTML = `
+    <span class="filter-by-label">Filter By:</span>
+    <select id="complianceMarketFilter" class="training-filter-select">
+      <option value="all">All Markets</option>
+      ${markets.map((market) => `<option value="${escapeHtml(market)}" ${complianceFilters.market === market ? 'selected' : ''}>${escapeHtml(market)}</option>`).join('')}
+    </select>
+    <select id="compliancePoolFilter" class="training-filter-select">
+      <option value="all">All Pools</option>
+      ${visiblePools.map((pool) => `<option value="${escapeHtml(pool)}" ${complianceFilters.pool === pool ? 'selected' : ''}>${escapeHtml(pool)}</option>`).join('')}
+    </select>
+  `;
+  container.appendChild(filterBar);
+
+  filterBar.querySelector('#complianceMarketFilter')?.addEventListener('change', (event) => {
+    complianceFilters.market = event.target.value;
+    complianceFilters.pool = 'all';
+    renderFacilityComplianceScores();
+  });
+
+  filterBar.querySelector('#compliancePoolFilter')?.addEventListener('change', (event) => {
+    complianceFilters.pool = event.target.value;
+    renderFacilityComplianceScores();
+  });
+}
+
+function renderFacilityComplianceScores() {
+  const container = document.getElementById('facilityComplianceContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  renderComplianceFilterBar(container);
+
+  const intro = document.createElement('p');
+  intro.className = 'dashboard-compliance-note';
+  intro.textContent = 'Daily task scores are based on tasks due today for each facility.';
+  container.appendChild(intro);
+
+  const actions = document.createElement('div');
+  actions.className = 'dashboard-compliance-actions';
+  actions.innerHTML = `
+    <button type="button" class="submit-btn" id="facilityComplianceSaveSizes">Save Staff Sizes</button>
+    <span id="facilityComplianceMessage" class="form-message"></span>
+  `;
+  container.appendChild(actions);
+
+  const groups = getCompliancePoolsByMarket();
+  if (!groups.length) {
+    const empty = document.createElement('p');
+    empty.style.margin = '20px 0';
+    empty.style.color = '#999';
+    empty.textContent = 'No facilities match the current filters.';
+    container.appendChild(empty);
+    return;
+  }
+
+  groups.forEach(({ market, pools }) => {
+    const section = document.createElement('section');
+    section.className = 'emp-market-section dashboard-compliance-section';
+
+    const heading = document.createElement('h3');
+    heading.className = 'emp-market-heading';
+    heading.textContent = market;
+    section.appendChild(heading);
+
+    const scrollWrap = document.createElement('div');
+    scrollWrap.className = 'table-scroll-wrap';
+
+    const table = document.createElement('table');
+    table.className = 'data-table dashboard-compliance-table';
+    table.innerHTML = `
+      <thead>
+        <tr>
+          <th>Facility</th>
+          <th>Staff Size</th>
+          <th>Tasks Complete Today</th>
+          <th>Daily Task Score</th>
+          <th>Signed Up for In-Service</th>
+          <th>Completed In-Service</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
+
+    const tbody = table.querySelector('tbody');
+    pools.forEach((poolDoc) => {
+      const facilityName = getPoolName(poolDoc);
+      const facilityKey = normalizeComplianceFacilityKey(facilityName);
+      const stats = getComplianceStats(facilityName);
+      const staffSize = facilityComplianceStaffSizes[facilityKey] ?? '';
+      const scoreClass = stats.taskScore === null
+        ? ''
+        : stats.taskScore >= 90
+          ? 'dashboard-compliance-score-good'
+          : stats.taskScore >= 70
+            ? 'dashboard-compliance-score-warn'
+            : 'dashboard-compliance-score-bad';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${escapeHtml(facilityName)}</td>
+        <td>
+          <input type="number" min="0" step="1" class="dashboard-compliance-staff-input" data-compliance-facility="${escapeHtml(facilityKey)}" value="${escapeHtml(staffSize)}" aria-label="Staff size for ${escapeHtml(facilityName)}">
+        </td>
+        <td>${stats.completedTasks} / ${stats.taskTotal}</td>
+        <td class="${scoreClass}">${stats.taskScore === null ? 'No tasks due today' : `${stats.taskScore}%`}</td>
+        <td>${stats.trainingSignedUp}</td>
+        <td>${stats.trainingCompleted}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    scrollWrap.appendChild(table);
+    section.appendChild(scrollWrap);
+    container.appendChild(section);
+  });
+
+  container.querySelectorAll('[data-compliance-facility]').forEach((input) => {
+    input.addEventListener('input', () => {
+      const key = input.dataset.complianceFacility || '';
+      const value = input.value === '' ? '' : Math.max(0, Number.parseInt(input.value, 10) || 0);
+      if (!key) return;
+      if (value === '') delete facilityComplianceStaffSizes[key];
+      else facilityComplianceStaffSizes[key] = value;
+    });
+  });
+
+  container.querySelector('#facilityComplianceSaveSizes')?.addEventListener('click', saveFacilityComplianceStaffSizes);
+}
+
+async function saveFacilityComplianceStaffSizes() {
+  const message = document.getElementById('facilityComplianceMessage');
+  const button = document.getElementById('facilityComplianceSaveSizes');
+  try {
+    if (button) button.disabled = true;
+    if (message) {
+      message.textContent = 'Saving...';
+      message.classList.remove('error', 'success');
+    }
+    await setDoc(doc(db, 'settings', 'facilityComplianceStaffSizes'), {
+      sizes: facilityComplianceStaffSizes,
+      updatedAt: serverTimestamp(),
+      updatedAtIso: new Date().toISOString(),
+    }, { merge: true });
+    if (message) {
+      message.textContent = 'Staff sizes saved.';
+      message.classList.remove('error');
+      message.classList.add('success');
+    }
+  } catch (err) {
+    console.error('[Employees] Error saving facility compliance staff sizes:', err);
+    if (message) {
+      message.textContent = 'Unable to save staff sizes.';
+      message.classList.add('error');
+      message.classList.remove('success');
+    }
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 // ============================================================

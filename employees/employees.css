@@ -286,6 +286,7 @@ body.dark-mode .emp-market-heading {
 .emp-table thead tr {
   background-color: #69140e;
   color: #fff;
+  opacity: 1 !important;
 }
 
 .emp-table th {

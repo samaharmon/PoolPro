@@ -881,6 +881,7 @@ body.dark-mode .pool-rule-block {
   letter-spacing: 0.04em;
   padding: 6px 8px;
   border-bottom: 1px solid #555;
+  opacity: 1 !important;
 }
 
 .rules-table .table-header-cell {
@@ -1094,6 +1095,7 @@ body.dark-mode .pool-rule-block {
 .table-header-row .header-cell {
     font-weight: bold;
     background-color: #252525;
+    opacity: 1 !important;
 }
 
 /* concern-level visual states */

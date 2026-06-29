@@ -44,9 +44,6 @@ let allDutyReports = [];
 let allManagerialReports = [];
 let allDesPreInspections = [];
 let allInventoryReports = [];
-let allFacilityTasks = [];
-let allTrainingSignups = [];
-let facilityComplianceStaffSizes = {};
 let currentPage = 1;
 const itemsPerPage = 20;
 let isLoggedIn = false;
@@ -1131,7 +1128,6 @@ function applyDashboardAccessMode() {
   const operationalPanel = document.getElementById('operationalDashboardContent');
   const suppliesPanel = document.getElementById('dashboardSuppliesContent');
   const metricsPanel = document.getElementById('dashboardMetricsContent');
-  const compliancePanel = document.getElementById('dashboardComplianceContent');
   if (!canViewChemDashboard) return;
   if (tabs) tabs.style.display = fullAccess ? '' : 'none';
   if (title) title.textContent = fullAccess ? 'Supervisor Dashboard' : 'Pool Chemistry Dashboard';
@@ -1143,7 +1139,6 @@ function applyDashboardAccessMode() {
     if (operationalPanel) operationalPanel.style.display = 'none';
     if (suppliesPanel) suppliesPanel.style.display = 'none';
     if (metricsPanel) metricsPanel.style.display = 'none';
-    if (compliancePanel) compliancePanel.style.display = 'none';
   }
 }
 
@@ -1197,16 +1192,12 @@ async function renderActiveDashboardTab() {
 
   if (activeTab === 'metrics') {
     renderDashboardMetrics();
-    return;
-  }
-
-  if (activeTab === 'compliance') {
-    renderFacilityComplianceDashboard();
   }
 }
 
 function activateDashboardTab(which) {
-  const target = !isSupervisor() ? 'chemistry' : (which || 'chemistry');
+  const requested = DASHBOARD_PANEL_IDS[which] ? which : 'chemistry';
+  const target = !isSupervisor() ? 'chemistry' : requested;
   document.querySelectorAll('[data-dash-tab]').forEach((tab) => {
     tab.classList.toggle('active', tab.dataset.dashTab === target);
   });
@@ -5034,7 +5025,6 @@ const DASHBOARD_PANEL_IDS = {
   operational: 'operationalDashboardContent',
   supplies: 'dashboardSuppliesContent',
   metrics: 'dashboardMetricsContent',
-  compliance: 'dashboardComplianceContent',
 };
 const SUPPLY_STATUS_PRIORITY = { Out: 0, 'Critically Low': 1, Low: 2, Moderate: 3, High: 4 };
 const SUPPLY_NEED_STATUSES = new Set(['Low', 'Critically Low', 'Out']);
@@ -5952,7 +5942,7 @@ async function loadDashboardData() {
       }
     };
     const optionalDoc = optionalDocs;
-    const [sanSnap, chemSnap, dutySnap, managerialSnap, desSnap, inventorySnap, resolvedSupplySnap, facilityTasksSnap, trainingSignupsSnap, complianceStaffSizesSnap, trainingScheduleSnap] = await Promise.all([
+    const [sanSnap, chemSnap, dutySnap, managerialSnap, desSnap, inventorySnap, resolvedSupplySnap, trainingScheduleSnap] = await Promise.all([
       getDoc(doc(db, 'settings', 'sanitation')),
       getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'))),
       fullAccess ? optionalDocs('cleanliness reports', getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
@@ -5960,9 +5950,6 @@ async function loadDashboardData() {
       fullAccess ? optionalDocs('DES pre-inspections', getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
       fullAccess ? optionalDocs('inventory reports', getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
       fullAccess ? optionalDoc('resolved supply needs', getDoc(doc(db, 'settings', 'resolvedSupplyNeeds'))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('facility tasks', getDocs(query(collection(db, 'facilityTasks'), orderBy('createdAt', 'desc'), limit(1000)))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('training signups', getDocs(query(collection(db, 'trainingSignups'), orderBy('signedUpAt', 'desc'), limit(1000)))) : Promise.resolve(null),
-      fullAccess ? optionalDoc('facility compliance staff sizes', getDoc(doc(db, 'settings', 'facilityComplianceStaffSizes'))) : Promise.resolve(null),
       fullAccess ? optionalDoc('training schedule', getDoc(doc(db, 'settings', 'trainingSchedule'))) : Promise.resolve(null),
     ]);
     sanitationSelections = sanSnap.exists() ? (sanSnap.data().pools || {}) : {};
@@ -5971,9 +5958,6 @@ async function loadDashboardData() {
     allManagerialReports = managerialSnap ? managerialSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     allDesPreInspections = desSnap ? desSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     allInventoryReports = inventorySnap ? inventorySnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
-    allFacilityTasks = facilityTasksSnap ? facilityTasksSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
-    allTrainingSignups = trainingSignupsSnap ? trainingSignupsSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
-    facilityComplianceStaffSizes = complianceStaffSizesSnap?.exists?.() ? (complianceStaffSizesSnap.data().sizes || {}) : {};
     if (trainingScheduleSnap?.exists?.()) {
       trainingSchedule.sessions = Array.isArray(trainingScheduleSnap.data().sessions) ? trainingScheduleSnap.data().sessions : [];
       window.trainingSchedule = trainingSchedule;
@@ -5986,212 +5970,6 @@ async function loadDashboardData() {
     console.error('[ChemLog] Error loading dashboard data:', err);
     dashboardDataLoaded = false;
     if (container) container.innerHTML = '<p style="color:red;padding:16px;">Error loading data. Check console.</p>';
-  }
-}
-
-function normalizeComplianceFacilityKey(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function getComplianceRecordFacilityKey(record = {}) {
-  return normalizeComplianceFacilityKey(
-    record.facilityName ||
-    record.pool ||
-    record.poolLocation ||
-    record.poolName ||
-    record.homePool ||
-    record.facilityId ||
-    ''
-  );
-}
-
-function isSameComplianceDay(value, date = new Date()) {
-  const recordDate = toDateObject(value);
-  if (!recordDate) return false;
-  return formatDateInputValue(recordDate) === formatDateInputValue(date);
-}
-
-function getComplianceIdentityKey(record = {}) {
-  return String(
-    record.employeeId ||
-    record.email ||
-    record.respondentEmail ||
-    record.submitterEmail ||
-    record.username ||
-    [record.firstName, record.lastName].filter(Boolean).join(' ') ||
-    record.id ||
-    ''
-  ).trim().toLowerCase();
-}
-
-function getFacilityComplianceStats(facilityName) {
-  const facilityKey = normalizeComplianceFacilityKey(facilityName);
-  const todayTasks = allFacilityTasks.filter((task) =>
-    getComplianceRecordFacilityKey(task) === facilityKey &&
-    isSameComplianceDay(task.requiredCompletionAtIso || task.createdAtIso || task.createdAt)
-  );
-  const completedTasks = todayTasks.filter((task) => !!task.completed).length;
-  const taskTotal = todayTasks.length;
-  const taskScore = taskTotal ? Math.round((completedTasks / taskTotal) * 100) : null;
-
-  const signedUpKeys = new Set();
-  allTrainingSignups.forEach((signup) => {
-    if (getComplianceRecordFacilityKey(signup) !== facilityKey) return;
-    const key = getComplianceIdentityKey(signup);
-    if (key) signedUpKeys.add(key);
-  });
-
-  const completedKeys = new Set();
-  (trainingSchedule.sessions || []).forEach((session) => {
-    (Array.isArray(session.attendees) ? session.attendees : []).forEach((attendee) => {
-      if (!attendee?.attended) return;
-      if (getComplianceRecordFacilityKey(attendee) !== facilityKey) return;
-      const key = getComplianceIdentityKey(attendee);
-      if (key) completedKeys.add(key);
-    });
-  });
-
-  return {
-    taskTotal,
-    completedTasks,
-    taskScore,
-    trainingSignedUp: signedUpKeys.size,
-    trainingCompleted: completedKeys.size,
-  };
-}
-
-function getCompliancePoolsByMarket() {
-  const marketMap = getDashboardMarketMap({ docs: true });
-  const visibleMarkets = getVisibleDashboardMarkets(marketMap);
-  return visibleMarkets.map((market) => ({
-    market,
-    pools: (marketMap[market] || []).filter((poolDoc) => {
-      const name = getPoolName(poolDoc);
-      return dashboardPoolFilter === 'all' || name === dashboardPoolFilter;
-    }),
-  })).filter((entry) => entry.pools.length);
-}
-
-function renderFacilityComplianceDashboard() {
-  const container = document.getElementById('dashboardComplianceContent');
-  if (!container) return;
-  container.innerHTML = '';
-
-  renderDashboardFilterBar(container, renderFacilityComplianceDashboard, { includeDate: false });
-
-  const intro = document.createElement('p');
-  intro.className = 'dashboard-compliance-note';
-  intro.textContent = 'Daily task scores are based on tasks due today for each facility.';
-  container.appendChild(intro);
-
-  const actions = document.createElement('div');
-  actions.className = 'dashboard-compliance-actions';
-  actions.innerHTML = `
-    <button type="button" class="submit-btn" id="facilityComplianceSaveSizes">Save Staff Sizes</button>
-    <span id="facilityComplianceMessage" class="form-message"></span>
-  `;
-  container.appendChild(actions);
-
-  const groups = getCompliancePoolsByMarket();
-  if (!groups.length) {
-    const empty = document.createElement('p');
-    empty.className = 'dashboard-empty-state';
-    empty.textContent = 'No facilities match the selected filter.';
-    container.appendChild(empty);
-    return;
-  }
-
-  groups.forEach(({ market, pools }) => {
-    const section = document.createElement('section');
-    section.className = 'dashboard-market-section dashboard-compliance-section';
-    const heading = document.createElement('h3');
-    heading.className = 'dashboard-market-heading';
-    heading.textContent = market;
-    section.appendChild(heading);
-
-    const table = document.createElement('table');
-    table.className = 'data-table dashboard-compliance-table';
-    table.innerHTML = `
-      <thead>
-        <tr>
-          <th>Facility</th>
-          <th>Staff Size</th>
-          <th>Tasks Complete Today</th>
-          <th>Daily Task Score</th>
-          <th>Signed Up for In-Service</th>
-          <th>Completed In-Service</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    `;
-    const tbody = table.querySelector('tbody');
-    pools.forEach((poolDoc) => {
-      const facilityName = getPoolName(poolDoc);
-      const facilityKey = normalizeComplianceFacilityKey(facilityName);
-      const stats = getFacilityComplianceStats(facilityName);
-      const staffSize = facilityComplianceStaffSizes[facilityKey] ?? '';
-      const scoreClass = stats.taskScore === null
-        ? ''
-        : stats.taskScore >= 90
-          ? 'dashboard-compliance-score-good'
-          : stats.taskScore >= 70
-            ? 'dashboard-compliance-score-warn'
-            : 'dashboard-compliance-score-bad';
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${escapeHtml(facilityName)}</td>
-        <td>
-          <input type="number" min="0" step="1" class="dashboard-compliance-staff-input" data-compliance-facility="${escapeHtml(facilityKey)}" value="${escapeHtml(staffSize)}" aria-label="Staff size for ${escapeHtml(facilityName)}">
-        </td>
-        <td>${stats.completedTasks} / ${stats.taskTotal}</td>
-        <td class="${scoreClass}">${stats.taskScore === null ? 'No tasks due today' : `${stats.taskScore}%`}</td>
-        <td>${stats.trainingSignedUp}</td>
-        <td>${stats.trainingCompleted}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-    section.appendChild(table);
-    container.appendChild(section);
-  });
-
-  container.querySelectorAll('[data-compliance-facility]').forEach((input) => {
-    input.addEventListener('input', () => {
-      const key = input.dataset.complianceFacility || '';
-      const value = input.value === '' ? '' : Math.max(0, Number.parseInt(input.value, 10) || 0);
-      if (!key) return;
-      if (value === '') delete facilityComplianceStaffSizes[key];
-      else facilityComplianceStaffSizes[key] = value;
-    });
-  });
-  container.querySelector('#facilityComplianceSaveSizes')?.addEventListener('click', saveFacilityComplianceStaffSizes);
-  wrapResponsiveTables(container);
-}
-
-async function saveFacilityComplianceStaffSizes() {
-  const message = document.getElementById('facilityComplianceMessage');
-  const button = document.getElementById('facilityComplianceSaveSizes');
-  try {
-    if (button) button.disabled = true;
-    if (message) message.textContent = 'Saving...';
-    await setDoc(doc(db, 'settings', 'facilityComplianceStaffSizes'), {
-      sizes: facilityComplianceStaffSizes,
-      updatedAt: serverTimestamp(),
-      updatedAtIso: new Date().toISOString(),
-    }, { merge: true });
-    if (message) {
-      message.textContent = 'Staff sizes saved.';
-      message.classList.remove('error');
-      message.classList.add('success');
-    }
-  } catch (err) {
-    console.error('[PoolPro] Error saving facility compliance staff sizes:', err);
-    if (message) {
-      message.textContent = 'Unable to save staff sizes.';
-      message.classList.add('error');
-      message.classList.remove('success');
-    }
-  } finally {
-    if (button) button.disabled = false;
   }
 }
 
