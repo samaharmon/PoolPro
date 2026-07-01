@@ -68,7 +68,7 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
-    // Managerial report submissions
+    // Chemical inventory log submissions
     match /managerialReports/{submissionId} {
       allow read, write: if true;
     }

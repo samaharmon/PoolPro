@@ -2126,7 +2126,7 @@ const PERMISSION_DEFINITIONS = [
   { key: 'trainingSignup', label: 'Training Signup' },
   { key: 'cleanlinessReport', label: 'Cleanliness Report' },
   { key: 'desLogbooks', label: 'DES Logbook Report' },
-  { key: 'managerialReport', label: 'Managerial Report' },
+  { key: 'managerialReport', label: 'Chemical Inventory Log' },
   { key: 'operationalStatusLog', label: 'Operational Status Log' },
   { key: 'inventory', label: 'Inventory' },
   { key: 'todoList', label: 'To Do List' },
@@ -3057,7 +3057,7 @@ const ALERT_REMINDER_CANCEL_FORM_OPTIONS = [
   },
   {
     key: 'managerialReport',
-    label: 'Managerial Report',
+    label: 'Chemical Inventory Log',
     collection: 'managerialReports',
     facilityFields: ['pool', 'facilityName', 'poolLocation', 'poolName', 'homePool'],
     timeFields: ['timestamp', 'submittedAt', 'createdAt'],
@@ -5946,7 +5946,7 @@ async function loadDashboardData() {
       getDoc(doc(db, 'settings', 'sanitation')),
       getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'))),
       fullAccess ? optionalDocs('cleanliness reports', getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('managerial reports', getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
+      fullAccess ? optionalDocs('chemical inventory logs', getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
       fullAccess ? optionalDocs('DES pre-inspections', getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
       fullAccess ? optionalDocs('inventory reports', getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
       fullAccess ? optionalDoc('resolved supply needs', getDoc(doc(db, 'settings', 'resolvedSupplyNeeds'))) : Promise.resolve(null),
@@ -10341,7 +10341,7 @@ async function getDataStorageExportSheets(categoryKey) {
     } else if (key === 'cleanlinessReports') {
       sheets.push({ name: 'Cleanliness Reports', rows: await getCollectionExportRows('dutySubmissions', summarizeReportRecord) });
     } else if (key === 'inspectionReports') {
-      sheets.push({ name: 'Managerial Reports', rows: await getCollectionExportRows('managerialReports', summarizeReportRecord) });
+      sheets.push({ name: 'Chemical Inventory Logs', rows: await getCollectionExportRows('managerialReports', summarizeReportRecord) });
       sheets.push({ name: 'DES Pre-Inspections', rows: await getCollectionExportRows('desPreInspections', summarizeReportRecord) });
     } else if (key === 'setPerformance') {
       sheets.push({ name: 'SET Performance', rows: await getSettingsDocExportRows('employeePerformance') });
@@ -10989,7 +10989,7 @@ function setDashboardReportPage(kind, value) {
 }
 
 function getDutyReportTitle(sub) {
-  return sub?.reportType === 'managerial' ? 'Managerial Report' : 'Cleanliness Report';
+  return sub?.reportType === 'managerial' ? 'Chemical Inventory Log' : 'Cleanliness Report';
 }
 
 function getDashboardCleanlinessShift(sub) {
@@ -11054,7 +11054,7 @@ function renderReportSubmissions(submissions, container, {
     );
   }
 
-  const reportLabel = kind === 'managerial' ? 'Managerial Report' : 'Cleanliness Report';
+  const reportLabel = kind === 'managerial' ? 'Chemical Inventory Log' : 'Cleanliness Report';
   const marketMap = getDashboardMarketMap({ docs: false });
   const marketsToShow = getVisibleDashboardMarkets(marketMap);
   let submissionsForDate = submissions.filter((sub) => isDashboardDate(sub.timestamp, dashboardDateFilter));
@@ -11257,8 +11257,8 @@ function createInspectionReportCell(sub, type) {
     cell.appendChild(createInspectionInfoFlag(sub, 'DES Pre-Inspection Details'));
     return cell;
   }
-  cell.appendChild(createDutyFormLink(sub, 'Managerial Report'));
-  cell.appendChild(createInspectionInfoFlag(sub, 'Managerial Report Details'));
+  cell.appendChild(createDutyFormLink(sub, 'Chemical Inventory Log'));
+  cell.appendChild(createInspectionInfoFlag(sub, 'Chemical Inventory Log Details'));
   return cell;
 }
 
@@ -11346,7 +11346,7 @@ function renderInspectionDateFilter(container, managerialPeriod, desPeriod) {
 
   const managerialChip = document.createElement('span');
   managerialChip.className = 'dashboard-date-filter-chip';
-  managerialChip.textContent = `Managerial: ${formatInspectionPeriodDate(managerialPeriod.start)} - ${formatInspectionPeriodDate(managerialPeriod.end)}`;
+  managerialChip.textContent = `Chemical Inventory Log: ${formatInspectionPeriodDate(managerialPeriod.start)} - ${formatInspectionPeriodDate(managerialPeriod.end)}`;
 
   const desChip = document.createElement('span');
   desChip.className = 'dashboard-date-filter-chip';
@@ -11417,7 +11417,7 @@ function renderInspectionReports() {
     section.appendChild(heading);
     const table = document.createElement('table');
     table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-cleanliness-table dashboard-inspection-table';
-    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Managerial Report</th><th>DES Pre-Inspection</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Chemical Inventory Log</th><th>DES Pre-Inspection</th></tr></thead>';
     const tbody = document.createElement('tbody');
     renderRowsForPools([dashboardPoolFilter], tbody);
     table.appendChild(tbody);
@@ -11442,7 +11442,7 @@ function renderInspectionReports() {
 
     const table = document.createElement('table');
     table.className = 'data-table dashboard-pool-table dashboard-cleanliness-table dashboard-inspection-table';
-    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Managerial Report</th><th>DES Pre-Inspection</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Chemical Inventory Log</th><th>DES Pre-Inspection</th></tr></thead>';
     const tbody = document.createElement('tbody');
     renderRowsForPools(poolNames, tbody);
     table.appendChild(tbody);
@@ -12863,7 +12863,7 @@ function openDutyFormModal(sub) {
   const ts = toDateObject(sub.timestamp);
   const esc = escapeHtml;
   const reportTitle = getDutyReportTitle(sub);
-  const managerPanelTitle = sub?.reportType === 'managerial' ? 'Managerial Report Details' : 'Managers Only';
+  const managerPanelTitle = sub?.reportType === 'managerial' ? 'Chemical Inventory Log Details' : 'Managers Only';
 
   const photoSectionHtml = (label, photos) => {
     if (!photos?.length) return '';

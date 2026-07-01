@@ -701,12 +701,12 @@ function initManagerSectionToggle() {
   canAccessManagerialReport().then((allowed) => {
     section.classList.toggle('hidden', !allowed);
     if (accessMessage) {
-      accessMessage.textContent = allowed ? '' : 'You do not have permission to view the Managerial Report.';
+      accessMessage.textContent = allowed ? '' : 'You do not have permission to view the Chemical Inventory Log.';
     }
     const submitBtn = document.getElementById('dutiesSubmitBtn');
     if (managerialPage && submitBtn) submitBtn.disabled = !allowed;
     if (!allowed) {
-      if (managerialPage && submitBtn) submitBtn.title = 'Managerial Report permission is required.';
+      if (managerialPage && submitBtn) submitBtn.title = 'Chemical Inventory Log permission is required.';
       return;
     }
     if (toggle) toggle.style.display = 'none';
@@ -1335,7 +1335,7 @@ window.submitDutiesForm = async function () {
   if (managerialPage) {
     const allowed = await canAccessManagerialReport();
     if (!allowed) {
-      if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = 'You do not have permission to submit a managerial report.'; }
+      if (msgEl) { msgEl.style.color = '#c0392b'; msgEl.textContent = 'You do not have permission to submit a chemical inventory log.'; }
       return;
     }
   }

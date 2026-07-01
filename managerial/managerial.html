@@ -40,7 +40,7 @@
             <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
             <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
-            <a href="managerial.html" class="dropdown-item active-page" data-nav="managerial-report">Managerial Report</a>
+            <a href="../inventory/inventory.html?form=chemical" class="dropdown-item active-page" data-nav="inventory">Chemical Inventory Log</a>
             <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
             <a href="../Training/training.html" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
             <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
@@ -56,12 +56,12 @@
   </div>
 
   <div class="container">
-    <h2 class="page-content-title">Managerial Report</h2>
+    <h2 class="page-content-title">Chemical Inventory Log</h2>
 
     <div class="form-container">
       <div class="duties-section">
-        <h2 class="duties-section-title">Managerial Report</h2>
-        <p class="duties-section-desc">Record manager-only supply levels for the selected facility.</p>
+        <h2 class="duties-section-title">Chemical Inventory Log</h2>
+        <p class="duties-section-desc">Record chemical inventory values for the selected facility.</p>
         <p class="duties-access-message" id="managerialAccessMessage"></p>
         <div class="duties-pool-row">
           <label for="dutiesPool">Pool Location</label>
@@ -75,7 +75,7 @@
       <div class="duties-section duties-manager-section" id="dutiesManagerSection">
         <div class="duties-manager-title">
           <button type="button" class="duties-manager-toggle" id="dutiesManagerToggle" aria-expanded="true">
-            <span class="duties-manager-title-text">Managerial Report</span>
+            <span class="duties-manager-title-text">Chemical Inventory Log</span>
             <span class="duties-manager-caret" aria-hidden="true">▾</span>
           </button>
         </div>
@@ -111,7 +111,7 @@
         </div>
       </div>
 
-      <button type="button" class="submit-btn" id="dutiesSubmitBtn" onclick="submitDutiesForm()">Submit Managerial Report</button>
+      <button type="button" class="submit-btn" id="dutiesSubmitBtn" onclick="submitDutiesForm()">Submit Chemical Inventory Log</button>
       <p id="dutiesMessage" style="margin-top:10px; color:#333;"></p>
     </div>
   </div>

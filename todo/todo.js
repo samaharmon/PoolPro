@@ -39,7 +39,7 @@ const FORM_PROOF_CONFIG = {
     predicate: (data) => String(data.formType || '').toLowerCase() !== 'chemical',
   },
   chemicalInventory: {
-    label: 'Chemical Inventory Form',
+    label: 'Chemical Inventory Log',
     collection: 'managerialReports',
     facilityFields: ['pool', 'facilityName', 'poolLocation', 'poolName'],
     timeFields: ['timestamp', 'submittedAtIso', 'createdAt'],

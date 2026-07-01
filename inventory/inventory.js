@@ -220,7 +220,7 @@ function renderChemicalInventoryFields() {
   const pool = getSelectedPool();
   els.chemical.innerHTML = `
     <section class="inventory-section-card inventory-chemical-card">
-      <h3>Chemical Inventory</h3>
+      <h3>Chemical Inventory Log</h3>
       <div class="inventory-chemical-grid">
         <label>
           <span>Bleach Volume (%)</span>
@@ -302,7 +302,7 @@ function syncFormType() {
       : type === 'weekly'
         ? 'Fill out this form to indicate the supply level of each item needed to run your pool.'
       : type === 'chemical'
-        ? 'Record chemical inventory values for the selected facility.'
+        ? 'Record chemical inventory log values for the selected facility.'
         : '';
   }
   if (type === 'weekly') renderWeeklyFields();
@@ -451,7 +451,7 @@ async function handleInventorySubmit(event) {
     }
     event.target.reset();
     syncFormType();
-    setMessage(type === 'chemical' ? 'Chemical inventory submitted.' : 'Inventory submitted.', false);
+    setMessage(type === 'chemical' ? 'Chemical inventory log submitted.' : 'Inventory submitted.', false);
   } catch (err) {
     console.error('[Inventory] Unable to submit inventory:', err);
     setMessage('Unable to submit inventory. Please try again.', true);
