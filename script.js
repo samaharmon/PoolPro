@@ -8581,7 +8581,9 @@ const PDFJS_SCRIPT_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_
 const PDFJS_WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
 let resourcePdfJsPromise = null;
 let resourceESignRenderToken = 0;
+let resourcePdfFullscreenRenderToken = 0;
 let currentResourceESignObjectUrl = '';
+let currentResourceESignPdfBlob = null;
 
 function getResourceStorage() {
   return getStorage(getApp());
@@ -9687,7 +9689,9 @@ function getResourcePdfFullscreenModal() {
         <h2 id="resourcePdfFullscreenTitle">Document</h2>
         <button type="button" class="resource-pdf-fullscreen-close" aria-label="Close">&times;</button>
       </div>
-      <iframe id="resourcePdfFullscreenFrame" title="Enlarged PDF document"></iframe>
+      <div class="resource-pdf-fullscreen-scroll">
+        <div id="resourcePdfFullscreenPages" class="resource-pdf-fullscreen-pages"></div>
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
@@ -9699,32 +9703,77 @@ function getResourcePdfFullscreenModal() {
   return modal;
 }
 
-function openResourceESignFullscreenViewer() {
-  if (!currentResourceESignObjectUrl) return;
+async function renderResourcePdfFullscreen(modal, blob, token) {
+  const pages = modal.querySelector('#resourcePdfFullscreenPages');
+  if (!pages || !blob) return;
+  const pdfjsLib = await loadResourcePdfJs();
+  const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
+  if (token !== resourcePdfFullscreenRenderToken) return;
+  pages.innerHTML = '';
+
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    if (token !== resourcePdfFullscreenRenderToken) return;
+    const page = await pdf.getPage(pageNumber);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const availableWidth = Math.max(260, (pages.clientWidth || window.innerWidth || 760) - 24);
+    const scale = Math.min(3, availableWidth / baseViewport.width);
+    const viewport = page.getViewport({ scale });
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(viewport.width * ratio);
+    canvas.height = Math.floor(viewport.height * ratio);
+    canvas.style.width = `${Math.floor(viewport.width)}px`;
+    canvas.style.height = `${Math.floor(viewport.height)}px`;
+    const context = canvas.getContext('2d');
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    const pageWrap = document.createElement('div');
+    pageWrap.className = 'resource-pdf-fullscreen-page';
+    const pageLabel = document.createElement('div');
+    pageLabel.className = 'resource-pdf-fullscreen-page-label';
+    pageLabel.textContent = `Page ${pageNumber} of ${pdf.numPages}`;
+    pageWrap.append(pageLabel, canvas);
+    pages.appendChild(pageWrap);
+
+    await page.render({ canvasContext: context, viewport }).promise;
+  }
+}
+
+async function openResourceESignFullscreenViewer() {
+  if (!currentResourceESignPdfBlob) return;
   const signModal = document.getElementById('resourceESignModal');
   const resource = resourcesData.find((item) => item.id === signModal?.dataset.resourceId) || {};
   const modal = getResourcePdfFullscreenModal();
   const title = modal.querySelector('#resourcePdfFullscreenTitle');
-  const frame = modal.querySelector('#resourcePdfFullscreenFrame');
+  const pages = modal.querySelector('#resourcePdfFullscreenPages');
   if (title) title.textContent = resource.documentName || resource.fileName || 'Document';
-  if (frame) frame.src = currentResourceESignObjectUrl;
+  if (pages) pages.innerHTML = '<div class="resource-esign-loading">Loading enlarged PDF...</div>';
   modal.style.display = 'flex';
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('resource-pdf-fullscreen-open');
   requestAnimationFrame(() => modal.classList.add('visible'));
+  const token = resourcePdfFullscreenRenderToken + 1;
+  resourcePdfFullscreenRenderToken = token;
+  try {
+    await renderResourcePdfFullscreen(modal, currentResourceESignPdfBlob, token);
+  } catch (err) {
+    console.error('[PoolPro] Unable to render enlarged E-Sign PDF:', err);
+    if (pages) pages.innerHTML = '<div class="resource-esign-loading error">Unable to enlarge this PDF.</div>';
+  }
 }
 
 function closeResourcePdfFullscreenViewer() {
   const modal = document.getElementById('resourcePdfFullscreenModal');
   if (!modal) return;
+  resourcePdfFullscreenRenderToken += 1;
   modal.classList.remove('visible');
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('resource-pdf-fullscreen-open');
   setTimeout(() => {
     if (!modal.classList.contains('visible')) {
       modal.style.display = 'none';
-      const frame = modal.querySelector('#resourcePdfFullscreenFrame');
-      if (frame) frame.src = '';
+      const pages = modal.querySelector('#resourcePdfFullscreenPages');
+      if (pages) pages.innerHTML = '';
       document.getElementById('resourceESignModal')?.focus?.();
     }
   }, 200);
@@ -9744,11 +9793,13 @@ async function openResourceESignModal(resource, resolvedUrl, options = {}) {
     URL.revokeObjectURL(currentResourceESignObjectUrl);
     currentResourceESignObjectUrl = '';
   }
+  currentResourceESignPdfBlob = null;
 
   try {
     const blob = await getResourceBlob(resource, resolvedUrl);
     const pdfBlob = blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
     if (token !== resourceESignRenderToken) return;
+    currentResourceESignPdfBlob = pdfBlob;
     currentResourceESignObjectUrl = URL.createObjectURL(pdfBlob);
     const downloadBtn = modal.querySelector('#resourceESignDownloadBtn');
     if (downloadBtn) downloadBtn.disabled = false;
@@ -9776,6 +9827,7 @@ function closeResourceESignModal() {
     URL.revokeObjectURL(currentResourceESignObjectUrl);
     currentResourceESignObjectUrl = '';
   }
+  currentResourceESignPdfBlob = null;
 }
 
 async function handleResourceESignSubmit(event) {
