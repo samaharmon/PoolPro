@@ -8551,6 +8551,7 @@ let resourcePageMarketFilter = 'all';
 let resourcePagePoolFilter = 'all';
 let resourceSettingsMarketFilter = 'all';
 let resourceSettingsPoolFilter = 'all';
+let resourcesDocumentsLoading = true;
 const resourceDataUrlMap = new Map();
 const dutyPhotoDataUrlMap = new Map();
 const chemControllerPhotoDataUrlMap = new Map();
@@ -9034,7 +9035,7 @@ function buildResourceRowCells(item, includeActions = false) {
     return `
       <td>${nameHtml}</td>
       <td>${item.pool || '—'}</td>
-      <td>${item.description || '—'}</td>
+      <td class="resource-description-cell">${item.description || '—'}</td>
       <td>${formatResourceDate(item.uploadDate, item.uploadedAt)}</td>
     `;
   }
@@ -9042,7 +9043,7 @@ function buildResourceRowCells(item, includeActions = false) {
   return `
     <td>${nameHtml}</td>
     <td>${formatResourceDate(item.uploadDate, item.uploadedAt)}</td>
-    <td>${item.description || '—'}</td>
+    <td class="resource-description-cell">${item.description || '—'}</td>
     <td>${getResourceMarket(item) || '—'}</td>
     <td>${item.pool || '—'}</td>
   `;
@@ -9052,6 +9053,11 @@ function renderResourcesPageTable() {
   const tbody = document.getElementById('resourcesTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
+
+  if (resourcesDocumentsLoading) {
+    tbody.innerHTML = getResourceLoadingRowHtml(4);
+    return;
+  }
 
   const rows = getFilteredResources({
     market: resourcePageMarketFilter,
@@ -9074,6 +9080,14 @@ function renderResourcesSettingsTable() {
   const tbody = document.getElementById('resourceTableBody');
   if (!tbody) return;
   tbody.innerHTML = '';
+
+  if (resourcesDocumentsLoading) {
+    tbody.innerHTML = getResourceLoadingRowHtml(5);
+    const wrapper = tbody.closest('.table-scroll-wrap');
+    if (wrapper) requestAnimationFrame(() => updateTableScrollShadow(wrapper));
+    syncResourceActionButtons();
+    return;
+  }
 
   const rows = getFilteredResources({
     market: resourceSettingsMarketFilter,
@@ -9103,6 +9117,18 @@ function renderResourcesSettingsTable() {
   const wrapper = tbody.closest('.table-scroll-wrap');
   if (wrapper) requestAnimationFrame(() => updateTableScrollShadow(wrapper));
   syncResourceActionButtons();
+}
+
+function getResourceLoadingRowHtml(colspan) {
+  return `
+    <tr class="resource-loading-row">
+      <td colspan="${colspan}">
+        <div class="resource-table-loading">
+          <div class="poolpro-loading-spinner" role="status" aria-label="Loading resources"></div>
+        </div>
+      </td>
+    </tr>
+  `;
 }
 
 function clearResourceForm() {
@@ -9193,6 +9219,7 @@ function getResourceESignModal() {
         <div>
           <h2 id="resourceESignTitle">E-Sign PDF</h2>
           <p id="resourceESignSubtitle">Review the full document before signing.</p>
+          <p class="resource-esign-enlarge-note">Click document to enlarge.</p>
         </div>
         <button type="button" class="resource-esign-close" aria-label="Close">&times;</button>
       </div>
@@ -9202,6 +9229,7 @@ function getResourceESignModal() {
         </div>
         <form class="resource-esign-actions" id="resourceESignForm">
           <div class="resource-esign-field">
+            <div class="resource-esign-account-name" id="resourceESignAccountName"></div>
             <label for="resourceESignSignatureInput">Type your name as it appears on your account</label>
             <input id="resourceESignSignatureInput" type="text" autocomplete="name" />
             <div class="resource-esign-hint" id="resourceESignSignatureHint"></div>
@@ -9232,6 +9260,9 @@ function getResourceESignModal() {
   modal.querySelector('#resourceESignSignatureInput')?.addEventListener('input', () => syncResourceESignSubmitState(modal));
   modal.querySelector('#resourceESignCheckbox')?.addEventListener('change', () => syncResourceESignSubmitState(modal));
   modal.querySelector('#resourceESignPdfScroll')?.addEventListener('scroll', () => requestAnimationFrame(() => updateResourceESignScrollGate(modal)));
+  modal.querySelector('#resourceESignPages')?.addEventListener('click', (event) => {
+    if (event.target.closest('.resource-esign-page')) openResourceESignFullscreenViewer();
+  });
   modal.querySelector('#resourceESignDownloadBtn')?.addEventListener('click', () => downloadCurrentResourceESignPdf());
 
   return modal;
@@ -9288,6 +9319,7 @@ function resetResourceESignModal(modal, resource) {
   const pages = modal.querySelector('#resourceESignPages');
   const scroll = modal.querySelector('#resourceESignPdfScroll');
   const checkbox = modal.querySelector('#resourceESignCheckbox');
+  const accountName = modal.querySelector('#resourceESignAccountName');
   const signatureInput = modal.querySelector('#resourceESignSignatureInput');
   const signatureHint = modal.querySelector('#resourceESignSignatureHint');
   const gate = modal.querySelector('#resourceESignGateMessage');
@@ -9305,10 +9337,15 @@ function resetResourceESignModal(modal, resource) {
     checkbox.checked = false;
     checkbox.disabled = true;
   }
+  if (accountName) {
+    accountName.textContent = context.displayName
+      ? `Account name: ${context.displayName}`
+      : 'Account name: not found';
+  }
   if (signatureInput) signatureInput.value = '';
   if (signatureHint) {
     signatureHint.textContent = context.displayName
-      ? `Signature must match the name on your account: ${context.displayName}`
+      ? `Signature must match this account name. Capitalization does not matter.`
       : 'Use your full account name as your electronic signature.';
   }
   if (gate) {
@@ -9406,6 +9443,63 @@ function downloadCurrentResourceESignPdf() {
   link.remove();
 }
 
+function getResourcePdfFullscreenModal() {
+  let modal = document.getElementById('resourcePdfFullscreenModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'resourcePdfFullscreenModal';
+  modal.className = 'resource-pdf-fullscreen-modal';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML = `
+    <div class="resource-pdf-fullscreen-dialog" role="dialog" aria-modal="true" aria-labelledby="resourcePdfFullscreenTitle">
+      <div class="resource-pdf-fullscreen-header">
+        <h2 id="resourcePdfFullscreenTitle">Document</h2>
+        <button type="button" class="resource-pdf-fullscreen-close" aria-label="Close">&times;</button>
+      </div>
+      <iframe id="resourcePdfFullscreenFrame" title="Enlarged PDF document"></iframe>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeResourcePdfFullscreenViewer();
+  });
+  modal.querySelector('.resource-pdf-fullscreen-close')?.addEventListener('click', closeResourcePdfFullscreenViewer);
+  return modal;
+}
+
+function openResourceESignFullscreenViewer() {
+  if (!currentResourceESignObjectUrl) return;
+  const signModal = document.getElementById('resourceESignModal');
+  const resource = resourcesData.find((item) => item.id === signModal?.dataset.resourceId) || {};
+  const modal = getResourcePdfFullscreenModal();
+  const title = modal.querySelector('#resourcePdfFullscreenTitle');
+  const frame = modal.querySelector('#resourcePdfFullscreenFrame');
+  if (title) title.textContent = resource.documentName || resource.fileName || 'Document';
+  if (frame) frame.src = currentResourceESignObjectUrl;
+  modal.style.display = 'flex';
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('resource-pdf-fullscreen-open');
+  requestAnimationFrame(() => modal.classList.add('visible'));
+}
+
+function closeResourcePdfFullscreenViewer() {
+  const modal = document.getElementById('resourcePdfFullscreenModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('resource-pdf-fullscreen-open');
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) {
+      modal.style.display = 'none';
+      const frame = modal.querySelector('#resourcePdfFullscreenFrame');
+      if (frame) frame.src = '';
+      document.getElementById('resourceESignModal')?.focus?.();
+    }
+  }, 200);
+}
+
 async function openResourceESignModal(resource, resolvedUrl) {
   const modal = getResourceESignModal();
   const token = resourceESignRenderToken + 1;
@@ -9440,6 +9534,7 @@ async function openResourceESignModal(resource, resolvedUrl) {
 function closeResourceESignModal() {
   const modal = document.getElementById('resourceESignModal');
   if (!modal) return;
+  closeResourcePdfFullscreenViewer();
   resourceESignRenderToken += 1;
   modal.classList.remove('visible');
   modal.setAttribute('aria-hidden', 'true');
@@ -9475,7 +9570,7 @@ async function handleResourceESignSubmit(event) {
     return;
   }
   if (context.displayName && normalizeESignText(signatureName) !== normalizeESignText(context.displayName)) {
-    setResourceESignMessage(modal, `Your signature must match "${context.displayName}".`, true);
+    setResourceESignMessage(modal, `Your signature must match "${context.displayName}". Capitalization does not matter.`, true);
     return;
   }
 
@@ -9671,12 +9766,17 @@ async function deleteResourceBackingFile(item) {
 }
 
 async function loadResourcesDocuments() {
+  resourcesDocumentsLoading = true;
+  renderResourcesPageTable();
+  renderResourcesSettingsTable();
   try {
     const snap = await getDocs(collection(db, 'resourcesDocuments'));
     resourcesData = snap.docs.map((docSnap) => normalizeResourceRecord(docSnap.data(), docSnap.id));
   } catch (err) {
     console.error('[PoolPro] Error loading resources:', err);
     resourcesData = [];
+  } finally {
+    resourcesDocumentsLoading = false;
   }
   renderResourcesPageTable();
   renderResourcesSettingsTable();
@@ -10909,6 +11009,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupMarketFilters();
   setupResourcesPageFilters();
   setupResourcesSettingsUI();
+  renderResourcesPageTable();
+  renderResourcesSettingsTable();
 
   // Load pools from Firestore and populate all dropdowns
   listenPools(populatePoolSelects);

@@ -3901,6 +3901,10 @@ textarea,
   white-space: normal;
 }
 
+.resource-table:not(.resource-table-admin) .resource-description-cell {
+  font-size: 12px !important;
+}
+
 .resource-table:not(.resource-table-admin) th:nth-child(4),
 .resource-table:not(.resource-table-admin) td:nth-child(4) {
   width: 16%;
@@ -3918,6 +3922,10 @@ textarea,
   white-space: normal;
 }
 
+.resource-table.resource-table-admin .resource-description-cell {
+  font-size: 14px !important;
+}
+
 .resource-table.resource-table-admin th:nth-child(4),
 .resource-table.resource-table-admin td:nth-child(4),
 .resource-table.resource-table-admin th:nth-child(5),
@@ -3927,22 +3935,27 @@ textarea,
   width: 14%;
 }
 
-/* Resource table: cell-level dimming only (no full overlay) */
 .settings-modal-content #resourceTableSection::before {
-  display: none !important;
-  content: none !important;
+  display: block !important;
+  content: '' !important;
+  background: rgba(0, 0, 0, 0.62) !important;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
 }
 
 .settings-modal-content #resourceTableSection.overlay-disabled {
   pointer-events: auto;
 }
 
-.resource-table-section.overlay-disabled tbody td:not(:last-child) {
-  opacity: 0.5;
+.settings-modal-content #resourceTableSection.overlay-disabled::before {
+  opacity: 1 !important;
+  pointer-events: auto;
 }
 
-.resource-table-section.overlay-disabled tbody td:last-child {
-  opacity: 1;
+.resource-table-section.overlay-disabled tbody tr,
+.resource-table-section.overlay-disabled tbody td {
+  opacity: 1 !important;
 }
 
 #resourceTableSection {
@@ -3966,6 +3979,21 @@ textarea,
 
 #resourceTableSection .resource-table-admin {
   min-width: 980px;
+}
+
+.resource-table-loading {
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resource-table-loading .poolpro-loading-spinner {
+  width: 34px;
+  height: 34px;
+  border-width: 3px;
+  border-color: rgba(105, 20, 14, 0.28);
+  border-top-color: #69140e;
 }
 
 /* Resource doc links */
@@ -4034,6 +4062,12 @@ textarea,
   line-height: 1.45;
 }
 
+.resource-esign-header .resource-esign-enlarge-note {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 700;
+}
+
 .resource-esign-close {
   border: 0;
   background: transparent;
@@ -4075,6 +4109,7 @@ textarea,
   background: #fff;
   color: #222;
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.36);
+  cursor: zoom-in;
 }
 
 .resource-esign-page canvas {
@@ -4116,6 +4151,15 @@ textarea,
   margin-bottom: 8px;
   font-weight: 700;
   color: #f7f9fc;
+}
+
+.resource-esign-account-name {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-left: 4px solid #ff7d7d;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-weight: 700;
 }
 
 .resource-esign-field input[type="text"] {
@@ -4213,6 +4257,68 @@ textarea,
 }
 
 body.resource-esign-open {
+  overflow: hidden;
+}
+
+.resource-pdf-fullscreen-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10040;
+  display: none;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.9);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.resource-pdf-fullscreen-modal.visible {
+  opacity: 1;
+}
+
+.resource-pdf-fullscreen-dialog {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  background: #111;
+  color: #fff;
+}
+
+.resource-pdf-fullscreen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  background: linear-gradient(135deg, #69140e, #1d2531);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.85);
+}
+
+.resource-pdf-fullscreen-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.4rem;
+}
+
+.resource-pdf-fullscreen-close {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#resourcePdfFullscreenFrame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #1f1f1f;
+}
+
+body.resource-pdf-fullscreen-open {
   overflow: hidden;
 }
 
@@ -7276,8 +7382,9 @@ body,
 .resource-table.resource-table-admin th:nth-child(5),
 .resource-table.resource-table-admin td:nth-child(5) { width: 20%; }
 
-.resource-table-section.overlay-disabled tbody tr {
-  opacity: 0.55;
+.resource-table-section.overlay-disabled tbody tr,
+.resource-table-section.overlay-disabled tbody td {
+  opacity: 1 !important;
 }
 
 .resource-row-clickable {
