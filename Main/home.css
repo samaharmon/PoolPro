@@ -25,12 +25,35 @@ body.page-exiting {
   opacity: 0;
 }
 
+.home-main,
+.home-header {
+  animation: homePageContentFadeIn 0.34s ease both;
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+
+body.page-exiting .home-main,
+body.page-exiting .home-header {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 @keyframes homePageFadeIn {
   from {
     opacity: 0;
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes homePageContentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

@@ -26,12 +26,33 @@ body.page-exiting {
   opacity: 0;
 }
 
+.training-main {
+  animation: poolproPageContentFadeIn 0.34s ease both;
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+
+body.page-exiting .training-main {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 @keyframes poolproPageFadeIn {
   from {
     opacity: 0;
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes poolproPageContentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -3910,6 +3931,12 @@ body {
 .training-signup-confirm-modal {
   z-index: 6000;
   background-color: rgba(0, 0, 0, 0.72);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.training-signup-confirm-modal.visible {
+  opacity: 1;
 }
 
 .training-signup-confirm-modal .training-signup-confirm-card {
@@ -3920,6 +3947,14 @@ body {
   color: #fff;
   border: 2px solid #69140e;
   padding: 0;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.training-signup-confirm-modal.visible .training-signup-confirm-card {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .training-signup-confirm-card .modal-header {
@@ -4476,6 +4511,12 @@ body {
     10px
     calc(10px + env(safe-area-inset-bottom, 0px));
   overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.attendance-modal.visible {
+  opacity: 1;
 }
 
 .attendance-modal .modal-content.large {
@@ -4488,6 +4529,14 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.attendance-modal.visible .modal-content.large {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .attendance-modal .modal-header {

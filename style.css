@@ -12,7 +12,7 @@ body {
   font-family: 'Franklin Gothic Medium', 'Franklin Gothic Medium Cond', Arial, sans-serif;
   opacity: 1;
   animation: poolproPageFadeIn 0.28s ease both;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.32s ease;
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
@@ -22,12 +22,39 @@ body.page-exiting {
   opacity: 0;
 }
 
+body > .container,
+#mainForm > .container,
+#empPageContent > .container,
+#testPageContent > .container {
+  animation: poolproPageContentFadeIn 0.34s ease both;
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+
+body.page-exiting > .container,
+body.page-exiting #mainForm > .container,
+body.page-exiting #empPageContent > .container,
+body.page-exiting #testPageContent > .container {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 @keyframes poolproPageFadeIn {
   from {
     opacity: 0;
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes poolproPageContentFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -4153,6 +4180,10 @@ textarea,
   color: #f7f9fc;
 }
 
+.resource-esign-field {
+  margin-top: 16px;
+}
+
 .resource-esign-account-name {
   margin-bottom: 10px;
   padding: 10px 12px;
@@ -4191,19 +4222,48 @@ textarea,
 
 .resource-esign-checkbox {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
-  margin-top: 14px;
+  margin: 0;
   color: #eef3fa;
   line-height: 1.45;
+  font-weight: 700;
 }
 
 .resource-esign-checkbox input {
-  margin-top: 3px;
-  width: 18px;
-  height: 18px;
-  accent-color: #a73f33;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 2px 0 0;
+  width: 22px;
+  height: 22px;
+  border: 2px solid #69140e;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.08);
   flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.resource-esign-checkbox input::after {
+  content: "";
+  width: 7px;
+  height: 13px;
+  border: solid #fff;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 0.14s ease;
+}
+
+.resource-esign-checkbox input:checked {
+  background: #69140e;
+  border-color: #ff7d7d;
+}
+
+.resource-esign-checkbox input:checked::after {
+  transform: rotate(45deg) scale(1);
 }
 
 .resource-esign-checkbox input:disabled {
@@ -7102,6 +7162,12 @@ body.dark-mode .dash-value-popover {
   justify-content: center;
   background: rgba(0, 0, 0, 0.88);
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+
+.photo-view-overlay.visible {
+  opacity: 1;
 }
 
 .photo-view-img {
@@ -7110,6 +7176,12 @@ body.dark-mode .dash-value-popover {
   object-fit: contain;
   box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
   cursor: default;
+  transform: scale(0.985);
+  transition: transform 0.22s ease;
+}
+
+.photo-view-overlay.visible .photo-view-img {
+  transform: scale(1);
 }
 
 .photo-view-close,

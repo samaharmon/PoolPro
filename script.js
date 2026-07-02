@@ -88,8 +88,10 @@ const CHEM_CONTROLLER_COMPRESS_THRESHOLD_BYTES = 1.5 * 1024 * 1024;
 const CHEM_AUTO_CONTROLLER_REUSE_WINDOW_MS = 30 * 60 * 1000;
 window.trainingSchedule = trainingSchedule;
 
-const PAGE_LOADING_MIN_MS = 180;
+const PAGE_LOADING_MIN_MS = 220;
+const PAGE_LOADING_DELAY_MS = 320;
 let pageLoadingStartedAt = Date.now();
+let pageLoadingTimer = null;
 
 function ensurePageLoadingOverlay() {
   if (!document.body || document.getElementById('poolproPageLoadingOverlay')) return null;
@@ -107,6 +109,10 @@ function markPageLoaded() {
 }
 
 function hidePageLoadingOverlay() {
+  if (pageLoadingTimer) {
+    clearTimeout(pageLoadingTimer);
+    pageLoadingTimer = null;
+  }
   const overlay = document.getElementById('poolproPageLoadingOverlay');
   if (!overlay) return;
   const waitMs = Math.max(0, PAGE_LOADING_MIN_MS - (Date.now() - pageLoadingStartedAt));
@@ -114,9 +120,41 @@ function hidePageLoadingOverlay() {
 }
 
 function showPageLoadingOverlay() {
-  const overlay = ensurePageLoadingOverlay();
   pageLoadingStartedAt = Date.now();
-  overlay?.classList.remove('hidden');
+  if (pageLoadingTimer) clearTimeout(pageLoadingTimer);
+  pageLoadingTimer = setTimeout(() => {
+    const overlay = ensurePageLoadingOverlay();
+    overlay?.classList.remove('hidden');
+  }, PAGE_LOADING_DELAY_MS);
+}
+
+function navigateWithPoolProFade(target, delay = 260) {
+  if (!target) return;
+  closeDropdownMenus();
+  document.body.classList.add('page-exiting');
+  showPageLoadingOverlay();
+  setTimeout(() => {
+    window.location.href = target;
+  }, delay);
+}
+
+function openPoolProModal(modal, display = 'flex') {
+  if (!modal) return;
+  modal.style.display = display;
+  modal.classList.remove('poolpro-modal-closing');
+  requestAnimationFrame(() => modal.classList.add('visible'));
+}
+
+function closePoolProModal(modal, delay = 280) {
+  if (!modal) return;
+  modal.classList.add('poolpro-modal-closing');
+  modal.classList.remove('visible');
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) {
+      modal.style.display = 'none';
+      modal.classList.remove('poolpro-modal-closing');
+    }
+  }, delay);
 }
 
 ensurePageLoadingOverlay();
@@ -728,8 +766,7 @@ window.openSettings = function () {
   closeDropdownMenus();
   showSharedModalOverlay();
   if (modal) {
-    modal.style.display = 'block';
-    requestAnimationFrame(() => modal.classList.add('visible'));
+    openPoolProModal(modal, 'block');
   }
 };
 
@@ -1096,8 +1133,7 @@ function setupAccountManagement() {
 window.closeSettings = function () {
   const modal = document.getElementById('settingsModal');
   if (modal) {
-    modal.classList.remove('visible');
-    setTimeout(() => { modal.style.display = 'none'; }, 250);
+    closePoolProModal(modal);
   }
   setTimeout(hideSharedModalOverlayIfUnused, 250);
 };
@@ -1691,7 +1727,7 @@ window.goToEditor = function () {
   const lastPart = parts[parts.length - 1] || '';
   const stepsUp = subDirs.some(d => d.toLowerCase() === lastPart.toLowerCase()) ? 1 : 0;
   const prefix = stepsUp > 0 ? '../' : '';
-  window.location.href = prefix + 'Editor/newRules.html';
+  navigateWithPoolProFade(prefix + 'Editor/newRules.html');
 };
 
 // ============================================================
@@ -1715,7 +1751,7 @@ window.goToTrainingSetup = function () {
     const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES', 'inventory', 'Inventory', 'todo', 'Todo', 'ToDo'];
     const lastPart = parts[parts.length - 1] || '';
     const prefix = subDirs.includes(lastPart) ? '../' : '';
-    window.location.href = prefix + 'Training/training.html';
+    navigateWithPoolProFade(prefix + 'Training/training.html');
   }
 };
 
@@ -1734,9 +1770,8 @@ window.closeModal = function () {
       return;
     }
   }
-  modal.classList.remove('visible');
+  closePoolProModal(modal);
   setTimeout(() => {
-    modal.style.display = 'none';
     hideSharedModalOverlayIfUnused();
   }, 250);
   const supSection = document.getElementById('supervisorNotifySection');
@@ -1746,8 +1781,7 @@ window.closeModal = function () {
 function forceCloseFeedbackModal() {
   const modal = document.getElementById('feedbackModal');
   if (!modal) return;
-  modal.classList.remove('visible');
-  modal.style.display = 'none';
+  closePoolProModal(modal, 0);
   delete modal.dataset.submitterName;
   delete modal.dataset.poolName;
   delete modal.dataset.entry;
@@ -3880,18 +3914,16 @@ function showPoolProConfirmation({ title = 'Confirm Action', message = '', confi
       if (event.target === modal) close(false);
     };
     const close = (result) => {
-      modal.classList.remove('visible');
       modal.removeEventListener('click', handleBackdropClick);
+      closePoolProModal(modal);
       setTimeout(() => {
-        modal.style.display = 'none';
         resolve(result);
-      }, 180);
+      }, 280);
     };
     modal.querySelector('[data-confirm-cancel]')?.addEventListener('click', () => close(false), { once: true });
     modal.querySelector('[data-confirm-ok]')?.addEventListener('click', () => close(true), { once: true });
     modal.addEventListener('click', handleBackdropClick);
-    modal.style.display = 'flex';
-    requestAnimationFrame(() => modal.classList.add('visible'));
+    openPoolProModal(modal);
   });
 }
 
@@ -4329,15 +4361,9 @@ function showActiveAlertReminderPopup(reminders) {
       </div>
     </div>
   `;
-  const close = () => {
-    modal.classList.remove('visible');
-    setTimeout(() => {
-      if (!modal.classList.contains('visible')) modal.style.display = 'none';
-    }, 220);
-  };
+  const close = () => closePoolProModal(modal);
   modal.querySelector('.poolpro-alert-popup-close')?.addEventListener('click', close);
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
+  openPoolProModal(modal);
 }
 
 // ============================================================
@@ -4972,8 +4998,7 @@ function setupChemForm() {
         feedbackModal.dataset.majorItems = majorLines.join('\n');
         modalContent.innerHTML = html;
         showSharedModalOverlay();
-        feedbackModal.style.display = 'block';
-        requestAnimationFrame(() => feedbackModal.classList.add('visible'));
+        openPoolProModal(feedbackModal, 'block');
       } else {
         alert('Chemistry log submitted successfully!');
       }
@@ -5693,8 +5718,7 @@ function showChemAutoControllerPhotos(log, poolIdx = null) {
     </div>
   `;
   modal.querySelector('.close')?.addEventListener('click', closeChemAutoControllerModal);
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
+  openPoolProModal(modal);
   hydrateChemAutoControllerImages(modal).catch((err) => {
     console.error('[ChemLog] Could not load auto controller photos:', err);
   });
@@ -5703,10 +5727,7 @@ function showChemAutoControllerPhotos(log, poolIdx = null) {
 function closeChemAutoControllerModal() {
   const modal = document.getElementById('chemAutoControllerModal');
   if (!modal) return;
-  modal.classList.remove('visible');
-  setTimeout(() => {
-    if (!modal.classList.contains('visible')) modal.style.display = 'none';
-  }, 220);
+  closePoolProModal(modal);
 }
 
 async function hydrateChemAutoControllerImages(root) {
@@ -6416,13 +6437,14 @@ function closeOperationalClosureModal() {
   const modal = document.getElementById('operationalClosureModal');
   const overlay = document.getElementById('operationalClosureOverlay');
   if (modal) {
-    modal.classList.remove('visible');
+    closePoolProModal(modal, 250);
     modal.setAttribute('aria-hidden', 'true');
-    modal.style.display = 'none';
   }
   if (overlay) {
     overlay.classList.remove('visible');
-    overlay.style.display = 'none';
+    setTimeout(() => {
+      if (!overlay.classList.contains('visible')) overlay.style.display = 'none';
+    }, 250);
   }
 }
 
@@ -6454,10 +6476,9 @@ function openOperationalClosureModal(poolLabel, closureReason) {
   });
 
   overlay.style.display = 'block';
-  modal.style.display = 'block';
+  openPoolProModal(modal, 'block');
   requestAnimationFrame(() => {
     overlay.classList.add('visible');
-    modal.classList.add('visible');
     modal.setAttribute('aria-hidden', 'false');
   });
 }
@@ -7591,10 +7612,7 @@ function renderUnverifiedAccountsTable() {
 function closeEmailVerificationOverrideModal() {
   const modal = document.getElementById('emailVerificationOverrideModal');
   if (!modal) return;
-  modal.classList.remove('visible');
-  setTimeout(() => {
-    modal.style.display = 'none';
-  }, 180);
+  closePoolProModal(modal);
 }
 
 function ensureEmailVerificationOverrideModal() {
@@ -7650,8 +7668,7 @@ function openEmailVerificationOverrideModal(account = {}) {
     }
   };
 
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
+  openPoolProModal(modal);
 }
 
 async function overrideEmailVerificationForAccount(account = {}) {
@@ -9241,17 +9258,17 @@ function getResourceESignModal() {
           <div class="resource-esign-pages" id="resourceESignPages"></div>
         </div>
         <form class="resource-esign-actions" id="resourceESignForm">
+          <label class="resource-esign-checkbox">
+            <input id="resourceESignCheckbox" type="checkbox" disabled />
+            <span>I have read and understand the policies listed in this document.</span>
+          </label>
+          <div class="resource-esign-gate" id="resourceESignGateMessage">Scroll until the top of the last page is visible to enable acknowledgment.</div>
           <div class="resource-esign-field">
             <div class="resource-esign-account-name" id="resourceESignAccountName"></div>
             <label for="resourceESignSignatureInput">Type your name as it appears on your account</label>
             <input id="resourceESignSignatureInput" type="text" autocomplete="name" />
             <div class="resource-esign-hint" id="resourceESignSignatureHint"></div>
           </div>
-          <label class="resource-esign-checkbox">
-            <input id="resourceESignCheckbox" type="checkbox" disabled />
-            <span>I understand this policy.</span>
-          </label>
-          <div class="resource-esign-gate" id="resourceESignGateMessage">Scroll until the top of the last page is visible to enable acknowledgment.</div>
           <div class="resource-esign-button-row">
             <button type="button" class="agreement-btn resource-esign-signees-btn hidden" id="resourceESignSigneesBtn">List of Signees</button>
             <button type="button" class="agreement-btn" id="resourceESignDownloadBtn" disabled>Download PDF</button>
@@ -9362,11 +9379,8 @@ function getResourceSigneesModal() {
 function closeResourceSigneesModal() {
   const modal = document.getElementById('resourceSigneesModal');
   if (!modal) return;
-  modal.classList.remove('visible');
+  closePoolProModal(modal);
   modal.setAttribute('aria-hidden', 'true');
-  setTimeout(() => {
-    if (!modal.classList.contains('visible')) modal.style.display = 'none';
-  }, 200);
 }
 
 function getResourceTargetFacilities(resource = {}) {
@@ -9527,9 +9541,8 @@ async function openResourceSigneesModal(resource) {
       </div>
     `;
   }
-  modal.style.display = 'flex';
+  openPoolProModal(modal);
   modal.setAttribute('aria-hidden', 'false');
-  requestAnimationFrame(() => modal.classList.add('visible'));
 
   try {
     if (!employeesData.length) await loadEmployees();
@@ -9748,10 +9761,9 @@ async function openResourceESignFullscreenViewer() {
   const pages = modal.querySelector('#resourcePdfFullscreenPages');
   if (title) title.textContent = resource.documentName || resource.fileName || 'Document';
   if (pages) pages.innerHTML = '<div class="resource-esign-loading">Loading enlarged PDF...</div>';
-  modal.style.display = 'flex';
+  openPoolProModal(modal);
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('resource-pdf-fullscreen-open');
-  requestAnimationFrame(() => modal.classList.add('visible'));
   const token = resourcePdfFullscreenRenderToken + 1;
   resourcePdfFullscreenRenderToken = token;
   try {
@@ -9766,17 +9778,16 @@ function closeResourcePdfFullscreenViewer() {
   const modal = document.getElementById('resourcePdfFullscreenModal');
   if (!modal) return;
   resourcePdfFullscreenRenderToken += 1;
-  modal.classList.remove('visible');
+  closePoolProModal(modal);
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('resource-pdf-fullscreen-open');
   setTimeout(() => {
     if (!modal.classList.contains('visible')) {
-      modal.style.display = 'none';
       const pages = modal.querySelector('#resourcePdfFullscreenPages');
       if (pages) pages.innerHTML = '';
       document.getElementById('resourceESignModal')?.focus?.();
     }
-  }, 200);
+  }, 300);
 }
 
 async function openResourceESignModal(resource, resolvedUrl, options = {}) {
@@ -9784,10 +9795,9 @@ async function openResourceESignModal(resource, resolvedUrl, options = {}) {
   const token = resourceESignRenderToken + 1;
   resourceESignRenderToken = token;
   resetResourceESignModal(modal, resource, options);
-  modal.style.display = 'flex';
+  openPoolProModal(modal);
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('resource-esign-open');
-  requestAnimationFrame(() => modal.classList.add('visible'));
 
   if (currentResourceESignObjectUrl) {
     URL.revokeObjectURL(currentResourceESignObjectUrl);
@@ -9817,12 +9827,9 @@ function closeResourceESignModal() {
   if (!modal) return;
   closeResourcePdfFullscreenViewer();
   resourceESignRenderToken += 1;
-  modal.classList.remove('visible');
+  closePoolProModal(modal);
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('resource-esign-open');
-  setTimeout(() => {
-    if (!modal.classList.contains('visible')) modal.style.display = 'none';
-  }, 220);
   if (currentResourceESignObjectUrl) {
     URL.revokeObjectURL(currentResourceESignObjectUrl);
     currentResourceESignObjectUrl = '';
@@ -11171,12 +11178,7 @@ document.addEventListener('click', (event) => {
     if (url.origin !== window.location.origin) return;
     event.preventDefault();
     url.searchParams.set('_reload', String(Date.now()));
-    closeDropdownMenus();
-    document.body.classList.add('page-exiting');
-    showPageLoadingOverlay();
-    setTimeout(() => {
-      window.location.href = url.pathname + url.search + url.hash;
-    }, 140);
+    navigateWithPoolProFade(url.pathname + url.search + url.hash);
   } catch (_) {
     // Ignore malformed URLs
   }
@@ -11604,17 +11606,13 @@ function openInspectionMetaPopup(sub, title) {
     </div>
   `;
   modal.querySelector('.dashboard-info-close')?.addEventListener('click', closeInspectionMetaPopup);
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
+  openPoolProModal(modal);
 }
 
 function closeInspectionMetaPopup() {
   const modal = document.getElementById('inspectionMetaModal');
   if (!modal) return;
-  modal.classList.remove('visible');
-  setTimeout(() => {
-    if (!modal.classList.contains('visible')) modal.style.display = 'none';
-  }, 200);
+  closePoolProModal(modal);
 }
 
 function createInspectionInfoFlag(sub, title) {
@@ -13212,8 +13210,7 @@ function openDesPreInspectionModal(sub) {
       </div>
     </div>`;
 
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
+  openPoolProModal(modal);
   hydrateDesInspectionPhotos(modal).catch((err) => {
     console.error('[DES] Could not hydrate submitted photos:', err);
   });
@@ -13222,10 +13219,7 @@ function openDesPreInspectionModal(sub) {
 window.closeDesPreInspectionModal = function closeDesPreInspectionModal() {
   const modal = document.getElementById('desInspectionModal');
   if (!modal) return;
-  modal.classList.remove('visible');
-  window.setTimeout(() => {
-    if (!modal.classList.contains('visible')) modal.style.display = 'none';
-  }, 250);
+  closePoolProModal(modal);
 };
 
 async function hydrateDutyReportPhotos(root) {
@@ -13347,8 +13341,7 @@ function openDutyFormModal(sub) {
       </div>
     </div>`;
 
-  modal.style.display = 'flex';
-  requestAnimationFrame(() => modal.classList.add('visible'));
+  openPoolProModal(modal);
   hydrateDutyReportPhotos(modal).catch((err) => {
     console.error('[Duties] Could not hydrate submitted photos:', err);
   });
@@ -13357,15 +13350,19 @@ function openDutyFormModal(sub) {
 window.closeDutyFormModal = function closeDutyFormModal() {
   const modal = document.getElementById('dutyFormModal');
   if (!modal) return;
-  modal.classList.remove('visible');
-  window.setTimeout(() => {
-    if (!modal.classList.contains('visible')) {
-      modal.style.display = 'none';
-    }
-  }, 250);
+  closePoolProModal(modal);
 };
 
 // Photo modal for submitted report images
+function closePhotoViewOverlay() {
+  const overlay = document.getElementById('photoViewOverlay');
+  if (!overlay) return;
+  overlay.classList.remove('visible');
+  setTimeout(() => {
+    if (!overlay.classList.contains('visible')) overlay.style.display = 'none';
+  }, 220);
+}
+
 window.openPhotoModal = function(url, gallery = []) {
   const urls = Array.isArray(gallery) && gallery.length ? gallery.filter(Boolean) : [url].filter(Boolean);
   let currentIndex = Math.max(0, urls.indexOf(url));
@@ -13375,7 +13372,7 @@ window.openPhotoModal = function(url, gallery = []) {
     overlay.id = 'photoViewOverlay';
     overlay.className = 'photo-view-overlay';
     overlay.addEventListener('click', (event) => {
-      if (event.target === overlay) overlay.style.display = 'none';
+      if (event.target === overlay) closePhotoViewOverlay();
     });
     const close = document.createElement('button');
     close.type = 'button';
@@ -13384,7 +13381,7 @@ window.openPhotoModal = function(url, gallery = []) {
     close.textContent = '×';
     close.addEventListener('click', (event) => {
       event.stopPropagation();
-      overlay.style.display = 'none';
+      closePhotoViewOverlay();
     });
     const prev = document.createElement('button');
     prev.type = 'button';
@@ -13424,4 +13421,5 @@ window.openPhotoModal = function(url, gallery = []) {
     btn.hidden = urls.length <= 1;
   });
   overlay.style.display = 'flex';
+  requestAnimationFrame(() => overlay.classList.add('visible'));
 };

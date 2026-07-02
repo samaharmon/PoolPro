@@ -24,6 +24,20 @@ let selectedAdminSessionId = '';
 let selectedAdminSessionMonth = '';
 let trainingUndoState = null;
 
+function openTrainingModal(modal, display = 'flex') {
+  if (!modal) return;
+  modal.style.display = display;
+  requestAnimationFrame(() => modal.classList.add('visible'));
+}
+
+function closeTrainingAnimatedModal(modal, delay = 260) {
+  if (!modal) return;
+  modal.classList.remove('visible');
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) modal.style.display = 'none';
+  }, delay);
+}
+
 // Market derived from lifeguard's selected home pool (filters signup session dropdown)
 let activeSignupMarket = '';
 
@@ -47,8 +61,7 @@ if (menuSupervisor) {
 
     const modal = document.getElementById('trainingLoginModal');
     if (modal) {
-      modal.style.display = 'flex';
-      requestAnimationFrame(() => modal.classList.add('visible'));
+      openTrainingModal(modal);
     } else {
       // Fallback: if no modal, just show the supervisor section
       showSupervisorView();
@@ -1650,20 +1663,20 @@ function openRosterModal(sessionId) {
     });
   }
 
-  modal.style.display = 'flex';
+  openTrainingModal(modal);
 
   // Close button - replace node to clear previous listeners
   const oldClose = document.getElementById('attendanceModalClose');
   if (oldClose) {
     const newClose = oldClose.cloneNode(true);
     oldClose.parentNode.replaceChild(newClose, oldClose);
-    newClose.addEventListener('click', () => { modal.style.display = 'none'; });
+    newClose.addEventListener('click', () => closeTrainingAnimatedModal(modal));
   }
 
   // Close on overlay click (click outside modal content)
   const onOverlayClick = (evt) => {
     if (evt.target === modal) {
-      modal.style.display = 'none';
+      closeTrainingAnimatedModal(modal);
       modal.removeEventListener('click', onOverlayClick);
     }
   };
@@ -1789,7 +1802,7 @@ function closeTrainingSignupModal() {
   const { modal, confirmBtn } = getTrainingSignupModalEls();
   pendingTrainingSignupSessionId = '';
   if (confirmBtn) confirmBtn.disabled = false;
-  if (modal) modal.style.display = 'none';
+  closeTrainingAnimatedModal(modal);
 }
 
 function showTrainingSignupModalError(message) {
@@ -1931,7 +1944,7 @@ function openTrainingSignupModal(sessionId, el) {
   if (!session || !modal) return;
   pendingTrainingSignupSessionId = sessionId;
   renderTrainingSignupConfirmation(session);
-  modal.style.display = 'flex';
+  openTrainingModal(modal);
 }
 
 function setupSignup(el) {
@@ -2060,8 +2073,7 @@ function setupLogin(el) {
   }
 
   function openModal() {
-    modal.style.display = 'flex';
-    requestAnimationFrame(() => modal.classList.add('visible'));
+    openTrainingModal(modal);
     if (messageEl) {
       messageEl.textContent = '';
       messageEl.classList.remove('success', 'error');
@@ -2069,10 +2081,7 @@ function setupLogin(el) {
   }
 
   function closeModal() {
-    modal.classList.remove('visible');
-    setTimeout(() => {
-      modal.style.display = 'none';
-    }, 200);
+    closeTrainingAnimatedModal(modal);
   }
 
   setLoggedIn(hasFreshSupervisorSession());
@@ -2263,8 +2272,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     } else {
       const loginModal = document.getElementById('trainingLoginModal');
       if (loginModal) {
-        loginModal.style.display = 'flex';
-        requestAnimationFrame(() => loginModal.classList.add('visible'));
+        openTrainingModal(loginModal);
       }
     }
   } else {
