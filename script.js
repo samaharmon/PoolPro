@@ -5069,6 +5069,7 @@ const SUPPLY_SECTIONS = [
 ];
 let supplyNeededEditMode = false;
 let supplyResolvedItems = {};
+let supplyPendingResolvedItems = new Set();
 let supplyUndoItem = null;
 let dashboardSupplyFilters = { market: 'all', pool: 'all' };
 const FILL_LINE_STATUS_OPTIONS = ['Off', 'On full blast', 'On halfway', 'On a trickle'];
@@ -5966,6 +5967,7 @@ async function loadDashboardData() {
       window.trainingSchedule = trainingSchedule;
     }
     supplyResolvedItems = resolvedSupplySnap?.exists?.() ? (resolvedSupplySnap.data().items || {}) : {};
+    supplyPendingResolvedItems.clear();
     await loadOperationalStatusLogs();
     dashboardDataLoaded = true;
     await renderActiveDashboardTab();
@@ -11920,7 +11922,21 @@ function renderSupplyNeedActions(container) {
     supplyNeededEditMode = true;
     renderSuppliesDashboard();
   });
-  save.addEventListener('click', () => {
+  save.addEventListener('click', async () => {
+    const pendingKeys = Array.from(supplyPendingResolvedItems);
+    if (pendingKeys.length) {
+      const previousResolvedItems = { ...supplyResolvedItems };
+      pendingKeys.forEach((key) => { supplyResolvedItems[key] = true; });
+      try {
+        await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true });
+        supplyUndoItem = pendingKeys;
+      } catch (err) {
+        supplyResolvedItems = previousResolvedItems;
+        console.error('[ChemLog] Unable to save resolved supply needs:', err);
+        return;
+      }
+      supplyPendingResolvedItems.clear();
+    }
     supplyNeededEditMode = false;
     renderSuppliesDashboard();
   });
@@ -11929,6 +11945,7 @@ function renderSupplyNeedActions(container) {
     const undoKeys = Array.isArray(supplyUndoItem) ? supplyUndoItem : [supplyUndoItem];
     undoKeys.forEach((key) => { delete supplyResolvedItems[key]; });
     supplyUndoItem = null;
+    supplyPendingResolvedItems.clear();
     await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true }).catch(() => {});
     renderSuppliesDashboard();
   });
@@ -11969,15 +11986,13 @@ function renderNeededSuppliesSection(container, rows) {
           checkbox.type = 'checkbox';
           checkbox.className = 'market-filter-checkbox';
           checkbox.disabled = !supplyNeededEditMode;
+          checkbox.checked = supplyPendingResolvedItems.has(rowKey);
           checkbox.addEventListener('change', () => {
-            if (!checkbox.checked) return;
-            facilityItem.classList.add('supply-row-fading');
-            window.setTimeout(async () => {
-              supplyResolvedItems[rowKey] = true;
-              supplyUndoItem = rowKey;
-              await setDoc(doc(db, 'settings', 'resolvedSupplyNeeds'), { items: supplyResolvedItems }, { merge: true }).catch(() => {});
-              renderSuppliesDashboard();
-            }, 3000);
+            if (checkbox.checked) {
+              supplyPendingResolvedItems.add(rowKey);
+            } else {
+              supplyPendingResolvedItems.delete(rowKey);
+            }
           });
           const facilityBtn = document.createElement('button');
           facilityBtn.type = 'button';
