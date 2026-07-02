@@ -145,11 +145,13 @@ let verifyCooldownTimer = null;
 let verifyStatusPoller = null;
 let createAccountSubmitting = false;
 let lastHomeMenuActivationAt = 0;
+let homeMenuPointerActivationAt = 0;
 let homeMenuActionPending = false;
 let cleanlinessReminderModal = null;
 let loginSubmitting = false;
 let loginSubmitTouchAt = 0;
 let modalOpenedAt = 0;
+let homeModalControlsBound = false;
 
 const modal = document.getElementById('homeLoginModal');
 const closeBtn = document.getElementById('homeLoginClose');
@@ -2322,50 +2324,78 @@ async function handleResetPasswordSubmit(event) {
 
 async function activateHomeMenuButton(btn, event) {
   event?.preventDefault?.();
+  event?.stopPropagation?.();
   if (homeMenuActionPending) return;
   const now = Date.now();
   if (now - lastHomeMenuActivationAt < 500) return;
   lastHomeMenuActivationAt = now;
   showHomeActionLoadingOverlay();
 
-  const requestedMode = normalizeAccessMode(btn.dataset.accessRole || btn.dataset.target);
-  pendingTarget = requestedMode === 'supervisor' ? 'supervisor' : 'chem';
+  try {
+    const requestedMode = normalizeAccessMode(btn.dataset.accessRole || btn.dataset.target);
+    pendingTarget = requestedMode === 'supervisor' ? 'supervisor' : 'chem';
 
-  if (hasFreshSupervisorSession()) {
-    try {
-      await assertAccessModeAllowed(requestedMode, getIdentityKeysForSupervisor(getStoredSupervisorEmail()));
-      persistAccessMode(requestedMode);
-      window.location.href = getDestinationPath();
-    } catch (err) {
-      openModal(requestedMode);
-      setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
+    if (hasFreshSupervisorSession()) {
+      try {
+        await assertAccessModeAllowed(requestedMode, getIdentityKeysForSupervisor(getStoredSupervisorEmail()));
+        persistAccessMode(requestedMode);
+        window.location.href = getDestinationPath();
+      } catch (err) {
+        openModal(requestedMode);
+        setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
+      }
+      return;
     }
+
+    const storedLifeguardSession = getStoredLifeguardSession();
+    if (storedLifeguardSession && requestedMode !== 'supervisor') {
+      try {
+        await assertAccessModeAllowed(requestedMode, [
+          storedLifeguardSession.email,
+          storedLifeguardSession.employeeId,
+          storedLifeguardSession.username,
+        ]);
+        persistAccessMode(requestedMode);
+        window.location.href = getDestinationPath();
+      } catch (err) {
+        openModal(requestedMode);
+        setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
+      }
+      return;
+    }
+
+    openModal(requestedMode);
+  } catch (err) {
+    console.error('Home menu activation failed:', err);
+    hideHomeActionLoadingOverlay();
+  }
+}
+
+function handleHomeMenuPointerActivation(btn, event) {
+  if (event.type === 'pointerdown' && event.pointerType === 'mouse' && event.button !== 0) return;
+  const now = Date.now();
+  if (now - homeMenuPointerActivationAt < 700) return;
+  homeMenuPointerActivationAt = now;
+  activateHomeMenuButton(btn, event);
+}
+
+function handleHomeMenuClickActivation(btn, event) {
+  if (Date.now() - homeMenuPointerActivationAt < 700) {
+    event.preventDefault();
+    event.stopPropagation();
     return;
   }
-
-  const storedLifeguardSession = getStoredLifeguardSession();
-  if (storedLifeguardSession && requestedMode !== 'supervisor') {
-    try {
-      await assertAccessModeAllowed(requestedMode, [
-        storedLifeguardSession.email,
-        storedLifeguardSession.employeeId,
-        storedLifeguardSession.username,
-      ]);
-      persistAccessMode(requestedMode);
-      window.location.href = getDestinationPath();
-    } catch (err) {
-      openModal(requestedMode);
-      setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
-    }
-    return;
-  }
-
-  openModal(requestedMode);
+  activateHomeMenuButton(btn, event);
 }
 
 function wireMenu() {
   document.querySelectorAll('.home-menu-item').forEach((btn) => {
-    btn.addEventListener('click', (event) => activateHomeMenuButton(btn, event));
+    if (btn.dataset.homeMenuBound === 'true') return;
+    btn.dataset.homeMenuBound = 'true';
+    btn.type = 'button';
+    btn.addEventListener('pointerdown', (event) => handleHomeMenuPointerActivation(btn, event));
+    btn.addEventListener('touchend', (event) => handleHomeMenuPointerActivation(btn, event));
+    btn.addEventListener('click', (event) => handleHomeMenuClickActivation(btn, event));
   });
 }
 
@@ -2420,14 +2450,9 @@ function handleForgotPasswordClick(event) {
   setModalView('reset');
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  mountUnifiedFooter();
-  const handledVerificationRedirect = await handleEmailVerificationRedirect();
-  await Promise.all([loadEmployees(), loadPools()]);
-  populatePoolOptions();
-  wireMenu();
-  wireRoleToggle();
-  setupMobileModalFocusGuards();
+function wireHomeModalControls() {
+  if (homeModalControlsBound) return;
+  homeModalControlsBound = true;
 
   form?.addEventListener('submit', handleSubmit);
   wireLoginSubmitTouchFallback();
@@ -2478,6 +2503,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     closeModal();
   });
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  mountUnifiedFooter();
+  wireMenu();
+  wireRoleToggle();
+  wireHomeModalControls();
+  setupMobileModalFocusGuards();
+  const handledVerificationRedirect = await handleEmailVerificationRedirect();
+  await Promise.all([loadEmployees(), loadPools()]);
+  populatePoolOptions();
 
   const pendingContext = loadPendingVerificationContext();
   if (pendingContext?.username && auth.currentUser) {

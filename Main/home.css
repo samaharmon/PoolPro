@@ -200,9 +200,10 @@ body.page-exiting {
   z-index: 900;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.46);
+  background: rgba(0, 0, 0, 0.72);
   opacity: 0;
   visibility: hidden;
+  pointer-events: auto;
   transition: opacity 0.18s ease, visibility 0.18s ease;
 }
 
