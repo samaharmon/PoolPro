@@ -267,7 +267,9 @@ document.addEventListener('click', async (e) => {
       ? await getFirestoreResourceDataUrl(key)
       : resourceUrl;
     if (isResourceESignPdf(resource)) {
-      await openResourceESignModal(resource, dataUrl);
+      await openResourceESignModal(resource, dataUrl, {
+        openedFromSettings: !!link.closest('#resourceTableSection, #resourceSettings'),
+      });
       return;
     }
     openResourceDataUrl(dataUrl);
@@ -536,6 +538,7 @@ function getResponsiveTableMinWidth(table) {
   if (table.matches('.dashboard-compliance-table')) return '760px';
   if (table.matches('.training-schedule-table')) return '760px';
   if (table.matches('.attendance-table, .test-rubric-table')) return '900px';
+  if (table.matches('.resource-signees-table')) return '760px';
   if (table.matches('.employee-unverified-table')) return '1260px';
   if (table.matches('.employee-table')) return '1520px';
   if (table.matches('.sanitation-table--settings')) return '420px';
@@ -8626,6 +8629,7 @@ function ensureResourcesSettingsSection() {
     </div>
     <div class="employee-add-btn-row">
       <button type="button" class="submit-btn button-shadow employee-action-btn" id="resourceAddBtn">Add</button>
+      <button type="button" class="submit-btn button-shadow employee-action-btn resource-signees-btn hidden" id="resourceSigneesBtn">List of Signees</button>
       <button type="button" class="submit-btn button-shadow employee-action-btn hidden" id="resourceDeleteBtn">Delete</button>
     </div>
     <div class="training-filter-bar employee-filter-bar" id="resourceFilterBar" style="margin: 20px 0 4px;">
@@ -8721,10 +8725,14 @@ function syncResourceActionButtons() {
   ensureResourceSettingsUi();
   const addBtn = document.getElementById('resourceAddBtn');
   const deleteBtn = document.getElementById('resourceDeleteBtn');
+  const signeesBtn = document.getElementById('resourceSigneesBtn');
   const hasSelectedRow = resourceTableEditable && !!resourceEditingId && resourcesData.some((item) => item.id === resourceEditingId);
+  const selectedResource = hasSelectedRow ? resourcesData.find((item) => item.id === resourceEditingId) : null;
+  const canShowSignees = !!selectedResource && isResourceESignPdf(selectedResource) && isSupervisor();
 
   if (addBtn) addBtn.textContent = hasSelectedRow ? 'Save' : 'Add';
   if (deleteBtn) deleteBtn.classList.toggle('hidden', !hasSelectedRow);
+  if (signeesBtn) signeesBtn.classList.toggle('hidden', !canShowSignees);
 }
 
 function selectResourceRow(resourceId) {
@@ -9240,6 +9248,7 @@ function getResourceESignModal() {
           </label>
           <div class="resource-esign-gate" id="resourceESignGateMessage">Scroll until the top of the last page is visible to enable acknowledgment.</div>
           <div class="resource-esign-button-row">
+            <button type="button" class="agreement-btn resource-esign-signees-btn hidden" id="resourceESignSigneesBtn">List of Signees</button>
             <button type="button" class="agreement-btn" id="resourceESignDownloadBtn" disabled>Download PDF</button>
             <button type="button" class="agreement-btn" id="resourceESignCancelBtn">Cancel</button>
             <button type="submit" class="agreement-btn primary" id="resourceESignSubmitBtn" disabled>Sign Document</button>
@@ -9264,6 +9273,10 @@ function getResourceESignModal() {
     if (event.target.closest('.resource-esign-page')) openResourceESignFullscreenViewer();
   });
   modal.querySelector('#resourceESignDownloadBtn')?.addEventListener('click', () => downloadCurrentResourceESignPdf());
+  modal.querySelector('#resourceESignSigneesBtn')?.addEventListener('click', () => {
+    const resource = resourcesData.find((item) => item.id === modal.dataset.resourceId);
+    if (resource) openResourceSigneesModal(resource);
+  });
 
   return modal;
 }
@@ -9313,7 +9326,218 @@ function getResourceESignSignatureId(context) {
     .slice(0, 140) || 'unknown-user';
 }
 
-function resetResourceESignModal(modal, resource) {
+function getResourceSigneesModal() {
+  let modal = document.getElementById('resourceSigneesModal');
+  if (modal) return modal;
+
+  modal = document.createElement('div');
+  modal.id = 'resourceSigneesModal';
+  modal.className = 'resource-signees-modal';
+  modal.setAttribute('aria-hidden', 'true');
+  modal.innerHTML = `
+    <div class="resource-signees-dialog" role="dialog" aria-modal="true" aria-labelledby="resourceSigneesTitle">
+      <div class="resource-signees-header">
+        <div>
+          <h2 id="resourceSigneesTitle">List of Signees</h2>
+          <p id="resourceSigneesSubtitle"></p>
+        </div>
+        <button type="button" class="resource-signees-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="resource-signees-body" id="resourceSigneesBody"></div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeResourceSigneesModal();
+  });
+  modal.querySelector('.resource-signees-close')?.addEventListener('click', closeResourceSigneesModal);
+  return modal;
+}
+
+function closeResourceSigneesModal() {
+  const modal = document.getElementById('resourceSigneesModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  modal.setAttribute('aria-hidden', 'true');
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) modal.style.display = 'none';
+  }, 200);
+}
+
+function getResourceTargetFacilities(resource = {}) {
+  if (!isResourceAllFacilities(resource.pool)) return resource.pool ? [resource.pool] : [];
+  const poolNames = [
+    ...poolsCache.map(getPoolName),
+    ...employeesData.map((employee) => normalizeEmployeeRecord(employee).homePool),
+  ].map((name) => String(name || '').trim()).filter(Boolean);
+  return Array.from(new Set(poolNames)).sort((a, b) => a.localeCompare(b));
+}
+
+function getResourceSignatureKeys(signature = {}) {
+  const signerName = [signature.firstName, signature.lastName].filter(Boolean).join(' ');
+  return [
+    signature.id,
+    signature.email,
+    signature.username,
+    signature.employeeId,
+    signature.displayName,
+    signature.signatureName,
+    signerName,
+  ].map(normalizeESignText).filter(Boolean);
+}
+
+function getEmployeeESignKeys(employee = {}) {
+  const normalized = normalizeEmployeeRecord(employee);
+  const displayName = employeeDisplayName(normalized);
+  const firstLast = [normalized.firstName, normalized.lastName].filter(Boolean).join(' ');
+  return [
+    ...getEmployeeIdentityKeys(normalized),
+    displayName,
+    firstLast,
+  ].map(normalizeESignText).filter(Boolean);
+}
+
+function getResourceSignatureLookup(signatures = []) {
+  const lookup = new Set();
+  signatures.forEach((signature) => {
+    getResourceSignatureKeys(signature).forEach((key) => lookup.add(key));
+  });
+  return lookup;
+}
+
+function hasEmployeeSignedResource(employee, signatureLookup) {
+  return getEmployeeESignKeys(employee).some((key) => signatureLookup.has(key));
+}
+
+function getSmsPhoneRecipient(employee = {}) {
+  const digits = getTenDigitPhone(normalizeEmployeeRecord(employee).phone || '');
+  return digits ? `+1${digits}` : '';
+}
+
+function openSmsForResourceNonSignees(resource, facilityName, nonSignees = []) {
+  const recipients = Array.from(new Set(nonSignees.map(getSmsPhoneRecipient).filter(Boolean)));
+  if (!recipients.length) {
+    alert('No phone numbers are available for the non-signees at this facility.');
+    return;
+  }
+  const documentName = resource.documentName || resource.fileName || 'this PoolPro document';
+  const body = `Please log in to PoolPro and sign "${documentName}" in Resources.`;
+  const href = `sms:${recipients.join(',')}?&body=${encodeURIComponent(body)}`;
+  const link = document.createElement('a');
+  link.href = href;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+function renderResourceSigneesRoster(modal, resource, signatures) {
+  const body = modal.querySelector('#resourceSigneesBody');
+  if (!body) return;
+  const signatureLookup = getResourceSignatureLookup(signatures);
+  const facilities = getResourceTargetFacilities(resource);
+
+  if (!facilities.length) {
+    body.innerHTML = '<p class="resource-signees-empty">No facilities are attached to this e-sign document.</p>';
+    return;
+  }
+
+  body.innerHTML = facilities.map((facilityName) => {
+    const staff = employeesData
+      .map(normalizeEmployeeRecord)
+      .filter((employee) => employee.homePool === facilityName)
+      .sort((a, b) => employeeDisplayName(a).localeCompare(employeeDisplayName(b)));
+    const rows = staff.map((employee) => {
+      const signed = hasEmployeeSignedResource(employee, signatureLookup);
+      return `
+        <tr class="resource-signee-row ${signed ? 'signed' : 'unsigned'}">
+          <td>${escapeHtml(employeeDisplayName(employee))}</td>
+          <td>${escapeHtml(formatEmployeeRoles(employee) || '—')}</td>
+          <td>${escapeHtml(employee.email || employee.username || '—')}</td>
+          <td>${escapeHtml(formatPhoneDisplay(employee.phone) || '—')}</td>
+          <td><span class="resource-signee-status">${signed ? 'Signed' : 'Not Signed'}</span></td>
+        </tr>
+      `;
+    }).join('');
+    const unsignedCount = staff.filter((employee) => !hasEmployeeSignedResource(employee, signatureLookup)).length;
+    const phoneCount = staff
+      .filter((employee) => !hasEmployeeSignedResource(employee, signatureLookup))
+      .map(getSmsPhoneRecipient)
+      .filter(Boolean).length;
+    return `
+      <section class="resource-signees-facility" data-facility="${escapeHtml(facilityName)}">
+        <div class="resource-signees-facility-header">
+          <h3>${escapeHtml(facilityName)}</h3>
+          <span>${staff.length} staff • ${unsignedCount} unsigned</span>
+        </div>
+        <div class="table-scroll-shell">
+          <div class="table-scroll-wrap">
+            <table class="employee-table resource-signees-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Email / Username</th>
+                  <th>Phone</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows || '<tr><td colspan="5">No employees are assigned to this facility.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <button type="button" class="submit-btn button-shadow resource-notify-btn" data-facility="${escapeHtml(facilityName)}" ${phoneCount ? '' : 'disabled'}>
+          Notify Non-Signees
+        </button>
+      </section>
+    `;
+  }).join('');
+
+  body.querySelectorAll('.resource-notify-btn').forEach((button) => {
+    button.addEventListener('click', () => {
+      const facilityName = button.dataset.facility || '';
+      const nonSignees = employeesData
+        .map(normalizeEmployeeRecord)
+        .filter((employee) => employee.homePool === facilityName && !hasEmployeeSignedResource(employee, signatureLookup));
+      openSmsForResourceNonSignees(resource, facilityName, nonSignees);
+    });
+  });
+  wrapResponsiveTables(body);
+}
+
+async function openResourceSigneesModal(resource) {
+  if (!isSupervisor() || !resource?.id || !isResourceESignPdf(resource)) return;
+  const modal = getResourceSigneesModal();
+  const title = modal.querySelector('#resourceSigneesTitle');
+  const subtitle = modal.querySelector('#resourceSigneesSubtitle');
+  const body = modal.querySelector('#resourceSigneesBody');
+  if (title) title.textContent = 'List of Signees';
+  if (subtitle) subtitle.textContent = resource.documentName || resource.fileName || 'E-Sign PDF';
+  if (body) {
+    body.innerHTML = `
+      <div class="resource-signees-loading">
+        <div class="poolpro-loading-spinner" role="status" aria-label="Loading signees"></div>
+      </div>
+    `;
+  }
+  modal.style.display = 'flex';
+  modal.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => modal.classList.add('visible'));
+
+  try {
+    if (!employeesData.length) await loadEmployees();
+    const snap = await getDocs(collection(db, 'resourcesDocuments', resource.id, 'eSignatures'));
+    const signatures = snap.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }));
+    renderResourceSigneesRoster(modal, resource, signatures);
+  } catch (err) {
+    console.error('[PoolPro] Unable to load resource signees:', err);
+    if (body) body.innerHTML = '<p class="resource-signees-empty error">Unable to load the list of signees right now.</p>';
+  }
+}
+
+function resetResourceESignModal(modal, resource, options = {}) {
   const title = modal.querySelector('#resourceESignTitle');
   const subtitle = modal.querySelector('#resourceESignSubtitle');
   const pages = modal.querySelector('#resourceESignPages');
@@ -9324,8 +9548,10 @@ function resetResourceESignModal(modal, resource) {
   const signatureHint = modal.querySelector('#resourceESignSignatureHint');
   const gate = modal.querySelector('#resourceESignGateMessage');
   const downloadBtn = modal.querySelector('#resourceESignDownloadBtn');
+  const signeesBtn = modal.querySelector('#resourceESignSigneesBtn');
   const submitBtn = modal.querySelector('#resourceESignSubmitBtn');
   const context = getResourceESignContext();
+  const showSignees = !!options.openedFromSettings && isSupervisor() && isResourceESignPdf(resource);
 
   modal.dataset.resourceId = resource?.id || '';
   modal.dataset.scrollUnlocked = 'false';
@@ -9353,6 +9579,7 @@ function resetResourceESignModal(modal, resource) {
     gate.classList.remove('ready');
   }
   if (downloadBtn) downloadBtn.disabled = true;
+  if (signeesBtn) signeesBtn.classList.toggle('hidden', !showSignees);
   if (submitBtn) submitBtn.disabled = true;
   setResourceESignMessage(modal, '');
 }
@@ -9500,11 +9727,11 @@ function closeResourcePdfFullscreenViewer() {
   }, 200);
 }
 
-async function openResourceESignModal(resource, resolvedUrl) {
+async function openResourceESignModal(resource, resolvedUrl, options = {}) {
   const modal = getResourceESignModal();
   const token = resourceESignRenderToken + 1;
   resourceESignRenderToken = token;
-  resetResourceESignModal(modal, resource);
+  resetResourceESignModal(modal, resource, options);
   modal.style.display = 'flex';
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('resource-esign-open');
@@ -9813,12 +10040,13 @@ function setupResourcesSettingsUI() {
   const linkInput = document.getElementById('resourceLinkInput');
   const poolInput = document.getElementById('resourcePoolInput');
   const addBtn = document.getElementById('resourceAddBtn');
+  const signeesBtn = document.getElementById('resourceSigneesBtn');
   const deleteBtn = document.getElementById('resourceDeleteBtn');
   const marketFilter = document.getElementById('resourceMarketFilter');
   const poolFilter = document.getElementById('resourcePoolFilter');
   const deleteAllBtn = document.getElementById('resourceDeleteAllBtn');
 
-  if (!sourceSelect || !fileInput || !linkInput || !poolInput || !addBtn || !deleteBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
+  if (!sourceSelect || !fileInput || !linkInput || !poolInput || !addBtn || !signeesBtn || !deleteBtn || !marketFilter || !poolFilter || !deleteAllBtn) return;
   if (addBtn.dataset.bound === 'true') return;
   addBtn.dataset.bound = 'true';
 
@@ -9848,6 +10076,11 @@ function setupResourcesSettingsUI() {
   });
 
   setupResourceOverlay();
+
+  signeesBtn.addEventListener('click', () => {
+    const resource = resourcesData.find((item) => item.id === resourceEditingId);
+    if (resource) openResourceSigneesModal(resource);
+  });
 
   addBtn.addEventListener('click', async () => {
     const documentName = document.getElementById('resourceDocumentNameInput')?.value.trim() || '';

@@ -4240,6 +4240,15 @@ textarea,
   box-shadow: 0 10px 24px rgba(143, 35, 25, 0.28);
 }
 
+.resource-esign-button-row .resource-esign-signees-btn,
+.resource-signees-btn,
+.resource-notify-btn {
+  background: linear-gradient(135deg, #0f6f3f, #19a75d) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #fff !important;
+  box-shadow: 0 10px 24px rgba(15, 111, 63, 0.28) !important;
+}
+
 .resource-esign-button-row .agreement-btn:disabled {
   opacity: 0.52;
   cursor: not-allowed;
@@ -4322,6 +4331,167 @@ body.resource-pdf-fullscreen-open {
   overflow: hidden;
 }
 
+.resource-signees-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10060;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.82);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.resource-signees-modal.visible {
+  opacity: 1;
+}
+
+.resource-signees-dialog {
+  width: min(1120px, 100%);
+  max-height: min(92vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #2b2b2b;
+  color: #fff;
+  border: 2px solid #69140e;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.46);
+  transform: translateY(12px);
+  transition: transform 0.2s ease;
+}
+
+.resource-signees-modal.visible .resource-signees-dialog {
+  transform: translateY(0);
+}
+
+.resource-signees-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #69140e, #1d2531);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.resource-signees-header h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.6rem;
+}
+
+.resource-signees-header p {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.resource-signees-close {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.resource-signees-body {
+  overflow: auto;
+  padding: 20px 24px 28px;
+}
+
+.resource-signees-loading {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resource-signees-loading .poolpro-loading-spinner {
+  border-color: rgba(255, 255, 255, 0.32);
+  border-top-color: #fff;
+}
+
+.resource-signees-empty {
+  margin: 0;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.resource-signees-empty.error {
+  color: #ffd2d2;
+}
+
+.resource-signees-facility + .resource-signees-facility {
+  margin-top: 28px;
+}
+
+.resource-signees-facility-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #ff7d7d;
+}
+
+.resource-signees-facility-header h3 {
+  margin: 0;
+  color: #ff7d7d;
+  font-size: 1.45rem;
+}
+
+.resource-signees-facility-header span {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.resource-signees-table {
+  table-layout: auto;
+}
+
+.resource-signees-table th,
+.resource-signees-table td {
+  white-space: normal !important;
+}
+
+.resource-signee-row.signed td {
+  background: rgba(28, 138, 77, 0.28) !important;
+}
+
+.resource-signee-row.unsigned td {
+  background: rgba(155, 29, 29, 0.28) !important;
+}
+
+.resource-signee-status {
+  display: inline-block;
+  min-width: 84px;
+  padding: 4px 8px;
+  text-align: center;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.resource-signee-row.signed .resource-signee-status {
+  background: #16824a;
+}
+
+.resource-signee-row.unsigned .resource-signee-status {
+  background: #9b1d1d;
+}
+
+.resource-notify-btn {
+  margin-top: 12px;
+  width: auto;
+  min-width: 220px;
+}
+
+.resource-notify-btn:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 @media (max-width: 720px) {
   .resource-esign-modal {
     padding: 10px;
@@ -4343,6 +4513,22 @@ body.resource-pdf-fullscreen-open {
 
   .resource-esign-header h2 {
     font-size: 1.35rem;
+  }
+
+  .resource-signees-modal {
+    padding: 10px;
+  }
+
+  .resource-signees-header,
+  .resource-signees-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .resource-signees-facility-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 }
 
