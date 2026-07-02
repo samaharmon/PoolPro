@@ -8575,6 +8575,7 @@ const RESOURCE_FIRESTORE_MAX_FILE_SIZE = 20 * 1024 * 1024;
 const RESOURCE_STORAGE_UPLOAD_TIMEOUT_MS = 12000;
 const RESOURCE_STORAGE_URL_TIMEOUT_MS = 10000;
 const RESOURCE_STORAGE_BLOCKED_SESSION_KEY = 'poolproResourceStorageBlocked';
+const RESOURCE_USE_FIRESTORE_UPLOADS = true;
 const PDFJS_VERSION = '3.11.174';
 const PDFJS_SCRIPT_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`;
 const PDFJS_WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
@@ -9869,6 +9870,10 @@ function markResourceStorageBlocked() {
   }
 }
 
+function shouldAttemptResourceStorageRequest() {
+  return !RESOURCE_USE_FIRESTORE_UPLOADS && !isResourceStorageMarkedBlocked();
+}
+
 async function deleteResourceFileChunks(resourceId) {
   if (!resourceId) return;
   const chunksSnap = await getDocs(collection(db, 'resourcesDocuments', resourceId, 'fileChunks'));
@@ -9883,7 +9888,7 @@ async function deleteResourceFileChunks(resourceId) {
 async function storeResourceFileInFirestoreChunks(file, resourceId, safeName) {
   if (!resourceId) throw new Error('Resource upload could not be prepared. Try again.');
   if (file.size > RESOURCE_FIRESTORE_MAX_FILE_SIZE) {
-    throw new Error('This file is too large for the temporary Firestore upload fallback. Use a website link, or apply Firebase Storage CORS and try again.');
+    throw new Error('This file is too large for PoolPro resource uploads. Use a website link, or apply Firebase Storage CORS and try again.');
   }
 
   const dataUrl = await readFileAsDataURL(file);
@@ -9934,7 +9939,7 @@ async function getFirestoreResourceDataUrl(resourceId) {
 
 async function uploadResourceFile(file, resourceId) {
   const safeName = `${Date.now()}_${String(file.name || 'resource').replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-  if (isResourceStorageMarkedBlocked()) {
+  if (!shouldAttemptResourceStorageRequest()) {
     return storeResourceFileInFirestoreChunks(file, resourceId, safeName);
   }
 
@@ -9986,7 +9991,7 @@ async function deleteResourceRecord(item) {
 
 async function deleteResourceBackingFile(item) {
   if (!item) return;
-  if (item.storagePath) {
+  if (item.storagePath && shouldAttemptResourceStorageRequest()) {
     await deleteObject(storageRef(getResourceStorage(), item.storagePath)).catch(() => {});
   }
   if (item.storageType === FIRESTORE_RESOURCE_STORAGE || item.fileUrl?.startsWith(`${FIRESTORE_RESOURCE_STORAGE}:`)) {
@@ -10162,7 +10167,7 @@ function setupResourcesSettingsUI() {
           await deleteResourceFileChunks(existing.id).catch(() => {});
         }
         fileMeta = await uploadResourceFile(pendingResourceFile, targetId);
-        if (oldStoragePath && oldStoragePath !== fileMeta.storagePath) {
+        if (oldStoragePath && oldStoragePath !== fileMeta.storagePath && shouldAttemptResourceStorageRequest()) {
           await deleteObject(storageRef(getResourceStorage(), oldStoragePath)).catch(() => {});
         }
       }
