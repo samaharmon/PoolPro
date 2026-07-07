@@ -434,6 +434,46 @@ body.page-exiting .home-header {
   box-sizing: border-box;
 }
 
+.home-password-input-wrap {
+  position: relative;
+}
+
+.home-password-input-wrap input {
+  padding-right: 48px;
+}
+
+.home-password-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(105, 20, 14, 0.65);
+  background: rgba(51, 51, 51, 0.14);
+  color: #1f1f1f;
+  cursor: pointer;
+}
+
+.home-password-toggle svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.home-password-toggle.is-visible {
+  background: #69140e;
+  color: #fff;
+}
+
 .form-group select {
   width: 100%;
   max-width: 100%;

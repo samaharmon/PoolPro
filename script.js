@@ -749,6 +749,8 @@ function resetOrphanedSharedModalOverlay() {
 window.addEventListener('load', resetOrphanedSharedModalOverlay);
 
 window.openSettings = function () {
+  ensureStandardSettingsSections();
+  ensureSettingsModalScrollBody();
   ensureAccountManagementSection();
   ensureDataStorageSettingsSection();
   ensureResourcesSettingsSection();
@@ -2834,9 +2836,26 @@ function ensureSettingsModalScrollBody() {
 
 function ensureStandardSettingsSections() {
   const modalContent = document.querySelector('#settingsModal .settings-modal-content');
-  if (!modalContent || document.getElementById('marketSection')) return;
+  if (!modalContent) return;
 
-  const websiteSection = modalContent.querySelector('.settings-section');
+  let websiteSection = Array.from(modalContent.querySelectorAll('.settings-section'))
+    .find((section) => (section.querySelector('h3')?.textContent || '').trim().toLowerCase() === 'website setup') || null;
+  if (!websiteSection) {
+    websiteSection = document.createElement('div');
+    websiteSection.className = 'settings-section';
+    websiteSection.innerHTML = `
+      <h3>Website Setup</h3>
+      <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
+    `;
+    const scrollBody = modalContent.querySelector(':scope > .settings-modal-scroll');
+    const header = modalContent.querySelector(':scope > .modal-header');
+    if (scrollBody) scrollBody.prepend(websiteSection);
+    else if (header) header.insertAdjacentElement('afterend', websiteSection);
+    else modalContent.prepend(websiteSection);
+  }
+
+  if (document.getElementById('marketSection')) return;
+
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <div class="settings-section">

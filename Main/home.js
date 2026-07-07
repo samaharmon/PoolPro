@@ -976,6 +976,13 @@ function resetForms() {
   restoreCreateAccountMode();
   form?.reset();
   createAccountForm?.reset();
+  document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+    const input = document.getElementById(button.dataset.passwordToggle);
+    if (input) input.type = 'password';
+    button.classList.remove('is-visible');
+    button.setAttribute('aria-label', 'Show password');
+    button.setAttribute('aria-pressed', 'false');
+  });
   if (createPoolInput) delete createPoolInput.dataset.pendingValue;
   verifyForm?.reset();
   resetVerificationState();
@@ -1427,6 +1434,7 @@ function openModal(target) {
 }
 
 function closeModal() {
+  hideHomeActionLoadingOverlay();
   modal.classList.remove('visible');
   setTimeout(() => {
     modal.style.display = 'none';
@@ -2565,6 +2573,18 @@ function wireHomeModalControls() {
 
   form?.addEventListener('submit', handleSubmit);
   wireLoginSubmitTouchFallback();
+  document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const input = document.getElementById(button.dataset.passwordToggle);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      button.classList.toggle('is-visible', show);
+      button.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      button.setAttribute('aria-pressed', show ? 'true' : 'false');
+      input.focus({ preventScroll: true });
+    });
+  });
   createAccountForm?.addEventListener('submit', handleCreateAccountSubmit);
   closeBtn?.addEventListener('click', async () => {
     if (auth.currentUser && currentRole !== 'supervisor') {

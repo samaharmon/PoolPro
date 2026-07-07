@@ -12,6 +12,7 @@ import {
 // ============================================================
 
 let employeesData = [];
+let rescuerOutsideClickBound = false;
 
 const CPR_RAPID_ASSESSMENT_ROWS = [
   { text: 'Rescuer ensured the scene was safe and put on gloves.', points: 2 },
@@ -297,19 +298,26 @@ function renderRubric(rubric) {
   fields.className = 'test-header-fields';
   fields.innerHTML = `
     <div class="test-header-field test-rescuer-picker-field">
-      <label>${escHtml(rubric.rescuerLabel)}:</label>
-      <input
-        type="text"
-        class="test-header-select"
-        id="testEmployeeName"
-        list="testEmployeeList"
-        placeholder="Type to find employee"
-        autocomplete="off"
-      />
+      <label for="testEmployeeName">${escHtml(rubric.rescuerLabel)}:</label>
+      <div class="test-rescuer-search-wrap">
+        <input
+          type="text"
+          class="test-header-select"
+          id="testEmployeeName"
+          name="poolpro-rescuer-search"
+          placeholder="Type to find employee"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="words"
+          spellcheck="false"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded="false"
+          aria-controls="testEmployeeResults"
+        />
+        <div class="test-rescuer-results" id="testEmployeeResults" role="listbox" aria-label="Employee matches"></div>
+      </div>
       <button type="button" class="test-rescuer-add-btn" id="testAddRescuerBtn">Add</button>
-      <datalist id="testEmployeeList">
-        ${buildEmployeeOptions()}
-      </datalist>
     </div>
     <div class="test-rescuer-list" id="testRescuerList"></div>
     <div class="test-header-field">
@@ -365,21 +373,39 @@ function renderRubric(rubric) {
   const empInput = document.getElementById('testEmployeeName');
   if (empInput) {
     const clearValidation = () => empInput.setCustomValidity('');
-    empInput.addEventListener('input', clearValidation);
-    empInput.addEventListener('change', () => {
+    empInput.addEventListener('input', () => {
       clearValidation();
-      const selectedEmp = findEmployeeByName(empInput.value);
-      if (selectedEmp) addRescuer(fullName(selectedEmp));
+      renderRescuerSearchResults(empInput.value);
     });
+    empInput.addEventListener('focus', () => renderRescuerSearchResults(empInput.value));
     empInput.addEventListener('keydown', (event) => {
       if (event.key !== 'Enter') return;
       event.preventDefault();
-      addRescuer(empInput.value);
+      const employee = findEmployeeByName(empInput.value);
+      addRescuer(employee ? fullName(employee) : empInput.value);
+      hideRescuerSearchResults();
     });
   }
   document.getElementById('testAddRescuerBtn')?.addEventListener('click', () => {
     addRescuer(document.getElementById('testEmployeeName')?.value || '');
+    hideRescuerSearchResults();
   });
+  const results = document.getElementById('testEmployeeResults');
+  results?.addEventListener('mousedown', (event) => event.preventDefault());
+  results?.addEventListener('click', (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const option = target?.closest('[data-rescuer-name]');
+    if (!option) return;
+    addRescuer(option.dataset.rescuerName || '');
+    hideRescuerSearchResults();
+  });
+  if (!rescuerOutsideClickBound) {
+    rescuerOutsideClickBound = true;
+    document.addEventListener('click', (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (!target?.closest('.test-rescuer-picker-field')) hideRescuerSearchResults();
+    });
+  }
 
   // Wire checkbox listeners for live score update
   container.querySelectorAll('.test-cb').forEach(cb => {
@@ -410,7 +436,7 @@ function buildSection(section, rubric) {
   const secRow = document.createElement('tr');
   secRow.className = 'test-section-header';
   const secTh = document.createElement('th');
-  secTh.colSpan = 3;
+  secTh.colSpan = 2;
   secTh.textContent = section.title;
   secRow.appendChild(secTh);
   thead.appendChild(secRow);
@@ -423,12 +449,8 @@ function buildSection(section, rubric) {
   const thCheck = document.createElement('th');
   thCheck.textContent = section.checkboxHeader || 'Correctly Demonstrated (X)';
   thCheck.style.width = '150px';
-  const thPts = document.createElement('th');
-  thPts.textContent = 'Points';
-  thPts.style.width = '52px';
   colRow.appendChild(thReq);
   colRow.appendChild(thCheck);
-  colRow.appendChild(thPts);
   thead.appendChild(colRow);
   table.appendChild(thead);
 
@@ -442,7 +464,7 @@ function buildSection(section, rubric) {
       const selTr = document.createElement('tr');
       selTr.className = 'test-scenario-header-row';
       const selTd = document.createElement('td');
-      selTd.colSpan = 3;
+      selTd.colSpan = 2;
       const radioLabel = document.createElement('label');
       radioLabel.className = 'test-scenario-radio-label';
       const radio = document.createElement('input');
@@ -512,12 +534,6 @@ function buildRow(row, scenarioIdx) {
     tdChecks.appendChild(cb);
   }
   tr.appendChild(tdChecks);
-
-  // Points cell
-  const tdPts = document.createElement('td');
-  tdPts.className = 'test-pts-cell';
-  tdPts.textContent = row.points;
-  tr.appendChild(tdPts);
 
   return tr;
 }
@@ -645,6 +661,83 @@ function syncRescuerEntry(input) {
   return null;
 }
 
+function getEmployeeMatches(query) {
+  const normalizedQuery = normalizeRescuerNameKey(query);
+  if (!normalizedQuery) return [];
+  return [...employeesData]
+    .filter((emp) => {
+      const haystack = [
+        fullName(emp),
+        emp?.email,
+        emp?.username,
+        emp?.id,
+        emp?.homePool,
+      ].filter(Boolean).map(normalizeRescuerNameKey);
+      return haystack.some((value) => value.includes(normalizedQuery));
+    })
+    .sort((a, b) => {
+      const aName = normalizeRescuerNameKey(fullName(a));
+      const bName = normalizeRescuerNameKey(fullName(b));
+      const aStarts = aName.startsWith(normalizedQuery) ? 0 : 1;
+      const bStarts = bName.startsWith(normalizedQuery) ? 0 : 1;
+      return aStarts - bStarts || fullName(a).localeCompare(fullName(b));
+    });
+}
+
+function renderRescuerSearchResults(query) {
+  const input = document.getElementById('testEmployeeName');
+  const panel = document.getElementById('testEmployeeResults');
+  if (!input || !panel) return;
+  const raw = String(query || '').trim();
+  panel.innerHTML = '';
+  if (!raw) {
+    hideRescuerSearchResults();
+    return;
+  }
+
+  const matches = getEmployeeMatches(raw).slice(0, 8);
+  const exact = findEmployeeByName(raw);
+  matches.forEach((emp) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'test-rescuer-result';
+    button.dataset.rescuerName = fullName(emp);
+    button.setAttribute('role', 'option');
+    button.innerHTML = `
+      <span class="test-rescuer-result-name">${escHtml(fullName(emp))}</span>
+      <span class="test-rescuer-result-meta">${escHtml([emp.email, emp.homePool].filter(Boolean).join(' - '))}</span>
+    `;
+    panel.appendChild(button);
+  });
+
+  if (!exact) {
+    const addButton = document.createElement('button');
+    addButton.type = 'button';
+    addButton.className = 'test-rescuer-result test-rescuer-result-new';
+    addButton.dataset.rescuerName = raw;
+    addButton.setAttribute('role', 'option');
+    addButton.innerHTML = `
+      <span class="test-rescuer-result-name">Add "${escHtml(raw)}"</span>
+      <span class="test-rescuer-result-meta">Unlisted rescuer</span>
+    `;
+    panel.appendChild(addButton);
+  }
+
+  const hasResults = panel.children.length > 0;
+  panel.classList.toggle('visible', hasResults);
+  input.setAttribute('aria-expanded', hasResults ? 'true' : 'false');
+}
+
+function hideRescuerSearchResults() {
+  const input = document.getElementById('testEmployeeName');
+  const panel = document.getElementById('testEmployeeResults');
+  if (panel) {
+    panel.classList.remove('visible');
+    panel.innerHTML = '';
+  }
+  if (input) input.setAttribute('aria-expanded', 'false');
+}
+
 function renumberRescuers() {
   document.querySelectorAll('#testRescuerList .test-rescuer-entry').forEach((row, index) => {
     const label = row.querySelector('label');
@@ -680,7 +773,6 @@ function addRescuer(rawName) {
   input.type = 'text';
   input.className = 'test-header-select test-rescuer-name-input';
   input.value = displayName;
-  input.setAttribute('list', 'testEmployeeList');
   input.autocomplete = 'off';
   input.addEventListener('change', () => syncRescuerEntry(input));
   input.addEventListener('input', () => input.setCustomValidity(''));

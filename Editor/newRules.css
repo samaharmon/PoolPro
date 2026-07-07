@@ -1419,3 +1419,16 @@ body.dark-mode .pool-rule-block .concernLevel {
     flex-direction: column;
   }
 }
+
+table thead,
+table thead tr {
+  background: var(--poolpro-accent-gradient, linear-gradient(90deg, #69140e, #202834)) !important;
+  opacity: 1 !important;
+}
+
+table thead th,
+table thead td {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #fff !important;
+}

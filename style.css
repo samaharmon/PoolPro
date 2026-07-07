@@ -7781,3 +7781,54 @@ body,
   opacity: 1;
   transform: translateY(0);
 }
+
+/* Keep dynamically populated controls from falling back to browser defaults. */
+select,
+input[list],
+.training-filter-select,
+.settings-field select,
+.settings-field input,
+.settings-field textarea {
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif !important;
+  border-radius: 0 !important;
+  max-width: 100%;
+}
+
+select,
+.training-filter-select,
+.settings-field select {
+  min-height: 40px;
+  border: 1px solid #ddd !important;
+  border-bottom: 2px solid #69140e !important;
+  background-color: #555 !important;
+  color: #fff !important;
+  padding: 8px 10px !important;
+  font-size: 14px !important;
+}
+
+select option,
+select optgroup {
+  background-color: #2e2e2e;
+  color: #fff;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+}
+
+select optgroup {
+  font-weight: 700;
+  color: #ff8080;
+}
+
+/* Table headers should read as one continuous band, not tiled per cell. */
+table thead,
+table thead tr {
+  background: var(--poolpro-accent-gradient, linear-gradient(90deg, #69140e, #202834)) !important;
+  opacity: 1 !important;
+}
+
+table thead th,
+table thead td {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #fff !important;
+}
