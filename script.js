@@ -8574,6 +8574,8 @@ let resourcePagePoolFilter = 'all';
 let resourceSettingsMarketFilter = 'all';
 let resourceSettingsPoolFilter = 'all';
 let resourcesDocumentsLoading = true;
+let resourcesDocumentsLoadError = '';
+let resourcesDocumentsLoadPromise = null;
 const resourceDataUrlMap = new Map();
 const dutyPhotoDataUrlMap = new Map();
 const chemControllerPhotoDataUrlMap = new Map();
@@ -8593,6 +8595,8 @@ const RESOURCE_STORAGE_UPLOAD_TIMEOUT_MS = 12000;
 const RESOURCE_STORAGE_URL_TIMEOUT_MS = 10000;
 const RESOURCE_STORAGE_BLOCKED_SESSION_KEY = 'poolproResourceStorageBlocked';
 const RESOURCE_USE_FIRESTORE_UPLOADS = true;
+const RESOURCE_DOCUMENTS_CACHE_KEY = 'poolproResourcesDocumentsCache';
+const RESOURCE_DOCUMENTS_LOAD_TIMEOUT_MS = 12000;
 const PDFJS_VERSION = '3.11.174';
 const PDFJS_SCRIPT_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.min.js`;
 const PDFJS_WORKER_URL = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
@@ -9084,7 +9088,7 @@ function renderResourcesPageTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  if (resourcesDocumentsLoading) {
+  if (resourcesDocumentsLoading && !resourcesData.length) {
     tbody.innerHTML = getResourceLoadingRowHtml(4);
     return;
   }
@@ -9095,7 +9099,9 @@ function renderResourcesPageTable() {
   });
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
+    tbody.innerHTML = resourcesDocumentsLoadError
+      ? `<tr><td colspan="4" style="text-align:center;font-style:italic;">${escapeHtml(resourcesDocumentsLoadError)}</td></tr>`
+      : '<tr><td colspan="4" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
     return;
   }
 
@@ -9111,7 +9117,7 @@ function renderResourcesSettingsTable() {
   if (!tbody) return;
   tbody.innerHTML = '';
 
-  if (resourcesDocumentsLoading) {
+  if (resourcesDocumentsLoading && !resourcesData.length) {
     tbody.innerHTML = getResourceLoadingRowHtml(5);
     const wrapper = tbody.closest('.table-scroll-wrap');
     if (wrapper) requestAnimationFrame(() => updateTableScrollShadow(wrapper));
@@ -9125,7 +9131,9 @@ function renderResourcesSettingsTable() {
   });
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
+    tbody.innerHTML = resourcesDocumentsLoadError
+      ? `<tr><td colspan="5" style="text-align:center;font-style:italic;">${escapeHtml(resourcesDocumentsLoadError)}</td></tr>`
+      : '<tr><td colspan="5" style="text-align:center;font-style:italic;">No resources found.</td></tr>';
     const wrapper = tbody.closest('.table-scroll-wrap');
     if (wrapper) requestAnimationFrame(() => updateTableScrollShadow(wrapper));
     syncResourceActionButtons();
@@ -10058,21 +10066,94 @@ async function deleteResourceBackingFile(item) {
   }
 }
 
-async function loadResourcesDocuments() {
-  resourcesDocumentsLoading = true;
-  renderResourcesPageTable();
-  renderResourcesSettingsTable();
+function withResourceLoadTimeout(promise) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      window.setTimeout(() => reject(new Error('Resource list request timed out.')), RESOURCE_DOCUMENTS_LOAD_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+function getCacheableResourceRecord(item = {}) {
+  const normalized = normalizeResourceRecord(item, item.id || '');
+  return {
+    id: normalized.id,
+    documentName: normalized.documentName,
+    uploadDate: normalized.uploadDate,
+    description: normalized.description,
+    market: normalized.market,
+    pool: normalized.pool,
+    fileUrl: normalized.fileUrl.startsWith('data:') ? '' : normalized.fileUrl,
+    fileName: normalized.fileName,
+    storagePath: normalized.storagePath,
+    storageType: normalized.storageType,
+    contentType: normalized.contentType,
+    fileSize: normalized.fileSize,
+    chunkCount: normalized.chunkCount,
+    dataUrlPrefix: normalized.dataUrlPrefix,
+    resourceType: normalized.resourceType,
+    sortDate: normalized.sortDate,
+  };
+}
+
+function cacheResourcesDocuments(records = resourcesData) {
+  const cacheable = (records || []).map(getCacheableResourceRecord).filter((item) => item.id || item.documentName);
+  if (!cacheable.length) return;
   try {
-    const snap = await getDocs(collection(db, 'resourcesDocuments'));
-    resourcesData = snap.docs.map((docSnap) => normalizeResourceRecord(docSnap.data(), docSnap.id));
+    localStorage.setItem(RESOURCE_DOCUMENTS_CACHE_KEY, JSON.stringify(cacheable));
   } catch (err) {
-    console.error('[PoolPro] Error loading resources:', err);
-    resourcesData = [];
-  } finally {
-    resourcesDocumentsLoading = false;
+    console.warn('[PoolPro] Resource cache could not be saved:', err);
   }
-  renderResourcesPageTable();
-  renderResourcesSettingsTable();
+}
+
+function loadCachedResourcesDocuments() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(RESOURCE_DOCUMENTS_CACHE_KEY) || '[]');
+    if (!Array.isArray(cached)) return [];
+    return cached
+      .map((item) => normalizeResourceRecord(item, item.id || ''))
+      .filter((item) => item.id || item.documentName);
+  } catch (_) {
+    return [];
+  }
+}
+
+async function loadResourcesDocuments({ force = false } = {}) {
+  if (resourcesDocumentsLoadPromise && !force) return resourcesDocumentsLoadPromise;
+
+  resourcesDocumentsLoadPromise = (async () => {
+    resourcesDocumentsLoading = true;
+    resourcesDocumentsLoadError = '';
+
+    const cached = loadCachedResourcesDocuments();
+    if (cached.length && !resourcesData.length) {
+      resourcesData = cached;
+    }
+
+    renderResourcesPageTable();
+    renderResourcesSettingsTable();
+    try {
+      const snap = await withResourceLoadTimeout(getDocs(collection(db, 'resourcesDocuments')));
+      resourcesData = snap.docs.map((docSnap) => normalizeResourceRecord(docSnap.data(), docSnap.id));
+      cacheResourcesDocuments(resourcesData);
+    } catch (err) {
+      console.error('[PoolPro] Error loading resources:', err);
+      resourcesDocumentsLoadError = cached.length
+        ? 'Unable to refresh resources right now. Showing saved resources when available.'
+        : 'Unable to load resources right now. Check the connection and refresh this page.';
+      if (!resourcesData.length) {
+        resourcesData = cached;
+      }
+    } finally {
+      resourcesDocumentsLoading = false;
+      renderResourcesPageTable();
+      renderResourcesSettingsTable();
+      resourcesDocumentsLoadPromise = null;
+    }
+  })();
+
+  return resourcesDocumentsLoadPromise;
 }
 
 function setupResourcesPageFilters() {
@@ -11305,6 +11386,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupResourcesSettingsUI();
   renderResourcesPageTable();
   renderResourcesSettingsTable();
+  loadResourcesDocuments().catch((err) => {
+    console.error('[PoolPro] Error loading resources during startup:', err);
+  });
 
   // Load pools from Firestore and populate all dropdowns
   listenPools(populatePoolSelects);
@@ -11319,7 +11403,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadEmployees();
   maybeShowCurrentPageLoginModal();
   ensureRolesPermissionsSettingsSection();
-  await loadResourcesDocuments();
   setupEmployeeManagement();
   setupEmployeeOverlay();
   await enforceAgreementForCurrentUser();
