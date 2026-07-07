@@ -449,6 +449,21 @@ body.page-exiting .home-header {
   box-sizing: border-box;
 }
 
+.form-group select option,
+.form-group select optgroup {
+  background-color: #ffffff;
+  color: #111111;
+  font-size: 18px;
+}
+
+.form-group select option:disabled {
+  color: #555555;
+}
+
+#homeCreatePoolInput.is-loading {
+  opacity: 0.85;
+}
+
 .home-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

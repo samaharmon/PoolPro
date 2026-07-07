@@ -32,6 +32,8 @@ const LIFEGUARD_SESSION_KEY = 'poolproLifeguardSession';
 const LIFEGUARD_SESSION_VERIFICATION_VERSION = 2;
 const SUPERVISOR_SESSION_VERIFICATION_VERSION = 1;
 const VERIFY_EMAIL_RESEND_MS = 60 * 1000;
+const HOME_POOL_OPTIONS_CACHE_KEY = 'poolproHomeFacilityOptions';
+const HOME_POOL_LOAD_WAIT_MS = 3500;
 const ALLOWED_PASSWORD_CHARS = /^[A-Za-z0-9!@#$%^&*()_\-+=[\]{};:'",.<>/?\\|`~]+$/;
 const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
 const DEVICE_VERIFIED_KEY = 'poolproDeviceVerified';
@@ -694,7 +696,7 @@ function configureProfileCompletionForm({ username, account, employee, target, a
     createEmailInput.disabled = true;
   }
   if (createPhoneInput) createPhoneInput.value = merged.phone || '';
-  if (createPoolInput) createPoolInput.value = merged.homePool || '';
+  setCreatePoolValue(merged.homePool || '');
   [createPasswordInput, createConfirmPasswordInput].forEach((input) => {
     input?.closest('.form-group')?.classList.add('hidden');
     if (input) {
@@ -974,6 +976,7 @@ function resetForms() {
   restoreCreateAccountMode();
   form?.reset();
   createAccountForm?.reset();
+  if (createPoolInput) delete createPoolInput.dataset.pendingValue;
   verifyForm?.reset();
   resetVerificationState();
   clearMessages();
@@ -1019,6 +1022,7 @@ function setModalView(view) {
   }
 
   if (view === 'create') {
+    populatePoolOptions({ loading: !homePoolOptions.length && !loadCachedHomePoolOptions().length });
     if (!profileCompletionContext) restoreCreateAccountMode();
     (profileCompletionContext ? createFirstNameInput : createUsernameInput)?.focus();
   }
@@ -1057,38 +1061,114 @@ function getDestinationPath() {
   return storedMode === 'supervisor' ? DESTINATIONS.supervisor : DESTINATIONS.chem;
 }
 
-function populatePoolOptions() {
+function normalizeHomePoolOption(raw) {
+  if (!raw) return null;
+  const name = (
+    typeof raw === 'string'
+      ? raw
+      : raw.name || raw.facilityName || raw.poolName || raw.id || ''
+  ).toString().trim();
+  if (!name) return null;
+  const rawMarkets = typeof raw === 'string'
+    ? []
+    : (Array.isArray(raw.markets) ? raw.markets : (raw.market ? [raw.market] : []));
+  const markets = rawMarkets
+    .map((market) => String(market || '').trim())
+    .filter(Boolean);
+  return { name, markets };
+}
+
+function mergeHomePoolOptions(...sources) {
+  const merged = new Map();
+  sources.flat().forEach((item) => {
+    const option = normalizeHomePoolOption(item);
+    if (!option) return;
+    const key = normalizeFacilityName(option.name);
+    const existing = merged.get(key);
+    if (!existing) {
+      merged.set(key, option);
+      return;
+    }
+    const existingMarkets = new Set(existing.markets || []);
+    option.markets.forEach((market) => existingMarkets.add(market));
+    existing.markets = Array.from(existingMarkets);
+  });
+  return Array.from(merged.values()).sort((a, b) => {
+    const marketA = (a.markets?.[0] || 'Other').localeCompare(b.markets?.[0] || 'Other');
+    return marketA || a.name.localeCompare(b.name);
+  });
+}
+
+function getEmployeeHomePoolOptions() {
+  return employeesCache
+    .map((employee) => normalizeHomePoolOption({ name: employee.homePool, markets: ['Other'] }))
+    .filter(Boolean);
+}
+
+function loadCachedHomePoolOptions() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(HOME_POOL_OPTIONS_CACHE_KEY) || '[]');
+    return Array.isArray(cached) ? cached.map(normalizeHomePoolOption).filter(Boolean) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function cacheHomePoolOptions(options) {
+  const normalized = mergeHomePoolOptions(options).filter((option) => option.name);
+  if (!normalized.length) return;
+  try {
+    localStorage.setItem(HOME_POOL_OPTIONS_CACHE_KEY, JSON.stringify(normalized));
+  } catch (_) {
+    // A missing local cache should never block account creation.
+  }
+}
+
+function setCreatePoolValue(value) {
   if (!createPoolInput) return;
-  const currentValue = createPoolInput.value;
+  const cleanValue = String(value || '').trim();
+  if (cleanValue) createPoolInput.dataset.pendingValue = cleanValue;
+  createPoolInput.value = cleanValue;
+}
+
+function populatePoolOptions({ loading = false } = {}) {
+  if (!createPoolInput) return;
+  const currentValue = createPoolInput.value || createPoolInput.dataset.pendingValue || '';
   createPoolInput.innerHTML = '<option value="">Select facility</option>';
 
-  const marketMap = {};
-  homePoolOptions.forEach((pool) => {
-    const market = pool.markets?.[0] || 'Other';
-    if (!marketMap[market]) marketMap[market] = [];
-    marketMap[market].push(pool.name);
-  });
-
-  const listedNames = new Set(homePoolOptions.map((pool) => pool.name));
-  const extraNames = employeesCache.map((employee) => employee.homePool).filter((name) => name && !listedNames.has(name));
-  if (extraNames.length) {
-    if (!marketMap.Other) marketMap.Other = [];
-    extraNames.forEach((name) => marketMap.Other.push(name));
+  const cachedOptions = homePoolOptions.length ? [] : loadCachedHomePoolOptions();
+  const facilityOptions = mergeHomePoolOptions(
+    homePoolOptions,
+    getEmployeeHomePoolOptions(),
+    cachedOptions
+  );
+  const hasCurrentValue = currentValue && facilityOptions.some((option) => option.name === currentValue);
+  if (currentValue && !hasCurrentValue) {
+    facilityOptions.push({ name: currentValue, markets: ['Current selection'] });
   }
 
-  Object.keys(marketMap).sort().forEach((market) => {
-    const group = document.createElement('optgroup');
-    group.label = market;
-    marketMap[market].sort().forEach((name) => {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = name;
-      group.appendChild(option);
-    });
-    createPoolInput.appendChild(group);
+  facilityOptions.forEach((pool) => {
+    const option = document.createElement('option');
+    option.value = pool.name;
+    option.textContent = pool.name;
+    option.dataset.market = pool.markets?.[0] || 'Other';
+    createPoolInput.appendChild(option);
   });
 
-  if (currentValue) createPoolInput.value = currentValue;
+  if (!facilityOptions.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = loading ? 'Loading facilities...' : 'Facilities could not load. Refresh and try again.';
+    option.disabled = true;
+    createPoolInput.appendChild(option);
+  }
+
+  createPoolInput.disabled = false;
+  createPoolInput.classList.toggle('is-loading', !!loading && !facilityOptions.length);
+  if (currentValue) {
+    createPoolInput.value = currentValue;
+    if (createPoolInput.value === currentValue) delete createPoolInput.dataset.pendingValue;
+  }
 }
 
 function persistLifeguardSession(employee, username, accessMode = 'lifeguard') {
@@ -1359,6 +1439,7 @@ async function loadEmployees() {
     const raw = Array.isArray(data.employees) ? data.employees : [];
     employeeDocSnapshot = raw;
     employeesCache = raw.map(normalizeEmployeeRecord);
+    populatePoolOptions();
   } catch (err) {
     console.error('Failed to load employees:', err);
   }
@@ -1376,10 +1457,18 @@ async function loadPools() {
         };
       })
       .filter((pool) => pool.name);
+    cacheHomePoolOptions(homePoolOptions);
     populatePoolOptions();
   } catch (err) {
     console.error('Failed to load pools:', err);
+    populatePoolOptions();
   }
+}
+
+function waitForHomeDataTimeout(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 async function getLifeguardAccount(usernameRaw) {
@@ -2512,7 +2601,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   wireHomeModalControls();
   setupMobileModalFocusGuards();
   const handledVerificationRedirect = await handleEmailVerificationRedirect();
-  await Promise.all([loadEmployees(), loadPools()]);
+  populatePoolOptions({ loading: true });
+  const homeDataLoad = Promise.allSettled([loadEmployees(), loadPools()]);
+  await Promise.race([homeDataLoad, waitForHomeDataTimeout(HOME_POOL_LOAD_WAIT_MS)]);
   populatePoolOptions();
 
   const pendingContext = loadPendingVerificationContext();
