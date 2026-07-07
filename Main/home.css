@@ -456,6 +456,14 @@ body.page-exiting .home-header {
   font-size: 18px;
 }
 
+.form-group select optgroup {
+  font-weight: 700;
+}
+
+.form-group select optgroup option {
+  font-weight: 400;
+}
+
 .form-group select option:disabled {
   color: #555555;
 }

@@ -1124,6 +1124,21 @@ function cacheHomePoolOptions(options) {
   }
 }
 
+function groupHomePoolOptionsByMarket(options) {
+  const groups = new Map();
+  options.forEach((pool) => {
+    const market = String(pool.markets?.[0] || 'Other').trim() || 'Other';
+    if (!groups.has(market)) groups.set(market, []);
+    groups.get(market).push(pool);
+  });
+  return Array.from(groups.entries())
+    .sort(([marketA], [marketB]) => marketA.localeCompare(marketB))
+    .map(([market, pools]) => ({
+      market,
+      pools: pools.sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+}
+
 function setCreatePoolValue(value) {
   if (!createPoolInput) return;
   const cleanValue = String(value || '').trim();
@@ -1147,12 +1162,17 @@ function populatePoolOptions({ loading = false } = {}) {
     facilityOptions.push({ name: currentValue, markets: ['Current selection'] });
   }
 
-  facilityOptions.forEach((pool) => {
-    const option = document.createElement('option');
-    option.value = pool.name;
-    option.textContent = pool.name;
-    option.dataset.market = pool.markets?.[0] || 'Other';
-    createPoolInput.appendChild(option);
+  groupHomePoolOptionsByMarket(facilityOptions).forEach(({ market, pools }) => {
+    const group = document.createElement('optgroup');
+    group.label = market;
+    pools.forEach((pool) => {
+      const option = document.createElement('option');
+      option.value = pool.name;
+      option.textContent = pool.name;
+      option.dataset.market = market;
+      group.appendChild(option);
+    });
+    createPoolInput.appendChild(group);
   });
 
   if (!facilityOptions.length) {
