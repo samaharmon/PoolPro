@@ -1,5 +1,6 @@
 // home.js – landing page login logic
 import { db, auth, doc, getDoc, setDoc, getDocs, collection, deleteDoc, query, orderBy, limit } from '../firebase.js';
+import { where } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
 import { requireUserAgreement } from '../agreement.js';
 import {
   createUserWithEmailAndPassword,
@@ -140,6 +141,7 @@ let employeesCache = [];
 let employeeDocSnapshot = [];
 let homePoolOptions = [];
 let homeRolesPermissionsData = HOME_ROLES_PERMISSIONS_EMPTY;
+let homeRolesPermissionsLoaded = false;
 let pendingVerification = null;
 let profileCompletionContext = null;
 let verifyCooldownUntil = 0;
@@ -433,9 +435,11 @@ async function maybeShowLifeguardCleanlinessReminder(accessMode, homePool) {
 }
 
 async function loadHomeRolesPermissions() {
+  if (homeRolesPermissionsLoaded) return homeRolesPermissionsData;
   try {
     const snap = await getDoc(doc(db, 'settings', ROLE_PERMISSIONS_DOC_ID));
     homeRolesPermissionsData = normalizeRolesPermissionsData(snap.exists() ? snap.data() : {});
+    homeRolesPermissionsLoaded = true;
   } catch (err) {
     console.error('Failed to load home roles and permissions:', err);
     homeRolesPermissionsData = normalizeRolesPermissionsData({});
@@ -1610,19 +1614,15 @@ async function findLifeguardAccountByEmail(email) {
   const normalizedEmail = (email || '').trim().toLowerCase();
   if (!normalizedEmail) return null;
 
-  const snap = await getDocs(collection(db, 'lifeguardAccounts'));
-  let match = null;
-  snap.forEach((docSnap) => {
-    if (match) return;
-    const account = docSnap.data() || {};
-    if (getAuthEmail(account) === normalizedEmail) {
-      match = {
-        username: normalizeUsername(account.username || docSnap.id),
-        ...account,
-      };
-    }
-  });
-  return match;
+  const col = collection(db, 'lifeguardAccounts');
+  const [authSnap, empSnap] = await Promise.all([
+    getDocs(query(col, where('authEmail', '==', normalizedEmail))),
+    getDocs(query(col, where('employeeEmail', '==', normalizedEmail))),
+  ]);
+  const hit = authSnap.docs[0] ?? empSnap.docs[0];
+  if (!hit) return null;
+  const account = hit.data() || {};
+  return { username: normalizeUsername(account.username || hit.id), ...account };
 }
 
 async function assignSignupRolePermissions(employeeRecord, role = 'lifeguard') {
@@ -2641,11 +2641,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   wireHomeModalControls();
   setupMobileModalFocusGuards();
   const handledVerificationRedirect = await handleEmailVerificationRedirect();
+
+  // Kick off data loads in the background — don't wait yet.
   populatePoolOptions({ loading: true });
   const homeDataLoad = Promise.allSettled([loadEmployees(), loadPools()]);
-  await Promise.race([homeDataLoad, waitForHomeDataTimeout(HOME_POOL_LOAD_WAIT_MS)]);
-  populatePoolOptions();
 
+  // Handle pending verification immediately; it only needs Firestore, not pool data.
   const pendingContext = loadPendingVerificationContext();
   if (pendingContext?.username && auth.currentUser) {
     const pendingMode = pendingContext.emailAuthMode || EMAIL_AUTH_MODE_VERIFY;
@@ -2674,6 +2675,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       accessMode: pendingAccessMode,
     });
   }
+
+  // Now wait for pool/employee data to populate the facility dropdown.
+  await Promise.race([homeDataLoad, waitForHomeDataTimeout(HOME_POOL_LOAD_WAIT_MS)]);
+  populatePoolOptions();
 
   if (handledVerificationRedirect) return;
 
