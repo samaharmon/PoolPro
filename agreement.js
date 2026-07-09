@@ -258,36 +258,29 @@ function ensureStyles() {
       inset: 0;
       z-index: 5000;
       display: none;
-      /* flex-start so overflow flows downward; margin:auto on dialog centers it when there's room */
-      align-items: flex-start;
-      justify-content: center;
       padding: 24px;
       background: rgba(8, 13, 18, 0.76);
       opacity: 0;
       transition: opacity 0.25s ease;
       backdrop-filter: blur(4px);
-      /* Allows scrolling on very small viewports so nothing is ever clipped */
       overflow-y: auto;
     }
     .agreement-modal.visible {
-      display: flex;
+      display: block;
       opacity: 1;
     }
     .agreement-dialog {
       width: min(980px, 100%);
-      /* dvh accounts for mobile browser chrome; calc fallback for older browsers */
-      max-height: min(92dvh, calc(100vh - 48px), 900px);
+      margin: 0 auto;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      overflow: visible;
       border: 1px solid rgba(255, 255, 255, 0.08);
       background: linear-gradient(180deg, rgba(24, 29, 36, 0.98), rgba(14, 18, 24, 0.98));
       color: #eef1f6;
       box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
       transform: translateY(16px);
       transition: transform 0.25s ease;
-      /* auto margins center the dialog when the modal has room */
-      margin: auto;
     }
     .agreement-modal.visible .agreement-dialog {
       transform: translateY(0);
@@ -322,17 +315,14 @@ function ensureStyles() {
     }
     .agreement-body {
       padding: 0;
-      overflow: hidden;
+      overflow: visible;
       display: flex;
       flex-direction: column;
-      min-height: 0;
-      flex: 1;
     }
     .agreement-scroll {
       padding: 22px 24px 0;
       overflow-y: auto;
-      min-height: 0;
-      flex: 1;
+      max-height: clamp(200px, 40vh, 500px);
       background:
         radial-gradient(circle at top left, rgba(105, 20, 14, 0.16), transparent 28%),
         linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
@@ -458,8 +448,8 @@ function ensureStyles() {
       .agreement-form-row {
         grid-template-columns: 1fr;
       }
-      .agreement-dialog {
-        max-height: min(95dvh, calc(100vh - 24px));
+      .agreement-scroll {
+        max-height: clamp(160px, 35vh, 380px);
       }
     }
   `;
@@ -564,7 +554,7 @@ function openModal(context, options) {
     : 'Use your normal full name as your electronic signature.';
   setAgreementMessage('');
 
-  modal.style.display = 'flex';
+  modal.style.display = 'block';
   requestAnimationFrame(() => modal.classList.add('visible'));
   document.body.classList.add('agreement-open');
   signatureInput.focus();
