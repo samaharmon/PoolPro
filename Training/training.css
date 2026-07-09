@@ -860,7 +860,7 @@ button:active,
   opacity: 1;
   visibility: visible;
   transform: translateY(0) scaleY(1);
-  max-height: min(80vh, 720px);
+  max-height: var(--poolpro-dropdown-max-height, min(calc(var(--poolpro-visual-vh, 100dvh) - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 720px));
   overflow-y: auto;
   pointer-events: auto;
   transition-delay: 0s;
@@ -903,12 +903,12 @@ button:active,
 
 .dropdown-item {
     display: block;
-    padding: 10px 15px;
+    padding: clamp(8px, 1.8vh, 10px) 15px;
     text-decoration: none;
     color: #fff;                  /* white text */
     background-color: #333;
     font-family: 'Franklin Gothic Medium', Arial, sans-serif;
-    font-size: 16px;
+    font-size: clamp(15px, 4.2vw, 16px);
     border-bottom: 1px solid #ccc;
     white-space: nowrap;
 }
@@ -4626,4 +4626,26 @@ table thead td {
   background-color: transparent !important;
   background-image: none !important;
   color: #fff !important;
+}
+
+:root {
+  --poolpro-visual-vh: 100dvh;
+  --poolpro-visual-vw: 100vw;
+  --poolpro-keyboard-inset: 0px;
+}
+
+#settingsModal,
+.modal,
+.attendance-modal,
+.training-modal {
+  max-height: var(--poolpro-visual-vh, 100dvh);
+}
+
+#settingsModal .settings-modal-content,
+.modal-content,
+.attendance-modal .modal-content.large,
+.training-modal-content {
+  max-height: calc(var(--poolpro-visual-vh, 100dvh) - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }

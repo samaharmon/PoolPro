@@ -404,7 +404,7 @@ body.dark-mode .page-content-title {
     opacity: 0;
     visibility: hidden;
     transform: translateY(-8px);
-    max-height: min(calc(100dvh - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 720px);
+    max-height: var(--poolpro-dropdown-max-height, min(calc(var(--poolpro-visual-vh, 100dvh) - 32px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)), 720px));
     overflow-y: auto;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
@@ -427,12 +427,12 @@ body.dark-mode .page-content-title {
 
 .dropdown-item {
     display: block;
-    padding: 10px 15px;
+    padding: clamp(8px, 1.8vh, 10px) 15px;
     text-decoration: none;
     color: #fff;
     background-color: #333;
     font-family: 'Franklin Gothic Medium', Arial, sans-serif;
-    font-size: 16px;
+    font-size: clamp(15px, 4.2vw, 16px);
     border-bottom: 1px solid #ccc;
     white-space: nowrap;
 }
@@ -4035,9 +4035,12 @@ textarea,
   inset: 0;
   z-index: 10000;
   display: none;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: 24px;
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+  height: var(--poolpro-visual-vh, 100dvh);
+  max-height: var(--poolpro-visual-vh, 100dvh);
+  overflow: hidden;
   background: rgba(8, 13, 18, 0.76);
   opacity: 0;
   transition: opacity 0.25s ease;
@@ -4050,7 +4053,8 @@ textarea,
 
 .resource-esign-dialog {
   width: min(1040px, 100%);
-  max-height: min(94vh, 920px);
+  height: min(920px, calc(var(--poolpro-visual-vh, 100dvh) - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)));
+  max-height: calc(var(--poolpro-visual-vh, 100dvh) - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -4110,6 +4114,9 @@ textarea,
   flex: 1 1 auto;
   display: grid;
   grid-template-rows: minmax(280px, 1fr) auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .resource-esign-pdf-scroll {
@@ -4131,6 +4138,7 @@ textarea,
 .resource-esign-page {
   width: fit-content;
   max-width: 100%;
+  box-sizing: border-box;
   padding: 10px;
   border: 2px solid rgba(255, 255, 255, 0.85);
   background: #fff;
@@ -4168,7 +4176,10 @@ textarea,
 
 .resource-esign-actions {
   flex: 0 0 auto;
-  padding: 18px 24px 24px;
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  padding: 18px 24px max(24px, calc(16px + env(safe-area-inset-bottom, 0px)));
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(10, 13, 18, 0.96);
 }
@@ -4280,6 +4291,7 @@ textarea,
 }
 
 .resource-esign-button-row .agreement-btn {
+  min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.08);
   color: #f3f6fb;
@@ -4595,11 +4607,13 @@ body.resource-pdf-fullscreen-open {
 
 @media (max-width: 720px) {
   .resource-esign-modal {
-    padding: 10px;
+    padding: max(6px, env(safe-area-inset-top, 0px)) max(6px, env(safe-area-inset-right, 0px)) max(6px, env(safe-area-inset-bottom, 0px)) max(6px, env(safe-area-inset-left, 0px));
   }
 
   .resource-esign-dialog {
-    max-height: 96vh;
+    width: 100%;
+    height: calc(var(--poolpro-visual-vh, 100dvh) - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: calc(var(--poolpro-visual-vh, 100dvh) - 12px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
 
   .resource-esign-header,
@@ -4610,10 +4624,55 @@ body.resource-pdf-fullscreen-open {
 
   .resource-esign-pdf-scroll {
     padding: 14px;
+    max-height: min(42dvh, calc(var(--poolpro-visual-vh, 100dvh) * 0.42));
   }
 
   .resource-esign-header h2 {
     font-size: 1.35rem;
+  }
+
+  .resource-esign-header {
+    padding-top: 16px;
+    padding-bottom: 14px;
+  }
+
+  .resource-esign-header p {
+    margin-top: 5px;
+  }
+
+  .resource-esign-body {
+    grid-template-rows: minmax(150px, auto) auto;
+  }
+
+  .resource-esign-actions {
+    padding-top: 14px;
+    padding-bottom: max(18px, calc(12px + env(safe-area-inset-bottom, 0px)));
+  }
+
+  .resource-esign-checkbox {
+    gap: 10px;
+    font-size: clamp(0.98rem, 4vw, 1.05rem);
+  }
+
+  .resource-esign-field {
+    margin-top: 12px;
+  }
+
+  .resource-esign-button-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-content: stretch;
+    gap: 10px;
+  }
+
+  .resource-esign-button-row .agreement-btn {
+    width: 100%;
+    padding: 12px 10px;
+    white-space: normal;
+  }
+
+  .resource-esign-message {
+    padding-bottom: max(0px, var(--poolpro-keyboard-inset, 0px));
   }
 
   .resource-pdf-fullscreen-header {
@@ -4652,6 +4711,33 @@ body.resource-pdf-fullscreen-open {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
+  }
+}
+
+@media (max-width: 420px), (max-height: 620px) {
+  .resource-esign-header h2 {
+    font-size: 1.12rem;
+  }
+
+  .resource-esign-header p,
+  .resource-esign-header .resource-esign-enlarge-note,
+  .resource-esign-hint,
+  .resource-esign-gate {
+    font-size: 0.84rem;
+  }
+
+  .resource-esign-pdf-scroll {
+    padding: 8px;
+    max-height: min(34dvh, calc(var(--poolpro-visual-vh, 100dvh) * 0.34));
+  }
+
+  .resource-esign-page {
+    padding: 4px;
+    border-width: 1px;
+  }
+
+  .resource-esign-account-name {
+    padding: 8px 10px;
   }
 }
 
@@ -7831,4 +7917,57 @@ table thead td {
   background-color: transparent !important;
   background-image: none !important;
   color: #fff !important;
+}
+
+/* Viewport-safe modal sizing for mobile Safari, keyboard views, and browser chrome changes. */
+:root {
+  --poolpro-visual-vh: 100dvh;
+  --poolpro-visual-vw: 100vw;
+  --poolpro-keyboard-inset: 0px;
+}
+
+#settingsModal {
+  height: calc(var(--poolpro-visual-vh, 100dvh) - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  max-height: calc(var(--poolpro-visual-vh, 100dvh) - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.modal,
+.feedback-modal,
+.poolpro-confirm-modal,
+.resource-pdf-fullscreen-modal,
+.resource-signees-modal,
+.dashboard-info-modal,
+.chem-controller-modal,
+#dutyFormModal.duty-report-modal,
+#desInspectionModal.duty-report-modal {
+  max-height: var(--poolpro-visual-vh, 100dvh);
+}
+
+.modal-content,
+.feedback-content,
+.poolpro-confirm-card,
+.resource-pdf-fullscreen-dialog,
+.resource-signees-dialog,
+.chem-controller-modal-card,
+.duty-report-modal-card {
+  max-height: calc(var(--poolpro-visual-vh, 100dvh) - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  #settingsModal {
+    height: calc(var(--poolpro-visual-vh, 100dvh) - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+    max-height: calc(var(--poolpro-visual-vh, 100dvh) - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .modal-content,
+  .feedback-content,
+  .poolpro-confirm-card,
+  .resource-pdf-fullscreen-dialog,
+  .resource-signees-dialog,
+  .chem-controller-modal-card,
+  .duty-report-modal-card {
+    max-height: calc(var(--poolpro-visual-vh, 100dvh) - 16px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
+  }
 }

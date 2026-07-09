@@ -93,6 +93,28 @@ const PAGE_LOADING_DELAY_MS = 320;
 let pageLoadingStartedAt = Date.now();
 let pageLoadingTimer = null;
 
+function updatePoolProViewportMetrics() {
+  const root = document.documentElement;
+  const visualViewport = window.visualViewport;
+  const viewportHeight = Math.max(320, Math.round(visualViewport?.height || window.innerHeight || root.clientHeight || 0));
+  const viewportWidth = Math.max(280, Math.round(visualViewport?.width || window.innerWidth || root.clientWidth || 0));
+  const keyboardInset = visualViewport
+    ? Math.max(0, Math.round((window.innerHeight || viewportHeight) - visualViewport.height - visualViewport.offsetTop))
+    : 0;
+  root.style.setProperty('--poolpro-visual-vh', `${viewportHeight}px`);
+  root.style.setProperty('--poolpro-visual-vw', `${viewportWidth}px`);
+  root.style.setProperty('--poolpro-keyboard-inset', `${keyboardInset}px`);
+
+  const openMenu = getOpenDropdownMenu?.();
+  if (openMenu) updateDropdownMenuBounds(openMenu);
+}
+
+updatePoolProViewportMetrics();
+window.addEventListener('resize', updatePoolProViewportMetrics, { passive: true });
+window.addEventListener('orientationchange', updatePoolProViewportMetrics, { passive: true });
+window.visualViewport?.addEventListener('resize', updatePoolProViewportMetrics, { passive: true });
+window.visualViewport?.addEventListener('scroll', updatePoolProViewportMetrics, { passive: true });
+
 function ensurePageLoadingOverlay() {
   if (!document.body || document.getElementById('poolproPageLoadingOverlay')) return null;
   const overlay = document.createElement('div');
@@ -140,6 +162,7 @@ function navigateWithPoolProFade(target, delay = 260) {
 
 function openPoolProModal(modal, display = 'flex') {
   if (!modal) return;
+  updatePoolProViewportMetrics();
   modal.style.display = display;
   modal.classList.remove('poolpro-modal-closing');
   requestAnimationFrame(() => modal.classList.add('visible'));
@@ -256,6 +279,20 @@ function closeDropdownMenus() {
   hideMenuContentOverlay();
 }
 
+function updateDropdownMenuBounds(menu) {
+  if (!menu) return;
+  const visualViewport = window.visualViewport;
+  const viewportHeight = Math.max(320, visualViewport?.height || window.innerHeight || document.documentElement.clientHeight || 0);
+  const footer = getMenuOverlayFooter();
+  const menuRect = menu.getBoundingClientRect();
+  const footerRect = footer?.getBoundingClientRect();
+  const footerVisible = footerRect && footerRect.top < viewportHeight && footerRect.bottom > 0;
+  const lowerLimit = footerVisible ? Math.max(96, footerRect.top - 10) : viewportHeight - 12;
+  const availableBelow = Math.floor(lowerLimit - menuRect.top);
+  const maxHeight = Math.max(180, Math.min(720, availableBelow, viewportHeight - 24));
+  menu.style.setProperty('--poolpro-dropdown-max-height', `${maxHeight}px`);
+}
+
 window.toggleMenu = function (btn) {
   const container = btn.closest('.menu-container');
   if (!container) return;
@@ -265,7 +302,10 @@ window.toggleMenu = function (btn) {
   // Close all open menus first
   document.querySelectorAll('.dropdown-menu.show').forEach(m => m.classList.remove('show'));
   document.querySelectorAll('.menu-btn.open').forEach(button => button.classList.remove('open'));
-  if (!isOpen) menu.classList.add('show');
+  if (!isOpen) {
+    menu.classList.add('show');
+    requestAnimationFrame(() => updateDropdownMenuBounds(menu));
+  }
   btn.classList.toggle('open', !isOpen);
   syncMenuContentOverlay(!isOpen ? btn : null);
 };
@@ -278,7 +318,11 @@ document.addEventListener('click', (e) => {
 });
 
 window.addEventListener('resize', () => {
-  if (getOpenDropdownMenu()) updateMenuContentOverlayBounds(getOpenDropdownMenu());
+  const openMenu = getOpenDropdownMenu();
+  if (openMenu) {
+    updateMenuContentOverlayBounds(openMenu);
+    updateDropdownMenuBounds(openMenu);
+  }
 }, { passive: true });
 
 window.addEventListener('scroll', () => {
@@ -9347,6 +9391,12 @@ function getResourceESignModal() {
   modal.querySelector('#resourceESignCancelBtn')?.addEventListener('click', closeResourceESignModal);
   modal.querySelector('#resourceESignForm')?.addEventListener('submit', handleResourceESignSubmit);
   modal.querySelector('#resourceESignSignatureInput')?.addEventListener('input', () => syncResourceESignSubmitState(modal));
+  modal.querySelector('#resourceESignSignatureInput')?.addEventListener('focus', () => {
+    updatePoolProViewportMetrics();
+    setTimeout(() => {
+      modal.querySelector('.resource-esign-button-row')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }, 260);
+  });
   modal.querySelector('#resourceESignCheckbox')?.addEventListener('change', () => syncResourceESignSubmitState(modal));
   modal.querySelector('#resourceESignPdfScroll')?.addEventListener('scroll', () => requestAnimationFrame(() => updateResourceESignScrollGate(modal)));
   modal.querySelector('#resourceESignPages')?.addEventListener('click', (event) => {
@@ -9665,7 +9715,13 @@ function syncResourceESignSubmitState(modal) {
   const signatureInput = modal?.querySelector('#resourceESignSignatureInput');
   const submitBtn = modal?.querySelector('#resourceESignSubmitBtn');
   if (!submitBtn || !checkbox || !signatureInput) return;
-  submitBtn.disabled = !(modal.dataset.scrollUnlocked === 'true' && checkbox.checked && signatureInput.value.trim());
+  const shouldEnable = modal.dataset.scrollUnlocked === 'true' && checkbox.checked && signatureInput.value.trim();
+  submitBtn.disabled = !shouldEnable;
+  if (shouldEnable && document.activeElement === signatureInput) {
+    requestAnimationFrame(() => {
+      modal.querySelector('.resource-esign-button-row')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+  }
 }
 
 function updateResourceESignScrollGate(modal) {
