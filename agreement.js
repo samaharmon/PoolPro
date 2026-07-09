@@ -258,13 +258,16 @@ function ensureStyles() {
       inset: 0;
       z-index: 5000;
       display: none;
-      align-items: center;
+      /* flex-start so overflow flows downward; margin:auto on dialog centers it when there's room */
+      align-items: flex-start;
       justify-content: center;
       padding: 24px;
       background: rgba(8, 13, 18, 0.76);
       opacity: 0;
       transition: opacity 0.25s ease;
       backdrop-filter: blur(4px);
+      /* Allows scrolling on very small viewports so nothing is ever clipped */
+      overflow-y: auto;
     }
     .agreement-modal.visible {
       display: flex;
@@ -272,7 +275,8 @@ function ensureStyles() {
     }
     .agreement-dialog {
       width: min(980px, 100%);
-      max-height: min(92vh, 900px);
+      /* dvh accounts for mobile browser chrome; calc fallback for older browsers */
+      max-height: min(92dvh, calc(100vh - 48px), 900px);
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -282,6 +286,8 @@ function ensureStyles() {
       box-shadow: 0 28px 70px rgba(0, 0, 0, 0.42);
       transform: translateY(16px);
       transition: transform 0.25s ease;
+      /* auto margins center the dialog when the modal has room */
+      margin: auto;
     }
     .agreement-modal.visible .agreement-dialog {
       transform: translateY(0);
@@ -350,6 +356,8 @@ function ensureStyles() {
       padding: 18px 24px 24px;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       background: rgba(10, 13, 18, 0.96);
+      /* Prevent the actions area from being squeezed out of view */
+      flex-shrink: 0;
     }
     .agreement-form-row {
       display: grid;
@@ -451,7 +459,7 @@ function ensureStyles() {
         grid-template-columns: 1fr;
       }
       .agreement-dialog {
-        max-height: 95vh;
+        max-height: min(95dvh, calc(100vh - 24px));
       }
     }
   `;
