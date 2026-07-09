@@ -117,3 +117,144 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Pool Area Signage section ---- */
+
+.inventory-signage-card {
+  padding-bottom: 4px;
+}
+
+.inventory-signage-subtitle {
+  padding: 0 16px;
+  margin: 12px 0 4px;
+}
+
+.inventory-photo-group {
+  padding: 16px 16px 20px;
+  border-top: 1px solid #444;
+}
+
+.inventory-photo-group-title {
+  margin: 0 0 6px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inventory-photo-required {
+  font-size: 12px;
+  font-weight: 400;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.inventory-photo-group-desc {
+  color: #d6d6d6;
+  font-size: 13.5px;
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+
+.inventory-photo-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.inventory-photo-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.inventory-upload-area {
+  width: 110px;
+  height: 110px;
+  border: 2px dashed #666;
+  border-radius: 8px;
+  background: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  position: relative;
+  transition: border-color 0.15s;
+}
+
+.inventory-upload-area:hover {
+  border-color: #aaa;
+}
+
+.inventory-upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  color: #888;
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
+  pointer-events: none;
+}
+
+.inventory-upload-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+
+.inventory-photo-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.inventory-photo-remove-btn {
+  background: none;
+  border: none;
+  color: #d44;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  text-decoration: underline;
+}
+
+.inventory-photo-remove-btn:hover {
+  color: #f66;
+}
+
+.inventory-add-photo-btn {
+  margin-top: 4px;
+  background: none;
+  border: 1px solid #666;
+  color: #d6d6d6;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.inventory-add-photo-btn:hover:not(:disabled) {
+  border-color: #aaa;
+  color: #fff;
+}
+
+.inventory-add-photo-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (max-width: 480px) {
+  .inventory-upload-area {
+    width: 90px;
+    height: 90px;
+  }
+}

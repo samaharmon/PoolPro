@@ -1,10 +1,17 @@
 import {
+  app,
   db,
   collection,
   doc,
   setDoc,
   serverTimestamp,
 } from '../firebase.js';
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
 
 const INVENTORY_STATUSES = ['High', 'Moderate', 'Low', 'Critically Low', 'Out'];
 const SUPPLY_SECTIONS = [
@@ -47,9 +54,37 @@ const SUPPLY_SECTIONS = [
   },
 ];
 
+const SIGNAGE_PHOTO_GROUPS = [
+  {
+    id: 'sigPoolRules',
+    category: 'poolRulesSign',
+    title: 'Pool Rules Sign',
+    description: 'Take a picture of the pool rules sign and ensure that ALL blanks are entirely filled out and clearly visible (not faded). The Pool Operator should be Capital City Aquatics, and the ID # should be 100548.',
+    min: 1,
+    max: 5,
+  },
+  {
+    id: 'sigShallowWater',
+    category: 'shallowWaterNoDiving',
+    title: 'Shallow Water, No Diving Signs',
+    description: 'Ensure that there are TWO shallow water signs and that they are bound to the fence (and unbroken).',
+    min: 2,
+    max: 5,
+  },
+  {
+    id: 'sigNoLifeguard',
+    category: 'noLifeguardOnDuty',
+    title: 'No Lifeguard On Duty, Swim At Your Own Risk Signs',
+    description: 'Ensure that there are TWO no lifeguard on duty signs and that they are bound to the fence (and unbroken).',
+    min: 2,
+    max: 5,
+  },
+];
+
 let poolsCache = [];
 let urgentRowCounter = 0;
 let weeklyCustomRowCounter = 0;
+const inventoryPhotoSlotCounters = {};
 
 const els = {
   formType: document.getElementById('inventoryFormType'),
@@ -71,6 +106,192 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ---- Signage photo slots ----
+
+function getInventorySlotCount(group) {
+  return group.querySelectorAll('.inventory-photo-slot').length;
+}
+
+function updateSignageAddBtn(groupId) {
+  const group = document.getElementById(groupId);
+  const btn = document.querySelector(`[data-add-for="${groupId}"]`);
+  if (!group || !btn) return;
+  const max = parseInt(group.dataset.max || '5', 10);
+  btn.disabled = getInventorySlotCount(group) >= max;
+}
+
+function addInventoryPhotoSlot(groupId) {
+  const group = document.getElementById(groupId);
+  if (!group) return;
+  const max = parseInt(group.dataset.max || '5', 10);
+  if (getInventorySlotCount(group) >= max) return;
+
+  inventoryPhotoSlotCounters[groupId] = (inventoryPhotoSlotCounters[groupId] || 0) + 1;
+  const idx = inventoryPhotoSlotCounters[groupId];
+  const inputId = `${groupId}_input${idx}`;
+
+  const slot = document.createElement('div');
+  slot.className = 'inventory-photo-slot';
+
+  const uploadArea = document.createElement('div');
+  uploadArea.className = 'inventory-upload-area';
+  uploadArea.addEventListener('click', () => fileInput.click());
+
+  const placeholder = document.createElement('div');
+  placeholder.className = 'inventory-upload-placeholder';
+  placeholder.innerHTML = '<span class="inventory-upload-icon">&#128247;</span><span>Tap to add</span>';
+
+  const preview = document.createElement('img');
+  preview.className = 'inventory-photo-preview';
+  preview.alt = 'Signage photo preview';
+  preview.style.display = 'none';
+
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+  fileInput.accept = 'image/*';
+  fileInput.id = inputId;
+  fileInput.style.display = 'none';
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    fileInput._selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      preview.src = ev.target.result;
+      preview.style.display = 'block';
+      placeholder.style.display = 'none';
+      removeBtn.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+    updateSignageAddBtn(groupId);
+  });
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'inventory-photo-remove-btn';
+  removeBtn.textContent = 'Remove';
+  removeBtn.style.display = 'none';
+  removeBtn.addEventListener('click', () => {
+    const min = parseInt(group.dataset.min || '0', 10);
+    if (getInventorySlotCount(group) > Math.max(min, 1)) {
+      slot.remove();
+    } else {
+      fileInput.value = '';
+      fileInput._selectedFile = null;
+      preview.src = '';
+      preview.style.display = 'none';
+      placeholder.style.display = 'flex';
+      removeBtn.style.display = 'none';
+    }
+    updateSignageAddBtn(groupId);
+  });
+
+  uploadArea.appendChild(placeholder);
+  uploadArea.appendChild(preview);
+  uploadArea.appendChild(fileInput);
+  slot.appendChild(uploadArea);
+  slot.appendChild(removeBtn);
+  group.appendChild(slot);
+  updateSignageAddBtn(groupId);
+}
+
+function initSignagePhotoGroups() {
+  SIGNAGE_PHOTO_GROUPS.forEach(({ id, min }) => {
+    inventoryPhotoSlotCounters[id] = 0;
+    const group = document.getElementById(id);
+    if (!group) return;
+    for (let i = 0; i < min; i++) addInventoryPhotoSlot(id);
+  });
+  document.querySelectorAll('[data-add-for]').forEach((btn) => {
+    btn.addEventListener('click', () => addInventoryPhotoSlot(btn.dataset.addFor));
+  });
+}
+
+function collectSignagePhotos() {
+  const photos = {};
+  SIGNAGE_PHOTO_GROUPS.forEach(({ id, category }) => {
+    const group = document.getElementById(id);
+    photos[category] = group
+      ? Array.from(group.querySelectorAll('input[type="file"]'))
+          .map((inp) => inp._selectedFile || inp.files?.[0] || null)
+          .filter(Boolean)
+      : [];
+  });
+  return photos;
+}
+
+function validateSignagePhotos(photos) {
+  for (const { category, title, min } of SIGNAGE_PHOTO_GROUPS) {
+    const count = (photos[category] || []).length;
+    if (count < min) {
+      const needed = min === 1 ? '1 photo' : `${min} photos`;
+      return `"${title}" requires ${needed} (${count} attached).`;
+    }
+  }
+  return '';
+}
+
+async function resizeSignageImage(file) {
+  return new Promise((resolve) => {
+    const MAX_SIDE = 1280;
+    const QUALITY = 0.72;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let { width: w, height: h } = img;
+      if (w > MAX_SIDE || h > MAX_SIDE) {
+        if (w > h) { h = Math.round((h * MAX_SIDE) / w); w = MAX_SIDE; }
+        else { w = Math.round((w * MAX_SIDE) / h); h = MAX_SIDE; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob((blob) => { URL.revokeObjectURL(url); resolve(blob || file); }, 'image/jpeg', QUALITY);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+async function uploadSignagePhoto({ submissionId, pool, category, file, index }) {
+  const blob = await resizeSignageImage(file);
+  const safeName = String(file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const photoId = `${Date.now()}_${index}_${safeName}`;
+  const path = `inventorySubmissionMedia/${submissionId}/signage/${category}/${photoId}`;
+  const ref = storageRef(getStorage(app), path);
+  await uploadBytes(ref, blob, { contentType: 'image/jpeg' });
+  const url = await getDownloadURL(ref);
+  return { url, name: file.name || safeName, storagePath: path, category, index };
+}
+
+function renderSignageSection() {
+  const section = document.createElement('section');
+  section.className = 'inventory-section-card inventory-chemical-card inventory-signage-card';
+  const header = document.createElement('h3');
+  header.textContent = 'Pool Area Signage';
+  const subtitle = document.createElement('p');
+  subtitle.className = 'inventory-directions inventory-signage-subtitle';
+  subtitle.textContent = 'Take images of all required signage.';
+  section.appendChild(header);
+  section.appendChild(subtitle);
+
+  SIGNAGE_PHOTO_GROUPS.forEach(({ id, category, title, description, min, max }) => {
+    const group = document.createElement('div');
+    group.className = 'inventory-photo-group';
+    group.innerHTML = `
+      <h4 class="inventory-photo-group-title">${escapeHtml(title)}
+        <span class="inventory-photo-required">${min === 1 ? '1 photo required' : `${min} photos required`}</span>
+      </h4>
+      <p class="inventory-photo-group-desc">${escapeHtml(description)}</p>
+      <div class="inventory-photo-slots" id="${id}" data-category="${category}" data-min="${min}" data-max="${max}"></div>
+      <button type="button" class="inventory-add-photo-btn" data-add-for="${id}">+ Add Photo</button>
+    `;
+    section.appendChild(group);
+  });
+  return section;
 }
 
 function getPoolName(pool) {
@@ -243,24 +464,28 @@ function renderChemicalInventoryFields() {
     </section>
   `;
   const cyaFields = els.chemical.querySelector('#chemicalCyaFields');
-  if (!cyaFields) return;
-  if (!pool) {
-    cyaFields.innerHTML = '<p class="inventory-directions">Select a facility above to see CYA fields.</p>';
-    return;
+  if (cyaFields) {
+    if (!pool) {
+      cyaFields.innerHTML = '<p class="inventory-directions">Select a facility above to see CYA fields.</p>';
+    } else {
+      const numPools = Math.max(1, parseInt(pool.numPools || pool.poolCount || pool.rules?.pools?.length || 1, 10));
+      const poolDefs = Array.isArray(pool.rules?.pools) ? pool.rules.pools : [];
+      for (let i = 1; i <= numPools; i += 1) {
+        const def = poolDefs[i - 1] || {};
+        const label = def.poolName ? `Pool ${i}: ${def.poolName}` : (numPools === 1 ? getPoolName(pool) : `Pool ${i}`);
+        const row = document.createElement('label');
+        row.className = 'inventory-chemical-cya-row';
+        row.innerHTML = `
+          <span>${escapeHtml(label)}</span>
+          <input type="number" min="0" max="100" class="inventory-chemical-cya-input" data-pool-index="${i}" placeholder="0-100">
+        `;
+        cyaFields.appendChild(row);
+      }
+    }
   }
-  const numPools = Math.max(1, parseInt(pool.numPools || pool.poolCount || pool.rules?.pools?.length || 1, 10));
-  const poolDefs = Array.isArray(pool.rules?.pools) ? pool.rules.pools : [];
-  for (let i = 1; i <= numPools; i += 1) {
-    const def = poolDefs[i - 1] || {};
-    const label = def.poolName ? `Pool ${i}: ${def.poolName}` : (numPools === 1 ? getPoolName(pool) : `Pool ${i}`);
-    const row = document.createElement('label');
-    row.className = 'inventory-chemical-cya-row';
-    row.innerHTML = `
-      <span>${escapeHtml(label)}</span>
-      <input type="number" min="0" max="100" class="inventory-chemical-cya-input" data-pool-index="${i}" placeholder="0-100">
-    `;
-    cyaFields.appendChild(row);
-  }
+
+  els.chemical.appendChild(renderSignageSection());
+  initSignagePhotoGroups();
 }
 
 function addWeeklyCustomRow() {
@@ -418,16 +643,39 @@ async function handleInventorySubmit(event) {
       const hasChemicalValue = ['bleachVolume', 'muriaticAcid', 'shockGranular'].some((key) => chemicalValues[key] !== null && chemicalValues[key] !== '') ||
         Object.keys(chemicalValues.cyaReadings || {}).length > 0;
       if (!hasChemicalValue) return setMessage('Enter at least one chemical inventory value.', true);
-      await setDoc(doc(collection(db, 'managerialReports')), {
+
+      const signagePhotos = collectSignagePhotos();
+      const signageError = validateSignagePhotos(signagePhotos);
+      if (signageError) return setMessage(signageError, true);
+
+      const submissionRef = doc(collection(db, 'managerialReports'));
+      const submissionId = submissionRef.id;
+      const poolName = getPoolName(pool);
+
+      setMessage('Uploading signage photos…');
+      const uploadedSignage = {};
+      for (const { category } of SIGNAGE_PHOTO_GROUPS) {
+        uploadedSignage[category] = [];
+        const files = signagePhotos[category] || [];
+        for (let i = 0; i < files.length; i++) {
+          uploadedSignage[category].push(
+            await uploadSignagePhoto({ submissionId, pool: poolName, category, file: files[i], index: i })
+          );
+        }
+      }
+      setMessage('Saving…');
+
+      await setDoc(submissionRef, {
         reportType: 'managerial',
         formType: 'chemicalInventory',
         timestamp: serverTimestamp(),
         submittedAtIso: new Date().toISOString(),
-        pool: getPoolName(pool),
-        facilityId: pool.id || getPoolName(pool),
-        facilityName: getPoolName(pool),
+        pool: poolName,
+        facilityId: pool.id || poolName,
+        facilityName: poolName,
         market: markets[0] || 'Other',
-        photos: { bleach: [] },
+        photos: { bleach: [], signage: uploadedSignage },
+        signagePhotos: uploadedSignage,
         ...chemicalValues,
         ...respondent,
         version: 2,
