@@ -6936,6 +6936,25 @@ function ensureEmployeeSettingsUi() {
       undoBtn.textContent = 'Undo';
       addRow.appendChild(undoBtn);
     }
+
+    if (!document.getElementById('employeeOverrideVerifyBtn')) {
+      const overrideBtn = document.createElement('button');
+      overrideBtn.type = 'button';
+      overrideBtn.id = 'employeeOverrideVerifyBtn';
+      overrideBtn.className = 'submit-btn button-shadow employee-action-btn hidden';
+      overrideBtn.textContent = 'Override Verification';
+      overrideBtn.addEventListener('click', () => {
+        const employee = employeesData[editingEmployeeIdx];
+        if (!employee) return;
+        const account = findLifeguardAccountForEmployee(normalizeEmployeeRecord(employee));
+        if (!account) {
+          alert('This employee has not created a PoolPro account yet.');
+          return;
+        }
+        openEmailVerificationOverrideModal(account);
+      });
+      addRow.appendChild(overrideBtn);
+    }
   }
 }
 
@@ -6967,11 +6986,23 @@ function syncEmployeeActionButtons() {
   const addBtn = document.getElementById('employeeAddBtn');
   const deleteBtn = document.getElementById('employeeDeleteBtn');
   const undoBtn = document.getElementById('employeeUndoBtn');
+  const overrideVerifyBtn = document.getElementById('employeeOverrideVerifyBtn');
   const hasSelectedRow = employeeTableEditable && editingEmployeeIdx >= 0 && !!employeesData[editingEmployeeIdx];
 
   if (addBtn) addBtn.textContent = hasSelectedRow ? 'Save' : 'Add';
   if (deleteBtn) deleteBtn.classList.toggle('hidden', !hasSelectedRow);
   if (undoBtn) undoBtn.classList.toggle('hidden', !employeeUndoState);
+
+  if (overrideVerifyBtn) {
+    let showOverride = false;
+    if (hasSelectedRow) {
+      const employee = employeesData[editingEmployeeIdx];
+      const account = employee ? findLifeguardAccountForEmployee(normalizeEmployeeRecord(employee)) : null;
+      const normalized = account ? normalizeLifeguardAccountRecord(account, account.username || '') : null;
+      showOverride = !!(normalized && !normalized.emailVerificationOverride);
+    }
+    overrideVerifyBtn.classList.toggle('hidden', !showOverride);
+  }
 }
 
 function selectEmployeeRow(sourceIndex) {
