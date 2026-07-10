@@ -3,6 +3,13 @@
   margin-top: 0;
 }
 
+.inventory-form-body.hidden,
+.inventory-supply-sections.hidden,
+.inventory-urgent-list.hidden,
+.inventory-chemical-fields.hidden {
+  display: none !important;
+}
+
 .inventory-form-choice {
   max-width: 420px;
 }
@@ -76,6 +83,10 @@
 .inventory-remove-item {
   min-height: 38px;
   padding: 8px 12px;
+}
+
+.inventory-inline-add-btn {
+  margin: 14px 16px 16px;
 }
 
 .inventory-chemical-grid,

@@ -1,19 +1,16 @@
 import {
-  app,
   db,
   collection,
   doc,
   setDoc,
   serverTimestamp,
+  writeBatch,
 } from '../firebase.js';
-import {
-  getStorage,
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-} from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js';
 
 const INVENTORY_STATUSES = ['High', 'Moderate', 'Low', 'Critically Low', 'Out'];
+const INVENTORY_FIRESTORE_PHOTO_SOURCE = 'firestoreDutyPhoto';
+const INVENTORY_FIRESTORE_CHUNK_SIZE = 650000;
+const INVENTORY_FIRESTORE_BATCH_SIZE = 120;
 const SUPPLY_SECTIONS = [
   {
     id: 'poolChemistry',
@@ -85,6 +82,7 @@ let poolsCache = [];
 let urgentRowCounter = 0;
 let weeklyCustomRowCounter = 0;
 const inventoryPhotoSlotCounters = {};
+let activeSignagePhotoGroups = SIGNAGE_PHOTO_GROUPS;
 
 const els = {
   formType: document.getElementById('inventoryFormType'),
@@ -110,8 +108,105 @@ function escapeHtml(value) {
 
 // ---- Signage photo slots ----
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetriableFirestoreUploadError(err) {
+  const text = `${err?.code || ''} ${err?.message || ''}`.toLowerCase();
+  return text.includes('resource-exhausted') ||
+    text.includes('unavailable') ||
+    text.includes('deadline-exceeded') ||
+    text.includes('maximum allowed queued writes') ||
+    text.includes('backoff');
+}
+
+async function commitInventoryUploadBatch(batch, label, attempt = 1) {
+  try {
+    await batch.commit();
+  } catch (err) {
+    if (attempt >= 4 || !isRetriableFirestoreUploadError(err)) throw err;
+    await wait(650 * attempt);
+    await commitInventoryUploadBatch(batch, label, attempt + 1);
+  }
+}
+
+function readBlobAsDataURL(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('Unable to read image.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function getInventorySlotCount(group) {
   return group.querySelectorAll('.inventory-photo-slot').length;
+}
+
+function getInventorySlotFile(slot) {
+  const input = slot?.querySelector?.('input[type="file"]');
+  return input?._selectedFile || input?.files?.[0] || null;
+}
+
+function setInventoryPhotoSlotFile(slot, file) {
+  const fileInput = slot?.querySelector?.('input[type="file"]');
+  const preview = slot?.querySelector?.('.inventory-photo-preview');
+  const placeholder = slot?.querySelector?.('.inventory-upload-placeholder');
+  const removeBtn = slot?.querySelector?.('.inventory-photo-remove-btn');
+  if (!slot || !fileInput || !file) return;
+
+  fileInput._selectedFile = file;
+  try {
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    fileInput.files = transfer.files;
+  } catch (_) {
+    /* Some mobile browsers do not allow programmatic FileList replacement. */
+  }
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    if (preview) {
+      preview.src = ev.target.result;
+      preview.style.display = 'block';
+    }
+    if (placeholder) placeholder.style.display = 'none';
+    if (removeBtn) removeBtn.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function getAvailableInventorySlot(groupId, preferredSlot = null) {
+  const group = document.getElementById(groupId);
+  if (!group) return null;
+  if (preferredSlot && preferredSlot.closest('.inventory-photo-slots') === group && !getInventorySlotFile(preferredSlot)) {
+    return preferredSlot;
+  }
+  const emptySlot = Array.from(group.querySelectorAll('.inventory-photo-slot'))
+    .find((slot) => !getInventorySlotFile(slot));
+  if (emptySlot) return emptySlot;
+
+  const max = parseInt(group.dataset.max || '5', 10);
+  if (getInventorySlotCount(group) >= max) return null;
+  return addInventoryPhotoSlot(groupId);
+}
+
+function addFilesToInventoryPhotoGroup(groupId, preferredSlot, files) {
+  const group = document.getElementById(groupId);
+  if (!group || !files?.length) return;
+  let added = 0;
+  files.forEach((file) => {
+    const slot = getAvailableInventorySlot(groupId, added === 0 ? preferredSlot : null);
+    if (!slot) return;
+    setInventoryPhotoSlotFile(slot, file);
+    added += 1;
+  });
+  updateSignageAddBtn(groupId);
+  if (added < files.length) {
+    const max = parseInt(group.dataset.max || '5', 10);
+    setMessage(`Only ${max} photos can be attached to this item.`, true);
+  }
 }
 
 function updateSignageAddBtn(groupId) {
@@ -124,9 +219,9 @@ function updateSignageAddBtn(groupId) {
 
 function addInventoryPhotoSlot(groupId) {
   const group = document.getElementById(groupId);
-  if (!group) return;
+  if (!group) return null;
   const max = parseInt(group.dataset.max || '5', 10);
-  if (getInventorySlotCount(group) >= max) return;
+  if (getInventorySlotCount(group) >= max) return null;
 
   inventoryPhotoSlotCounters[groupId] = (inventoryPhotoSlotCounters[groupId] || 0) + 1;
   const idx = inventoryPhotoSlotCounters[groupId];
@@ -151,21 +246,13 @@ function addInventoryPhotoSlot(groupId) {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'image/*';
+  fileInput.multiple = true;
   fileInput.id = inputId;
   fileInput.style.display = 'none';
   fileInput.addEventListener('change', () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    fileInput._selectedFile = file;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      preview.src = ev.target.result;
-      preview.style.display = 'block';
-      placeholder.style.display = 'none';
-      removeBtn.style.display = 'block';
-    };
-    reader.readAsDataURL(file);
-    updateSignageAddBtn(groupId);
+    const files = Array.from(fileInput.files || []);
+    if (!files.length) return;
+    addFilesToInventoryPhotoGroup(groupId, slot, files);
   });
 
   const removeBtn = document.createElement('button');
@@ -195,10 +282,11 @@ function addInventoryPhotoSlot(groupId) {
   slot.appendChild(removeBtn);
   group.appendChild(slot);
   updateSignageAddBtn(groupId);
+  return slot;
 }
 
 function initSignagePhotoGroups() {
-  SIGNAGE_PHOTO_GROUPS.forEach(({ id, min }) => {
+  activeSignagePhotoGroups.forEach(({ id, min }) => {
     inventoryPhotoSlotCounters[id] = 0;
     const group = document.getElementById(id);
     if (!group) return;
@@ -211,7 +299,7 @@ function initSignagePhotoGroups() {
 
 function collectSignagePhotos() {
   const photos = {};
-  SIGNAGE_PHOTO_GROUPS.forEach(({ id, category }) => {
+  activeSignagePhotoGroups.forEach(({ id, category }) => {
     const group = document.getElementById(id);
     photos[category] = group
       ? Array.from(group.querySelectorAll('input[type="file"]'))
@@ -223,7 +311,7 @@ function collectSignagePhotos() {
 }
 
 function validateSignagePhotos(photos) {
-  for (const { category, title, min } of SIGNAGE_PHOTO_GROUPS) {
+  for (const { category, title, min } of activeSignagePhotoGroups) {
     const count = (photos[category] || []).length;
     if (count < min) {
       const needed = min === 1 ? '1 photo' : `${min} photos`;
@@ -259,15 +347,67 @@ async function resizeSignageImage(file) {
 async function uploadSignagePhoto({ submissionId, pool, category, file, index }) {
   const blob = await resizeSignageImage(file);
   const safeName = String(file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
-  const photoId = `${Date.now()}_${index}_${safeName}`;
-  const path = `inventorySubmissionMedia/${submissionId}/signage/${category}/${photoId}`;
-  const ref = storageRef(getStorage(app), path);
-  await uploadBytes(ref, blob, { contentType: 'image/jpeg' });
-  const url = await getDownloadURL(ref);
-  return { url, name: file.name || safeName, storagePath: path, category, index };
+  const uniqueId = window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const photoId = `${Date.now()}_${category}_${index}_${uniqueId}_${safeName}`;
+  const dataUrl = await readBlobAsDataURL(blob);
+  const [prefix, encoded = ''] = String(dataUrl || '').split(',');
+  if (!encoded) throw new Error(`Unable to encode ${file.name || 'photo'} for upload.`);
+
+  const groupMeta = activeSignagePhotoGroups.find((group) => group.category === category) || {};
+  const chunks = [];
+  for (let i = 0; i < encoded.length; i += INVENTORY_FIRESTORE_CHUNK_SIZE) {
+    chunks.push(encoded.slice(i, i + INVENTORY_FIRESTORE_CHUNK_SIZE));
+  }
+
+  await setDoc(doc(db, 'dutySubmissionMedia', submissionId, 'photos', photoId), {
+    submissionId,
+    pool,
+    category,
+    baseCategory: groupMeta.baseCategory || category,
+    poolLabel: groupMeta.poolLabel || '',
+    groupTitle: groupMeta.title || category,
+    index,
+    fileName: file.name || safeName,
+    contentType: blob.type || file.type || 'image/jpeg',
+    chunkCount: chunks.length,
+    dataUrlPrefix: prefix,
+    storedAt: serverTimestamp(),
+  });
+
+  for (let i = 0; i < chunks.length; i += INVENTORY_FIRESTORE_BATCH_SIZE) {
+    const batch = writeBatch(db);
+    chunks.slice(i, i + INVENTORY_FIRESTORE_BATCH_SIZE).forEach((chunk, offset) => {
+      const chunkIndex = i + offset;
+      const chunkId = String(chunkIndex).padStart(4, '0');
+      batch.set(doc(db, 'dutySubmissionMedia', submissionId, 'photos', photoId, 'chunks', chunkId), {
+        index: chunkIndex,
+        data: chunk,
+      });
+    });
+    await commitInventoryUploadBatch(batch, `${photoId} chunks ${i + 1}-${Math.min(i + INVENTORY_FIRESTORE_BATCH_SIZE, chunks.length)}`);
+  }
+
+  return {
+    index,
+    url: `${INVENTORY_FIRESTORE_PHOTO_SOURCE}:${submissionId}:${photoId}`,
+    name: file.name || safeName,
+    storagePath: '',
+    source: INVENTORY_FIRESTORE_PHOTO_SOURCE,
+    category,
+    baseCategory: groupMeta.baseCategory || category,
+    poolLabel: groupMeta.poolLabel || '',
+    groupTitle: groupMeta.title || category,
+    contentType: blob.type || file.type || 'image/jpeg',
+    dataUrlPrefix: prefix,
+    chunkCount: chunks.length,
+    photoId,
+    submissionId,
+  };
 }
 
 function renderSignageSection() {
+  const pool = getSelectedPool();
+  activeSignagePhotoGroups = getInventorySignageGroups(pool);
   const section = document.createElement('section');
   section.className = 'inventory-section-card inventory-chemical-card inventory-signage-card';
   const header = document.createElement('h3');
@@ -278,7 +418,7 @@ function renderSignageSection() {
   section.appendChild(header);
   section.appendChild(subtitle);
 
-  SIGNAGE_PHOTO_GROUPS.forEach(({ id, category, title, description, min, max }) => {
+  activeSignagePhotoGroups.forEach(({ id, category, title, description, min, max }) => {
     const group = document.createElement('div');
     group.className = 'inventory-photo-group';
     group.innerHTML = `
@@ -314,6 +454,48 @@ function getSupplySetting(pool, itemId) {
 function getSelectedPool() {
   const id = els.facility?.value || '';
   return poolsCache.find((pool) => pool.id === id || getPoolName(pool) === id) || null;
+}
+
+function getChemicalPoolDefinitions(pool) {
+  const rulesPools = Array.isArray(pool?.rules?.pools) ? pool.rules.pools : [];
+  const counts = [
+    Number(pool?.numPools),
+    Number(pool?.poolCount),
+    rulesPools.length,
+  ].filter((value) => Number.isFinite(value) && value > 0);
+  const facilityName = getPoolName(pool);
+  const minimumCount = /\bforest\s+lake\b/i.test(facilityName) ? 2 : 1;
+  const count = Math.max(minimumCount, ...counts);
+  return Array.from({ length: count }, (_, index) => {
+    const def = rulesPools[index] || {};
+    const customName = (def.poolName || def.name || '').toString().trim();
+    const label = customName ? `Pool ${index + 1}: ${customName}` : (count === 1 ? facilityName : `Pool ${index + 1}`);
+    return {
+      index: index + 1,
+      key: `pool${index + 1}`,
+      label,
+      rawName: customName,
+    };
+  });
+}
+
+function isForestLakeFacility(pool) {
+  return /\bforest\s+lake\b/i.test(getPoolName(pool));
+}
+
+function getInventorySignageGroups(pool) {
+  const poolDefs = getChemicalPoolDefinitions(pool);
+  if (!isForestLakeFacility(pool) || poolDefs.length < 2) {
+    return SIGNAGE_PHOTO_GROUPS.map((group) => ({ ...group, baseCategory: group.category }));
+  }
+  return poolDefs.flatMap((poolDef) => SIGNAGE_PHOTO_GROUPS.map((group) => ({
+    ...group,
+    id: `${group.id}_${poolDef.key}`,
+    category: `${poolDef.key}_${group.category}`,
+    baseCategory: group.category,
+    poolLabel: poolDef.label,
+    title: `${poolDef.label} - ${group.title}`,
+  })));
 }
 
 function setMessage(text, isError = false) {
@@ -395,8 +577,13 @@ function renderWeeklyFields() {
   });
   const customCard = document.createElement('section');
   customCard.className = 'inventory-section-card inventory-custom-section';
-  customCard.innerHTML = '<h3>Additional Items</h3><div class="inventory-custom-list" id="weeklyCustomItems"></div>';
+  customCard.innerHTML = `
+    <h3>Additional Items</h3>
+    <div class="inventory-custom-list" id="weeklyCustomItems"></div>
+    <button type="button" class="editAndSave inventory-inline-add-btn" id="weeklyAddCustomItemBtn">+ Add Additional Item</button>
+  `;
   els.weekly.appendChild(customCard);
+  customCard.querySelector('#weeklyAddCustomItemBtn')?.addEventListener('click', addWeeklyCustomRow);
 }
 
 function createSupplyOptions(pool = getSelectedPool()) {
@@ -411,6 +598,7 @@ function createSupplyOptions(pool = getSelectedPool()) {
 
 function addUrgentRow(value = '') {
   if (!els.urgent) return;
+  const list = document.getElementById('urgentInventoryRows') || els.urgent;
   urgentRowCounter += 1;
   const row = document.createElement('div');
   row.className = 'inventory-urgent-row';
@@ -427,13 +615,21 @@ function addUrgentRow(value = '') {
   row.querySelector('.inventory-remove-item')?.addEventListener('click', () => {
     row.remove();
   });
-  els.urgent.appendChild(row);
+  list.appendChild(row);
 }
 
 function renderUrgentFields() {
   if (!els.urgent) return;
-  els.urgent.innerHTML = '';
   urgentRowCounter = 0;
+  els.urgent.innerHTML = `
+    <section class="inventory-section-card inventory-urgent-section">
+      <h3>Urgent Items</h3>
+      <div id="urgentInventoryRows"></div>
+      <button type="button" class="editAndSave inventory-inline-add-btn" id="urgentAddItemBtn">+ Add Urgent Item</button>
+    </section>
+  `;
+  els.urgent.querySelector('#urgentAddItemBtn')?.addEventListener('click', () => addUrgentRow());
+  addUrgentRow();
 }
 
 function renderChemicalInventoryFields() {
@@ -468,19 +664,16 @@ function renderChemicalInventoryFields() {
     if (!pool) {
       cyaFields.innerHTML = '<p class="inventory-directions">Select a facility above to see CYA fields.</p>';
     } else {
-      const numPools = Math.max(1, parseInt(pool.numPools || pool.poolCount || pool.rules?.pools?.length || 1, 10));
-      const poolDefs = Array.isArray(pool.rules?.pools) ? pool.rules.pools : [];
-      for (let i = 1; i <= numPools; i += 1) {
-        const def = poolDefs[i - 1] || {};
-        const label = def.poolName ? `Pool ${i}: ${def.poolName}` : (numPools === 1 ? getPoolName(pool) : `Pool ${i}`);
+      const poolDefs = getChemicalPoolDefinitions(pool);
+      poolDefs.forEach((poolDef) => {
         const row = document.createElement('label');
         row.className = 'inventory-chemical-cya-row';
         row.innerHTML = `
-          <span>${escapeHtml(label)}</span>
-          <input type="number" min="0" max="100" class="inventory-chemical-cya-input" data-pool-index="${i}" placeholder="0-100">
+          <span>${escapeHtml(poolDef.label)}</span>
+          <input type="number" min="0" max="100" class="inventory-chemical-cya-input" data-pool-key="${escapeHtml(poolDef.key)}" data-pool-label="${escapeHtml(poolDef.label)}" placeholder="0-100">
         `;
         cyaFields.appendChild(row);
-      }
+      });
     }
   }
 
@@ -610,9 +803,12 @@ function collectUrgentItems(pool) {
 
 function collectChemicalInventoryValues() {
   const cyaReadings = {};
+  const cyaReadingLabels = {};
   document.querySelectorAll('.inventory-chemical-cya-input').forEach((input) => {
     if (input.value !== '') {
-      cyaReadings[`pool${input.dataset.poolIndex}`] = parseFloat(input.value);
+      const key = input.dataset.poolKey || `pool${input.dataset.poolIndex || Object.keys(cyaReadings).length + 1}`;
+      cyaReadings[key] = parseFloat(input.value);
+      cyaReadingLabels[key] = input.dataset.poolLabel || key;
     }
   });
   return {
@@ -620,6 +816,7 @@ function collectChemicalInventoryValues() {
     muriaticAcid: document.getElementById('chemicalMuriaticAcid')?.value || null,
     shockGranular: document.getElementById('chemicalShockGranular')?.value || null,
     cyaReadings,
+    cyaReadingLabels,
   };
 }
 
@@ -654,7 +851,7 @@ async function handleInventorySubmit(event) {
 
       setMessage('Uploading signage photos…');
       const uploadedSignage = {};
-      for (const { category } of SIGNAGE_PHOTO_GROUPS) {
+      for (const { category } of activeSignagePhotoGroups) {
         uploadedSignage[category] = [];
         const files = signagePhotos[category] || [];
         for (let i = 0; i < files.length; i++) {

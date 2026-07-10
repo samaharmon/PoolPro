@@ -13479,15 +13479,27 @@ function openDutyFormModal(sub) {
   };
 
   const photos = sub.photos || {};
+  const signagePhotos = photos.signage || sub.signagePhotos || {};
+  const signagePhotoSectionsHtml = Object.entries(signagePhotos)
+    .filter(([, list]) => Array.isArray(list) && list.length)
+    .map(([category, list]) => {
+      const first = list[0] || {};
+      const label = first.groupTitle || category
+        .replace(/^pool\d+_/, '')
+        .replace(/([A-Z])/g, ' $1')
+        .replace(/^./, (char) => char.toUpperCase());
+      return photoSectionHtml(label, list);
+    }).join('');
+  const hasSignagePhotos = !!signagePhotoSectionsHtml;
   const hasValue = (value) => value !== null && value !== undefined && value !== '';
   const hasManagerData = hasValue(sub.bleachVolume) || hasValue(sub.muriaticAcid) ||
     hasValue(sub.shockGranular) || (sub.cyaReadings && Object.keys(sub.cyaReadings).length > 0) ||
-    photos.bleach?.length;
+    photos.bleach?.length || hasSignagePhotos;
 
   let cyaHtml = '';
   if (sub.cyaReadings && Object.keys(sub.cyaReadings).length) {
     const rows = Object.entries(sub.cyaReadings).map(([k, v]) => {
-      const label = k.replace('pool', 'Pool ');
+      const label = sub.cyaReadingLabels?.[k] || k.replace(/^pool(\d+)$/i, 'Pool $1').replace('pool', 'Pool ');
       return dutyScaleHtml(`${label} CYA`, v, '', 'cya');
     }).join('');
     cyaHtml = `<div class="duty-scale-group"><h4>CYA Levels</h4>${rows}</div>`;
@@ -13522,6 +13534,7 @@ function openDutyFormModal(sub) {
         <section class="duty-report-manager-panel">
           <h3>${esc(managerPanelTitle)}</h3>
           ${photoSectionHtml('Bleach Barrels', photos.bleach)}
+          ${signagePhotoSectionsHtml}
           ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
           ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}
           ${dutyScaleHtml('Shock / Granular', sub.shockGranular, '%', 'linear')}
