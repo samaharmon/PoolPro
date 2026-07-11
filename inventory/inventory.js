@@ -293,7 +293,22 @@ function initSignagePhotoGroups() {
     for (let i = 0; i < min; i++) addInventoryPhotoSlot(id);
   });
   document.querySelectorAll('[data-add-for]').forEach((btn) => {
-    btn.addEventListener('click', () => addInventoryPhotoSlot(btn.dataset.addFor));
+    btn.addEventListener('click', () => {
+      const groupId = btn.dataset.addFor;
+      const group = document.getElementById(groupId);
+      if (!group) return;
+      const max = parseInt(group.dataset.max || '5', 10);
+      if (getInventorySlotCount(group) >= max) return;
+      const tempInput = document.createElement('input');
+      tempInput.type = 'file';
+      tempInput.accept = 'image/*';
+      tempInput.multiple = true;
+      tempInput.addEventListener('change', () => {
+        const files = Array.from(tempInput.files || []);
+        if (files.length) addFilesToInventoryPhotoGroup(groupId, null, files);
+      });
+      tempInput.click();
+    });
   });
 }
 
@@ -549,6 +564,7 @@ function renderWeeklyFields() {
   if (!els.weekly) return;
   els.weekly.innerHTML = '';
   weeklyCustomRowCounter = 0;
+  els.weekly.appendChild(renderSignageSection());
   SUPPLY_SECTIONS.forEach((section) => {
     const enabledItems = section.items.filter((item) => !pool || getSupplySetting(pool, item.id).enabled);
     if (!enabledItems.length) return;
@@ -584,6 +600,7 @@ function renderWeeklyFields() {
   `;
   els.weekly.appendChild(customCard);
   customCard.querySelector('#weeklyAddCustomItemBtn')?.addEventListener('click', addWeeklyCustomRow);
+  initSignagePhotoGroups();
 }
 
 function createSupplyOptions(pool = getSelectedPool()) {
@@ -677,8 +694,6 @@ function renderChemicalInventoryFields() {
     }
   }
 
-  els.chemical.appendChild(renderSignageSection());
-  initSignagePhotoGroups();
 }
 
 function addWeeklyCustomRow() {
@@ -718,7 +733,7 @@ function syncFormType() {
     els.directions.textContent = type === 'urgent'
       ? 'Use this form to indicate any items that are critically low in stock and will run out before the next inventory form is completed (Thursdays).'
       : type === 'weekly'
-        ? 'Fill out this form to indicate the supply level of each item needed to run your pool.'
+        ? 'Take images of all required signage, then fill out the supply level of each item needed to run your pool.'
       : type === 'chemical'
         ? 'Record chemical inventory log values for the selected facility.'
         : '';
@@ -841,11 +856,48 @@ async function handleInventorySubmit(event) {
         Object.keys(chemicalValues.cyaReadings || {}).length > 0;
       if (!hasChemicalValue) return setMessage('Enter at least one chemical inventory value.', true);
 
+      const poolName = getPoolName(pool);
+      setMessage('Saving…');
+      await setDoc(doc(collection(db, 'managerialReports')), {
+        reportType: 'managerial',
+        formType: 'chemicalInventory',
+        timestamp: serverTimestamp(),
+        submittedAtIso: new Date().toISOString(),
+        pool: poolName,
+        facilityId: pool.id || poolName,
+        facilityName: poolName,
+        market: markets[0] || 'Other',
+        ...chemicalValues,
+        ...respondent,
+        version: 2,
+      });
+    } else if (type === 'urgent') {
+      const items = collectUrgentItems(pool);
+      if (!items.length) return setMessage('Add at least one urgent item.', true);
+      await setDoc(doc(collection(db, 'inventorySubmissions')), {
+        timestamp: serverTimestamp(),
+        submittedAtIso: new Date().toISOString(),
+        formType: 'urgent',
+        pool: getPoolName(pool),
+        facilityId: pool.id || getPoolName(pool),
+        facilityName: getPoolName(pool),
+        market: markets[0] || 'Other',
+        items,
+        ...respondent,
+        version: 1,
+      });
+    } else {
+      // weekly (General Inventory Log) — includes signage photos
       const signagePhotos = collectSignagePhotos();
       const signageError = validateSignagePhotos(signagePhotos);
       if (signageError) return setMessage(signageError, true);
 
-      const submissionRef = doc(collection(db, 'managerialReports'));
+      const items = collectWeeklyItems(pool);
+      if (!items.length) return setMessage('Add at least one item.', true);
+      const missingStatus = items.find((item) => !item.status);
+      if (missingStatus) return setMessage(`Select a level for "${missingStatus.item}".`, true);
+
+      const submissionRef = doc(collection(db, 'inventorySubmissions'));
       const submissionId = submissionRef.id;
       const poolName = getPoolName(pool);
 
@@ -861,42 +913,23 @@ async function handleInventorySubmit(event) {
         }
       }
       setMessage('Saving…');
-
       await setDoc(submissionRef, {
-        reportType: 'managerial',
-        formType: 'chemicalInventory',
         timestamp: serverTimestamp(),
         submittedAtIso: new Date().toISOString(),
+        formType: 'weekly',
         pool: poolName,
         facilityId: pool.id || poolName,
         facilityName: poolName,
         market: markets[0] || 'Other',
-        photos: { bleach: [], signage: uploadedSignage },
-        signagePhotos: uploadedSignage,
-        ...chemicalValues,
-        ...respondent,
-        version: 2,
-      });
-    } else {
-      const items = type === 'urgent' ? collectUrgentItems(pool) : collectWeeklyItems(pool);
-      if (!items.length) return setMessage('Add at least one item.', true);
-      const missingStatus = items.find((item) => !item.status);
-      if (missingStatus) return setMessage(`Select a level for ${missingStatus.item}.`, true);
-      await setDoc(doc(collection(db, 'inventorySubmissions')), {
-        timestamp: serverTimestamp(),
-        submittedAtIso: new Date().toISOString(),
-        formType: type,
-        facilityId: pool.id || getPoolName(pool),
-        facilityName: getPoolName(pool),
-        market: markets[0] || 'Other',
         items,
+        signagePhotos: uploadedSignage,
         ...respondent,
         version: 1,
       });
     }
     event.target.reset();
     syncFormType();
-    setMessage(type === 'chemical' ? 'Chemical inventory log submitted.' : 'Inventory submitted.', false);
+    setMessage(type === 'chemical' ? 'Chemical inventory log submitted.' : type === 'weekly' ? 'General inventory log submitted.' : 'Inventory submitted.', false);
   } catch (err) {
     console.error('[Inventory] Unable to submit inventory:', err);
     setMessage('Unable to submit inventory. Please try again.', true);

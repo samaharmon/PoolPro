@@ -11838,6 +11838,19 @@ function createInspectionReportCell(sub, type) {
     cell.appendChild(createInspectionInfoFlag(sub, 'DES Pre-Inspection Details'));
     return cell;
   }
+  if (type === 'signage') {
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = 'dashboard-form-link';
+    link.textContent = 'Signage Photos';
+    link.addEventListener('click', (event) => {
+      event.preventDefault();
+      openSignageModal(sub);
+    });
+    cell.appendChild(link);
+    cell.appendChild(createInspectionInfoFlag(sub, 'Signage Details'));
+    return cell;
+  }
   cell.appendChild(createDutyFormLink(sub, 'Chemical Inventory Log'));
   cell.appendChild(createInspectionInfoFlag(sub, 'Chemical Inventory Log Details'));
   return cell;
@@ -11948,6 +11961,16 @@ function findLatestReportForPool(submissions, poolName, period = null) {
     .sort((a, b) => (toDateObject(b.timestamp)?.getTime?.() || 0) - (toDateObject(a.timestamp)?.getTime?.() || 0))[0] || null;
 }
 
+function findLatestSignageReport(poolName, period = null) {
+  return allInventoryReports
+    .filter((sub) => {
+      const pool = sub.pool || sub.facilityName || '';
+      const hasSignage = sub.signagePhotos && Object.keys(sub.signagePhotos).some((k) => Array.isArray(sub.signagePhotos[k]) && sub.signagePhotos[k].length);
+      return pool === poolName && hasSignage && (!period || isReportInPeriod(sub, period));
+    })
+    .sort((a, b) => (toDateObject(b.timestamp)?.getTime?.() || 0) - (toDateObject(a.timestamp)?.getTime?.() || 0))[0] || null;
+}
+
 function isInspectionReportRowStale(...reports) {
   const latestTime = reports
     .map((report) => toDateObject(report?.timestamp)?.getTime?.() || 0)
@@ -11977,13 +12000,15 @@ function renderInspectionReports() {
   const renderRowsForPools = (poolNames, tbody) => {
     poolNames.forEach((poolName) => {
       const managerial = findLatestReportForPool(allManagerialReports, poolName, managerialPeriod);
+      const signage = findLatestSignageReport(poolName, managerialPeriod);
       const des = findLatestReportForPool(allDesPreInspections, poolName, desPeriod);
       const tr = document.createElement('tr');
-      tr.classList.toggle('dashboard-stale-report-row', isInspectionReportRowStale(managerial, des));
+      tr.classList.toggle('dashboard-stale-report-row', isInspectionReportRowStale(managerial, des, signage));
       const facilityCell = document.createElement('td');
       facilityCell.textContent = poolName;
       tr.appendChild(facilityCell);
       tr.appendChild(createInspectionReportCell(managerial, 'managerial'));
+      tr.appendChild(createInspectionReportCell(signage, 'signage'));
       tr.appendChild(createInspectionReportCell(des, 'des'));
       tbody.appendChild(tr);
     });
@@ -11998,7 +12023,7 @@ function renderInspectionReports() {
     section.appendChild(heading);
     const table = document.createElement('table');
     table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-cleanliness-table dashboard-inspection-table';
-    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Chemical Inventory Log</th><th>DES Pre-Inspection</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Chemical Inventory Log</th><th>Signage</th><th>DES Pre-Inspection</th></tr></thead>';
     const tbody = document.createElement('tbody');
     renderRowsForPools([dashboardPoolFilter], tbody);
     table.appendChild(tbody);
@@ -12023,7 +12048,7 @@ function renderInspectionReports() {
 
     const table = document.createElement('table');
     table.className = 'data-table dashboard-pool-table dashboard-cleanliness-table dashboard-inspection-table';
-    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Chemical Inventory Log</th><th>DES Pre-Inspection</th></tr></thead>';
+    table.innerHTML = '<thead><tr><th>Facility Name</th><th>Chemical Inventory Log</th><th>Signage</th><th>DES Pre-Inspection</th></tr></thead>';
     const tbody = document.createElement('tbody');
     renderRowsForPools(poolNames, tbody);
     table.appendChild(tbody);
@@ -13411,6 +13436,95 @@ window.closeDesPreInspectionModal = function closeDesPreInspectionModal() {
   closePoolProModal(modal);
 };
 
+function openSignageModal(sub) {
+  let modal = document.getElementById('signageReportModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'signageReportModal';
+    modal.className = 'duty-report-modal des-inspection-modal';
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeSignageModal();
+    });
+    document.body.appendChild(modal);
+  }
+
+  const esc = escapeHtml;
+  const ts = toDateObject(sub.timestamp);
+  const signagePhotos = sub.signagePhotos || {};
+
+  const SIGNAGE_CANONICAL_ORDER = ['poolRulesSign', 'shallowWaterNoDiving', 'noLifeguardOnDuty'];
+  const SIGNAGE_CANONICAL_LABELS = {
+    poolRulesSign: 'Pool Rules Sign',
+    shallowWaterNoDiving: 'Shallow Water, No Diving Signs',
+    noLifeguardOnDuty: 'No Lifeguard On Duty Signs',
+  };
+  const signageSortKey = (cat) => {
+    for (let i = 0; i < SIGNAGE_CANONICAL_ORDER.length; i++) {
+      if (cat === SIGNAGE_CANONICAL_ORDER[i] || cat.endsWith(`_${SIGNAGE_CANONICAL_ORDER[i]}`)) {
+        const poolNum = (cat.match(/^pool(\d+)_/) || [])[1];
+        return (poolNum ? parseInt(poolNum, 10) : 0) * 100 + i;
+      }
+    }
+    return 999;
+  };
+
+  const photoSectionHtml = (label, photos) => {
+    if (!photos?.length) return '';
+    const imgs = photos.map((p) => {
+      const meta = encodeURIComponent(JSON.stringify({
+        url: p.url || '',
+        name: p.name || '',
+        source: p.source || '',
+        contentType: p.contentType || '',
+        dataUrlPrefix: p.dataUrlPrefix || '',
+        photoId: p.photoId || '',
+        submissionId: p.submissionId || sub.id || '',
+      }));
+      return `<img src="${EMPTY_INLINE_IMAGE}" alt="${esc(p.name || 'photo')}" class="duty-report-photo duty-report-photo--loading" data-duty-photo-meta="${meta}">`;
+    }).join('');
+    return `<section class="duty-report-photo-section"><h4>${esc(label)}</h4><div class="duty-report-photo-grid">${imgs}</div></section>`;
+  };
+
+  const signageSectionsHtml = Object.entries(signagePhotos)
+    .filter(([, list]) => Array.isArray(list) && list.length)
+    .sort(([a], [b]) => signageSortKey(a) - signageSortKey(b))
+    .map(([category, list]) => {
+      const first = list[0] || {};
+      const baseCategory = category.replace(/^pool\d+_/, '');
+      const poolMatch = category.match(/^(pool\d+)_/);
+      const poolPrefix = poolMatch ? `${poolMatch[1].replace('pool', 'Pool ')} — ` : '';
+      const label = first.groupTitle || (poolPrefix + (SIGNAGE_CANONICAL_LABELS[baseCategory] || baseCategory.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())));
+      return photoSectionHtml(label, list);
+    }).join('');
+
+  modal.innerHTML = `
+    <div class="duty-report-modal-card des-inspection-modal-card">
+      <div class="modal-header duty-report-modal-header">
+        <h2>Pool Area Signage</h2>
+        <button type="button" class="close" onclick="closeSignageModal()">&times;</button>
+      </div>
+      <div class="duty-report-modal-scroll">
+        <div class="duty-report-meta">
+          <p><strong>Pool:</strong> ${esc(sub.pool || sub.facilityName || '—')}</p>
+          <p><strong>Submitted by:</strong> ${esc(getSubmissionRespondentName(sub))}</p>
+          <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
+        </div>
+        ${signageSectionsHtml || '<p style="padding:16px;color:#aaa;">No signage photos found.</p>'}
+      </div>
+    </div>`;
+
+  openPoolProModal(modal);
+  hydrateDutyReportPhotos(modal).catch((err) => {
+    console.error('[Signage] Could not hydrate photos:', err);
+  });
+}
+
+window.closeSignageModal = function closeSignageModal() {
+  const modal = document.getElementById('signageReportModal');
+  if (!modal) return;
+  closePoolProModal(modal);
+};
+
 async function hydrateDutyReportPhotos(root) {
   if (!root) return;
   const images = Array.from(root.querySelectorAll('[data-duty-photo-meta]'));
@@ -13479,15 +13593,33 @@ function openDutyFormModal(sub) {
   };
 
   const photos = sub.photos || {};
-  const signagePhotos = photos.signage || sub.signagePhotos || {};
-  const signagePhotoSectionsHtml = Object.entries(signagePhotos)
+
+  // Canonical signage category display order
+  const SIGNAGE_CANONICAL_ORDER = ['poolRulesSign', 'shallowWaterNoDiving', 'noLifeguardOnDuty'];
+  const SIGNAGE_CANONICAL_LABELS = {
+    poolRulesSign: 'Pool Rules Sign',
+    shallowWaterNoDiving: 'Shallow Water, No Diving Signs',
+    noLifeguardOnDuty: 'No Lifeguard On Duty Signs',
+  };
+  const signageSortKey = (cat) => {
+    for (let i = 0; i < SIGNAGE_CANONICAL_ORDER.length; i++) {
+      if (cat === SIGNAGE_CANONICAL_ORDER[i] || cat.endsWith(`_${SIGNAGE_CANONICAL_ORDER[i]}`)) {
+        const poolNum = (cat.match(/^pool(\d+)_/) || [])[1];
+        return (poolNum ? parseInt(poolNum, 10) : 0) * 100 + i;
+      }
+    }
+    return 999;
+  };
+  const rawSignagePhotos = photos.signage || sub.signagePhotos || {};
+  const signagePhotoSectionsHtml = Object.entries(rawSignagePhotos)
     .filter(([, list]) => Array.isArray(list) && list.length)
+    .sort(([a], [b]) => signageSortKey(a) - signageSortKey(b))
     .map(([category, list]) => {
       const first = list[0] || {};
-      const label = first.groupTitle || category
-        .replace(/^pool\d+_/, '')
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/^./, (char) => char.toUpperCase());
+      const baseCategory = category.replace(/^pool\d+_/, '');
+      const poolMatch = category.match(/^(pool\d+)_/);
+      const poolPrefix = poolMatch ? `${poolMatch[1].replace('pool', 'Pool ')} — ` : '';
+      const label = first.groupTitle || (poolPrefix + (SIGNAGE_CANONICAL_LABELS[baseCategory] || baseCategory.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())));
       return photoSectionHtml(label, list);
     }).join('');
   const hasSignagePhotos = !!signagePhotoSectionsHtml;
@@ -13534,11 +13666,11 @@ function openDutyFormModal(sub) {
         <section class="duty-report-manager-panel">
           <h3>${esc(managerPanelTitle)}</h3>
           ${photoSectionHtml('Bleach Barrels', photos.bleach)}
-          ${signagePhotoSectionsHtml}
           ${dutyScaleHtml('Bleach Volume', sub.bleachVolume, '%', 'linear')}
           ${dutyScaleHtml('Muriatic Acid', sub.muriaticAcid, ' gal', 'acid')}
           ${dutyScaleHtml('Shock / Granular', sub.shockGranular, '%', 'linear')}
           ${cyaHtml}
+          ${hasSignagePhotos ? `<h4 style="margin:16px 0 8px;color:#eef1f6;">Pool Area Signage</h4>${signagePhotoSectionsHtml}` : ''}
         </section>` : ''}
       </div>
     </div>`;
