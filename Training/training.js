@@ -1172,6 +1172,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
       row.appendChild(capCell);
 
       if (capacity && taken >= capacity) row.classList.add('session-row-full');
+      if (session.trainingType === 'Makeup In-Service') row.classList.add('training-row-makeup');
 
       if (isAdmin) {
         const actionsCell = document.createElement('td');
