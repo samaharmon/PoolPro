@@ -81,6 +81,7 @@ const LIFEGUARD_SESSION_EXPIRED_KEY = 'poolproLifeguardSessionExpired';
 const LIFEGUARD_SESSION_VERIFICATION_VERSION = 2;
 const SUPERVISOR_SESSION_VERIFICATION_VERSION = 1;
 const CHEM_AUTO_CONTROLLER_STORAGE = 'firestoreChemControllerPhoto';
+const CHEM_LOG_PHOTO_STORAGE = 'firestoreChemLogPhoto';
 const CHEM_CONTROLLER_CHUNK_SIZE = 350000;
 const CHEM_CONTROLLER_IMAGE_MAX_SIDE = 1280;
 const CHEM_CONTROLLER_IMAGE_QUALITY = 0.72;
@@ -4656,6 +4657,219 @@ function resetChemAutoControllerUploads() {
   getChemSectionIds().forEach((_, idx) => clearChemAutoControllerPhoto(idx));
 }
 
+// ---- Chem Log Photos (one photo per pool when requiresChemPhotos is enabled) ----
+
+function ensureChemLogPhotoUploadSections() {
+  getChemSectionIds().forEach((sectionId, idx) => {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    const content = section.querySelector('.pool-section-content');
+    if (!content || content.querySelector('.chem-log-photo-group')) return;
+
+    const group = document.createElement('div');
+    group.className = 'chem-log-photo-group hidden';
+    group.dataset.poolIndex = String(idx);
+    group.innerHTML = `
+      <div class="chem-auto-controller-copy">
+        <h4 class="chem-auto-controller-title">Pool Photo <span class="duties-req-badge">1 required</span></h4>
+        <p class="chem-auto-controller-desc"></p>
+      </div>
+      <div class="chem-auto-controller-slot">
+        <div class="chem-log-photo-upload-area chem-auto-controller-upload-area" role="button" tabindex="0">
+          <div class="chem-auto-controller-placeholder">
+            <span class="chem-auto-controller-icon">&#128247;</span>
+            <span>Tap to add</span>
+          </div>
+          <img class="chem-log-photo-preview chem-auto-controller-preview" alt="Pool photo preview" />
+          <input type="file" class="chem-log-photo-input" accept="image/*" hidden>
+        </div>
+        <button type="button" class="chem-log-photo-remove duties-clear-btn">Remove</button>
+      </div>
+    `;
+
+    const uploadArea = group.querySelector('.chem-log-photo-upload-area');
+    const fileInput = group.querySelector('.chem-log-photo-input');
+    const preview = group.querySelector('.chem-log-photo-preview');
+    const placeholder = group.querySelector('.chem-auto-controller-placeholder');
+    const removeBtn = group.querySelector('.chem-log-photo-remove');
+
+    const clearFile = () => {
+      if (fileInput) { fileInput.value = ''; fileInput._selectedFile = null; }
+      if (preview) { preview.removeAttribute('src'); preview.style.display = 'none'; }
+      if (placeholder) placeholder.style.display = 'flex';
+      if (removeBtn) removeBtn.style.display = 'none';
+    };
+
+    const setFile = (file) => {
+      if (!fileInput || !preview || !placeholder || !removeBtn || !file) return;
+      try {
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        fileInput.files = transfer.files;
+      } catch (_) {
+        fileInput._selectedFile = file;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        preview.src = event.target?.result || '';
+        preview.style.display = 'block';
+        placeholder.style.display = 'none';
+        removeBtn.style.display = 'inline-flex';
+      };
+      reader.readAsDataURL(file);
+    };
+
+    uploadArea?.addEventListener('click', () => fileInput?.click());
+    uploadArea?.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput?.click(); }
+    });
+    fileInput?.addEventListener('change', () => {
+      const file = fileInput.files?.[0] || fileInput._selectedFile;
+      if (file) setFile(file);
+    });
+    removeBtn?.addEventListener('click', () => clearFile());
+
+    clearFile();
+    content.appendChild(group);
+  });
+}
+
+function getChemLogPhotoFile(poolIdx) {
+  const input = document.querySelector(`.chem-log-photo-group[data-pool-index="${poolIdx}"] .chem-log-photo-input`);
+  return input?.files?.[0] || input?._selectedFile || null;
+}
+
+function clearChemLogPhoto(poolIdx) {
+  const group = document.querySelector(`.chem-log-photo-group[data-pool-index="${poolIdx}"]`);
+  if (!group) return;
+  const input = group.querySelector('.chem-log-photo-input');
+  const preview = group.querySelector('.chem-log-photo-preview');
+  const placeholder = group.querySelector('.chem-auto-controller-placeholder');
+  const removeBtn = group.querySelector('.chem-log-photo-remove');
+  if (input) { input.value = ''; input._selectedFile = null; }
+  if (preview) { preview.removeAttribute('src'); preview.style.display = 'none'; }
+  if (placeholder) placeholder.style.display = 'flex';
+  if (removeBtn) removeBtn.style.display = 'none';
+}
+
+function resetChemLogPhotoUploads() {
+  getChemSectionIds().forEach((_, idx) => clearChemLogPhoto(idx));
+}
+
+async function updateChemLogPhotoSections(poolDoc) {
+  ensureChemLogPhotoUploadSections();
+  getChemSectionIds().forEach((sectionId, idx) => {
+    const section = document.getElementById(sectionId);
+    const group = section?.querySelector('.chem-log-photo-group');
+    if (!section || !group) return;
+
+    const sectionVisible = idx < Number(poolDoc?.numPools || poolDoc?.poolCount || 2);
+    const rulesPool = poolDoc?.rules?.pools?.[idx];
+    const enabled = !!rulesPool?.requiresChemPhotos && sectionVisible;
+    group.classList.toggle('hidden', !enabled);
+    if (!enabled) {
+      clearChemLogPhoto(idx);
+      return;
+    }
+
+    const titleText = section.querySelector('h3')?.textContent?.trim() || `Pool ${idx + 1}`;
+    const poolDisplayName = rulesPool?.poolName || titleText;
+    const desc = group.querySelector('.chem-auto-controller-desc');
+    if (desc) desc.textContent = `Upload a photo of the ${getChemPoolOrdinalLabel(idx, poolDisplayName)} pool.`;
+  });
+}
+
+function getChemLogPhotoRows(entry, poolDoc) {
+  const rows = [];
+  const poolCount = Math.max(1, Number(poolDoc?.numPools || poolDoc?.poolCount || 1));
+  for (let idx = 0; idx < poolCount; idx += 1) {
+    const fields = poolFieldNames(idx);
+    const hasReading = !!(entry?.[fields.ph] || entry?.[fields.cl]);
+    if (!hasReading) continue;
+    if (!poolDoc?.rules?.pools?.[idx]?.requiresChemPhotos) continue;
+    rows.push({
+      poolIdx: idx,
+      label: getFacilityPoolLabel(poolDoc, idx),
+      file: getChemLogPhotoFile(idx),
+    });
+  }
+  return rows;
+}
+
+async function uploadChemLogPhoto({ submissionId, poolName, poolIdx, file }) {
+  const safeName = String(file.name || 'pool-photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const uploadPayload = await prepareChemControllerPhotoForUpload(file);
+  const photoId = `log_${Date.now()}_${poolIdx}_${safeName}`;
+  const photoDoc = doc(db, 'chemSubmissionMedia', submissionId, 'photos', photoId);
+  const dataUrl = await readFileAsDataURL(uploadPayload.body);
+  const [prefix, encoded = ''] = String(dataUrl || '').split(',');
+  if (!encoded) throw new Error(`Unable to encode ${file.name || 'pool photo'} for upload.`);
+
+  const chunks = [];
+  for (let i = 0; i < encoded.length; i += CHEM_CONTROLLER_CHUNK_SIZE) {
+    chunks.push(encoded.slice(i, i + CHEM_CONTROLLER_CHUNK_SIZE));
+  }
+
+  await setDoc(photoDoc, {
+    submissionId,
+    poolName,
+    poolIdx,
+    fileName: file.name || safeName,
+    contentType: uploadPayload.contentType,
+    chunkCount: chunks.length,
+    dataUrlPrefix: prefix,
+    source: CHEM_LOG_PHOTO_STORAGE,
+    storedAt: serverTimestamp(),
+  });
+
+  for (let i = 0; i < chunks.length; i += 400) {
+    const batch = writeBatch(db);
+    chunks.slice(i, i + 400).forEach((chunk, offset) => {
+      const chunkIndex = i + offset;
+      batch.set(doc(db, 'chemSubmissionMedia', submissionId, 'photos', photoId, 'chunks', String(chunkIndex).padStart(4, '0')), {
+        index: chunkIndex,
+        data: chunk,
+      });
+    });
+    await batch.commit();
+  }
+
+  return {
+    poolIdx,
+    poolName,
+    url: `${CHEM_LOG_PHOTO_STORAGE}:${submissionId}:${photoId}`,
+    name: file.name || safeName,
+    source: CHEM_LOG_PHOTO_STORAGE,
+    contentType: uploadPayload.contentType,
+    dataUrlPrefix: prefix,
+    chunkCount: chunks.length,
+    photoId,
+    submissionId,
+  };
+}
+
+async function uploadChemLogPhotos({ submissionId, poolName, photoRows, onProgress }) {
+  const uploaded = {};
+  for (let i = 0; i < photoRows.length; i += 1) {
+    const row = photoRows[i];
+    if (!row.file) continue;
+    onProgress?.({
+      completed: i,
+      total: photoRows.length,
+      label: row.label,
+      fileName: row.file.name || `Photo ${i + 1}`,
+    });
+    uploaded[`pool${row.poolIdx + 1}`] = [await uploadChemLogPhoto({
+      submissionId,
+      poolName,
+      poolIdx: row.poolIdx,
+      file: row.file,
+    })];
+  }
+  if (photoRows.length) onProgress?.({ completed: photoRows.length, total: photoRows.length, done: true });
+  return uploaded;
+}
+
 function canvasToBlob(canvas, type, quality) {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -4859,6 +5073,7 @@ function setupChemForm() {
   const submitBtn = document.getElementById('submitBtn');
   if (!submitBtn) return;
   ensureChemAutoControllerUploadSections();
+  ensureChemLogPhotoUploadSections();
 
   // Show/hide pool sections when location changes
   const locationSelect = document.getElementById('poolLocation');
@@ -4869,12 +5084,16 @@ function setupChemForm() {
       updateVisiblePoolSections(latestPool ? (latestPool.numPools || 2) : 2);
       updatePoolSectionTitles(latestPool);
       await updateChemAutoControllerSections(latestPool || null);
+      await updateChemLogPhotoSections(latestPool || null);
     });
     const initialPool = poolsCache.find(p => p.id === locationSelect.value);
     updateVisiblePoolSections(initialPool ? (initialPool.numPools || 2) : 2);
     updatePoolSectionTitles(initialPool || null);
     updateChemAutoControllerSections(initialPool || null).catch((err) => {
       console.warn('[ChemLog] Unable to initialize auto-controller upload sections.', err);
+    });
+    updateChemLogPhotoSections(initialPool || null).catch((err) => {
+      console.warn('[ChemLog] Unable to initialize chem log photo upload sections.', err);
     });
   }
 
@@ -4937,6 +5156,13 @@ function setupChemForm() {
         return;
       }
 
+      const chemLogPhotoRows = getChemLogPhotoRows(entry, poolDocForSubmission || pool);
+      const missingChemLogPhoto = chemLogPhotoRows.some((row) => !row.file);
+      if (missingChemLogPhoto) {
+        alert('Please upload a pool photo for each required pool before submitting.');
+        return;
+      }
+
       let uploadedControllerPhotos = {};
       const controllerRowsToUpload = autoControllerRows.filter((row) => row.file);
       if (controllerRowsToUpload.length) {
@@ -4952,8 +5178,23 @@ function setupChemForm() {
         });
       }
 
+      let uploadedChemLogPhotos = {};
+      if (chemLogPhotoRows.length) {
+        uploadedChemLogPhotos = await uploadChemLogPhotos({
+          submissionId: submissionRef.id,
+          poolName,
+          photoRows: chemLogPhotoRows,
+          onProgress: ({ completed, total, label, done }) => {
+            submitBtn.textContent = done
+              ? 'Saving…'
+              : `Uploading pool photo (${completed + 1}/${total})`;
+          },
+        });
+      }
+
       entry.autoControllerPhotos = uploadedControllerPhotos;
       entry.autoControllerPhotoWindowBypassed = recentSubmission;
+      entry.chemLogPhotos = uploadedChemLogPhotos;
       await setDoc(submissionRef, entry);
 
       if (!FEEDBACK_RESPONSES_ENABLED) {
@@ -4961,6 +5202,7 @@ function setupChemForm() {
         alert('Chemistry log submitted successfully!');
         resetChemistryFormFields();
         resetChemAutoControllerUploads();
+        resetChemLogPhotoUploads();
         return;
       }
 
@@ -5079,7 +5321,9 @@ function setupChemForm() {
       // Reset form fields
       resetChemistryFormFields();
       resetChemAutoControllerUploads();
+      resetChemLogPhotoUploads();
       await updateChemAutoControllerSections(null);
+      await updateChemLogPhotoSections(null);
 
     } catch (err) {
       console.error('[ChemLog] Error submitting chemistry log:', err);

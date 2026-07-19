@@ -190,6 +190,7 @@ function captureRockbridgePresetIfNeeded() {
     const poolRules = { ph: {}, cl: {} };
     const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
     const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
+    const chemPhotosCheckbox = block.querySelector('.pool-chem-photo-checkbox');
 
     getResponseFields(block, poolIndex).forEach((area) => {
       const typeKey = area.id.includes('_ph_') ? 'ph' : 'cl';
@@ -204,6 +205,7 @@ function captureRockbridgePresetIfNeeded() {
 
     poolRules.autoController = !!autoControllerCheckbox?.checked;
     poolRules.requiresWeeklyBackwashing = weeklyBackwashCheckbox?.checked !== false;
+    poolRules.requiresChemPhotos = !!chemPhotosCheckbox?.checked;
 
     preset.rulesByPoolIndex[poolIndex] = poolRules;
   });
@@ -268,6 +270,8 @@ function applyRockbridgePresetToNewPool() {
     if (autoControllerCheckbox) autoControllerCheckbox.checked = !!rules.autoController;
     const weeklyBackwashCheckbox = document.querySelector(`.pool-rule-block[data-pool-index="${poolIndex}"] .pool-weekly-backwash-checkbox`);
     if (weeklyBackwashCheckbox) weeklyBackwashCheckbox.checked = rules.requiresWeeklyBackwashing !== false;
+    const chemPhotosCheckbox = document.querySelector(`.pool-rule-block[data-pool-index="${poolIndex}"] .pool-chem-photo-checkbox`);
+    if (chemPhotosCheckbox) chemPhotosCheckbox.checked = !!rules.requiresChemPhotos;
     ['ph', 'cl'].forEach(typeKey => {
       const group = rules[typeKey] || {};
       Object.entries(group).forEach(([key, rule]) => {
@@ -595,6 +599,8 @@ function setBlockEnabled(block, enabled) {
   if (autoControllerCheckbox) autoControllerCheckbox.disabled = !enabled;
   const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
   if (weeklyBackwashCheckbox) weeklyBackwashCheckbox.disabled = !enabled;
+  const chemPhotosCheckbox = block.querySelector('.pool-chem-photo-checkbox');
+  if (chemPhotosCheckbox) chemPhotosCheckbox.disabled = !enabled;
 
   // add overlay class only to the rules-table region
   block.querySelectorAll('.rules-table').forEach(tbl => {
@@ -1863,6 +1869,8 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
     if (autoControllerCheckbox) autoControllerCheckbox.checked = !!fromDoc.autoController;
     const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
     if (weeklyBackwashCheckbox) weeklyBackwashCheckbox.checked = fromDoc.requiresWeeklyBackwashing !== false;
+    const chemPhotosCheckbox = block.querySelector('.pool-chem-photo-checkbox');
+    if (chemPhotosCheckbox) chemPhotosCheckbox.checked = !!fromDoc.requiresChemPhotos;
   });
 
   // Make sure the right sanitize tab is active & buttons are wired
@@ -1940,6 +1948,7 @@ function readEditorToObject() {
     const nameInput = block.querySelector('.pool-name-input');
     const autoControllerCheckbox = block.querySelector('.pool-auto-controller-checkbox');
     const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
+    const chemPhotosCheckbox = block.querySelector('.pool-chem-photo-checkbox');
     const poolName = nameInput ? nameInput.value.trim() : '';
     const phMethods = state.phMethods || createEmptyPhMethods();
     const defaultPh = phMethods[DEFAULT_PH_RULE_METHOD]?.ph || {};
@@ -1953,6 +1962,7 @@ function readEditorToObject() {
       poolName,
       autoController: !!autoControllerCheckbox?.checked,
       requiresWeeklyBackwashing: weeklyBackwashCheckbox?.checked !== false,
+      requiresChemPhotos: !!chemPhotosCheckbox?.checked,
     });
   });
 
@@ -2173,6 +2183,8 @@ function setBlockEditing(block, isEditing) {
   if (autoControllerCheckbox) autoControllerCheckbox.disabled = !isEditing;
   const weeklyBackwashCheckbox = block.querySelector('.pool-weekly-backwash-checkbox');
   if (weeklyBackwashCheckbox) weeklyBackwashCheckbox.disabled = !isEditing;
+  const chemPhotosCheckbox = block.querySelector('.pool-chem-photo-checkbox');
+  if (chemPhotosCheckbox) chemPhotosCheckbox.disabled = !isEditing;
 
   const editBtn = block.querySelector('.pool-edit-btn');
   const saveBtn = block.querySelector('.pool-save-btn');
@@ -3250,6 +3262,17 @@ function ensureAutoControllerToggles() {
         <span>Requires Weekly Backwashing.</span>
       `;
       autoToggle.insertAdjacentElement('afterend', backwashToggle);
+    }
+
+    if (!block.querySelector('.pool-chem-photo-toggle')) {
+      const chemPhotoToggle = document.createElement('label');
+      chemPhotoToggle.className = 'pool-chem-photo-toggle pool-rule-option-toggle';
+      chemPhotoToggle.innerHTML = `
+        <input type="checkbox" class="market-filter-checkbox pool-chem-photo-checkbox" data-pool-index="${poolIndex}">
+        <span>Requires photos for pool chemistry logs.</span>
+      `;
+      const backwashToggle = block.querySelector('.pool-weekly-backwash-toggle');
+      (backwashToggle || autoToggle).insertAdjacentElement('afterend', chemPhotoToggle);
     }
   });
 }
