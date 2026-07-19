@@ -3271,6 +3271,8 @@ function ensureAutoControllerToggles() {
         <input type="checkbox" class="market-filter-checkbox pool-chem-photo-checkbox" data-pool-index="${poolIndex}">
         <span>Requires photos for pool chemistry logs.</span>
       `;
+      const cb = chemPhotoToggle.querySelector('.pool-chem-photo-checkbox');
+      if (cb) cb.checked = false;
       const backwashToggle = block.querySelector('.pool-weekly-backwash-toggle');
       (backwashToggle || autoToggle).insertAdjacentElement('afterend', chemPhotoToggle);
     }

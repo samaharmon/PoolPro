@@ -4671,7 +4671,7 @@ function ensureChemLogPhotoUploadSections() {
     group.dataset.poolIndex = String(idx);
     group.innerHTML = `
       <div class="chem-auto-controller-copy">
-        <h4 class="chem-auto-controller-title">Pool Photo <span class="duties-req-badge">1 required</span></h4>
+        <h4 class="chem-auto-controller-title">Photo of Chemistry Levels <span class="duties-req-badge">1 required</span></h4>
         <p class="chem-auto-controller-desc"></p>
       </div>
       <div class="chem-auto-controller-slot">
