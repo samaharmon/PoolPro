@@ -5933,6 +5933,98 @@ function getChemAutoControllerPhotoList(log, poolIdx = null) {
   return Object.values(groups).flatMap((items) => Array.isArray(items) ? items : []);
 }
 
+function getChemLogPhotoList(log, poolIdx = null) {
+  const groups = log?.chemLogPhotos;
+  if (!groups || typeof groups !== 'object') return [];
+  if (poolIdx !== null && poolIdx !== undefined) {
+    const key = `pool${Number(poolIdx) + 1}`;
+    return Array.isArray(groups[key]) ? groups[key] : [];
+  }
+  return Object.values(groups).flatMap((items) => Array.isArray(items) ? items : []);
+}
+
+async function getFirestoreChemLogPhotoDataUrl(photo) {
+  const submissionId = String(photo?.submissionId || '');
+  const photoId = String(photo?.photoId || '');
+  const cacheKey = `${CHEM_LOG_PHOTO_STORAGE}:${submissionId}:${photoId}`;
+  if (chemLogPhotoDataUrlMap.has(cacheKey)) return chemLogPhotoDataUrlMap.get(cacheKey);
+  if (!submissionId || !photoId) throw new Error('Chem log photo reference is incomplete.');
+
+  const chunksSnap = await getDocs(collection(db, 'chemSubmissionMedia', submissionId, 'photos', photoId, 'chunks'));
+  const chunks = chunksSnap.docs
+    .map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) }))
+    .sort((a, b) => Number(a.index ?? a.id) - Number(b.index ?? b.id))
+    .map((chunk) => chunk.data || '');
+  if (!chunks.length) throw new Error('Chem log photo chunks were not found.');
+
+  const prefix = photo.dataUrlPrefix || `data:${photo.contentType || 'image/jpeg'};base64`;
+  const dataUrl = `${prefix},${chunks.join('')}`;
+  chemLogPhotoDataUrlMap.set(cacheKey, dataUrl);
+  return dataUrl;
+}
+
+async function hydrateChemLogPhotoImages(root) {
+  const images = Array.from(root.querySelectorAll('[data-chem-log-photo-meta]'));
+  await Promise.all(images.map(async (img) => {
+    try {
+      const meta = JSON.parse(decodeURIComponent(img.dataset.chemLogPhotoMeta || ''));
+      img.src = await getFirestoreChemLogPhotoDataUrl(meta);
+    } catch (err) {
+      console.error('[ChemLog] Could not hydrate chem log photo:', err);
+      img.alt = 'Unable to load pool chemistry photo';
+      img.classList.add('duty-report-photo--error');
+    }
+  }));
+}
+
+function showChemLogPhotoModal(log, poolIdx = null) {
+  const photos = getChemLogPhotoList(log, poolIdx);
+  if (!photos.length) return;
+
+  let modal = document.getElementById('chemLogPhotoModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'chemLogPhotoModal';
+    modal.className = 'chem-controller-modal';
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closePoolProModal(modal);
+    });
+    document.body.appendChild(modal);
+  }
+
+  const esc = escapeHtml;
+  const poolDoc = getDashboardPoolDocByName(log?.poolLocation);
+  const poolLabel = poolDoc ? getFacilityPoolLabel(poolDoc, poolIdx ?? 0) : `Pool ${(poolIdx ?? 0) + 1}`;
+  const content = `
+    <section class="chem-controller-photo-section">
+      <h3>${esc(poolLabel)}</h3>
+      <div class="chem-controller-photo-grid">
+        ${photos.map((photo) => `
+          <figure class="chem-controller-photo-card">
+            <img src="${EMPTY_INLINE_IMAGE}" alt="${esc(photo?.name || 'Pool chemistry photo')}" data-chem-log-photo-meta="${encodeURIComponent(JSON.stringify(photo || {}))}">
+            <figcaption>${esc(photo?.name || 'Pool chemistry photo')}</figcaption>
+          </figure>
+        `).join('')}
+      </div>
+    </section>
+  `;
+
+  modal.innerHTML = `
+    <div class="chem-controller-modal-card">
+      <div class="modal-header duty-report-modal-header">
+        <h2>Photo of Chemistry Levels</h2>
+        <button type="button" class="close" aria-label="Close photo">&times;</button>
+      </div>
+      <div class="chem-controller-modal-scroll">${content}</div>
+    </div>
+  `;
+  modal.querySelector('.close')?.addEventListener('click', () => closePoolProModal(modal));
+  openPoolProModal(modal);
+  hydrateChemLogPhotoImages(modal).catch((err) => {
+    console.error('[ChemLog] Could not load chem log photos:', err);
+  });
+}
+
 function getChemControllerPhotoCacheKey(photo) {
   const url = String(photo?.url || '');
   if (url.startsWith(`${CHEM_AUTO_CONTROLLER_STORAGE}:`)) return url;
@@ -6061,20 +6153,37 @@ function fillFacilityCellWithControllerFlag(cell, facilityName, log, poolIdx = n
   const label = document.createElement('span');
   label.textContent = facilityName || '—';
   cell.appendChild(label);
-  const photos = getChemAutoControllerPhotoList(log, poolIdx);
-  if (!photos.length) return;
 
-  const flag = document.createElement('button');
-  flag.type = 'button';
-  flag.className = 'dashboard-cell-flag';
-  flag.title = 'View auto controller photos';
-  flag.setAttribute('aria-label', 'View auto controller photos');
-  flag.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    showChemAutoControllerPhotos(log, poolIdx);
-  });
-  cell.appendChild(flag);
+  const controllerPhotos = getChemAutoControllerPhotoList(log, poolIdx);
+  if (controllerPhotos.length) {
+    const flag = document.createElement('button');
+    flag.type = 'button';
+    flag.className = 'dashboard-cell-flag';
+    flag.title = 'View auto controller photos';
+    flag.setAttribute('aria-label', 'View auto controller photos');
+    flag.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showChemAutoControllerPhotos(log, poolIdx);
+    });
+    cell.appendChild(flag);
+  }
+
+  const chemLogPhotos = getChemLogPhotoList(log, poolIdx);
+  if (chemLogPhotos.length) {
+    const flag = document.createElement('button');
+    flag.type = 'button';
+    flag.className = 'dashboard-cell-flag dashboard-cell-flag--chem-log';
+    if (controllerPhotos.length) flag.style.right = '20px';
+    flag.title = 'View pool chemistry photo';
+    flag.setAttribute('aria-label', 'View pool chemistry photo');
+    flag.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      showChemLogPhotoModal(log, poolIdx);
+    });
+    cell.appendChild(flag);
+  }
 }
 
 function getLatestChemistryLogForPool(logs, facilityName, poolIdx) {
@@ -8917,6 +9026,7 @@ let resourcesDocumentsLoadPromise = null;
 const resourceDataUrlMap = new Map();
 const dutyPhotoDataUrlMap = new Map();
 const chemControllerPhotoDataUrlMap = new Map();
+const chemLogPhotoDataUrlMap = new Map();
 const desInspectionPhotoDataUrlMap = new Map();
 const RESOURCE_FILTER_ALL_VALUE = 'all';
 const RESOURCE_ALL_FACILITIES_VALUE = 'All';

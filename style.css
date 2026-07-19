@@ -5700,6 +5700,10 @@ body.dark-mode .alerts-reminder-list-meta {
   filter: brightness(1.2);
 }
 
+.dashboard-cell-flag--chem-log {
+  border-top-color: #ff7700;
+}
+
 .dashboard-info-modal,
 .chem-controller-modal {
   position: fixed;
