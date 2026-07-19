@@ -6289,7 +6289,8 @@ body.dark-mode .dashboard-market-heading {
   border-top: 1px solid #555;
 }
 
-.chem-auto-controller-group.hidden {
+.chem-auto-controller-group.hidden,
+.chem-log-photo-group.hidden {
   display: none !important;
 }
 
