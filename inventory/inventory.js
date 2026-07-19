@@ -252,7 +252,13 @@ function addInventoryPhotoSlot(groupId) {
   fileInput.addEventListener('change', () => {
     const files = Array.from(fileInput.files || []);
     if (!files.length) return;
-    addFilesToInventoryPhotoGroup(groupId, slot, files);
+    if (getInventorySlotFile(slot)) {
+      // Slot already has a file — replace it directly instead of creating a new slot
+      setInventoryPhotoSlotFile(slot, files[0]);
+      if (files.length > 1) addFilesToInventoryPhotoGroup(groupId, null, files.slice(1));
+    } else {
+      addFilesToInventoryPhotoGroup(groupId, slot, files);
+    }
   });
 
   const removeBtn = document.createElement('button');

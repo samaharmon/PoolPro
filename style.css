@@ -7184,7 +7184,8 @@ body.dark-mode .dash-value-popover {
    Cleanliness report detail modal
    ============================================================ */
 #dutyFormModal.duty-report-modal,
-#desInspectionModal.duty-report-modal {
+#desInspectionModal.duty-report-modal,
+#signageReportModal.duty-report-modal {
   position: fixed;
   inset: 0;
   display: none;
@@ -7703,29 +7704,34 @@ body,
 .feedback-modal,
 #dutyFormModal.duty-report-modal,
 #desInspectionModal.duty-report-modal,
+#signageReportModal.duty-report-modal,
 .modal-overlay {
   transition: opacity 0.25s ease, transform 0.25s ease;
 }
 
 #dutyFormModal.duty-report-modal,
-#desInspectionModal.duty-report-modal {
+#desInspectionModal.duty-report-modal,
+#signageReportModal.duty-report-modal {
   opacity: 0;
 }
 
 #dutyFormModal.duty-report-modal.visible,
-#desInspectionModal.duty-report-modal.visible {
+#desInspectionModal.duty-report-modal.visible,
+#signageReportModal.duty-report-modal.visible {
   opacity: 1;
 }
 
 #dutyFormModal .duty-report-modal-card,
-#desInspectionModal .duty-report-modal-card {
+#desInspectionModal .duty-report-modal-card,
+#signageReportModal .duty-report-modal-card {
   transform: translateY(10px);
   transition: opacity 0.25s ease, transform 0.25s ease;
   opacity: 0;
 }
 
 #dutyFormModal.visible .duty-report-modal-card,
-#desInspectionModal.visible .duty-report-modal-card {
+#desInspectionModal.visible .duty-report-modal-card,
+#signageReportModal.visible .duty-report-modal-card {
   transform: translateY(0);
   opacity: 1;
 }
@@ -7944,7 +7950,8 @@ table thead td {
 .dashboard-info-modal,
 .chem-controller-modal,
 #dutyFormModal.duty-report-modal,
-#desInspectionModal.duty-report-modal {
+#desInspectionModal.duty-report-modal,
+#signageReportModal.duty-report-modal {
   max-height: var(--poolpro-visual-vh, 100dvh);
 }
 
