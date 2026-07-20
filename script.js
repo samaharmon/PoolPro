@@ -4435,10 +4435,13 @@ function showActiveAlertReminderPopup(reminders) {
 // ============================================================
 
 function updateVisiblePoolSections(numPools) {
+  const count = numPools || 2;
+  const secondary = document.getElementById('secondaryPoolSection');
+  if (secondary) secondary.classList.toggle('hidden', count < 2);
   ['pool3Section', 'pool4Section', 'pool5Section'].forEach((id, i) => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (i + 3 <= (numPools || 2)) {
+    if (i + 3 <= count) {
       el.classList.remove('hidden');
     } else {
       el.classList.add('hidden');
@@ -5129,9 +5132,14 @@ function setupChemForm() {
       poolLocation: poolName,
       mainPoolPH: document.getElementById('mainPoolPH')?.value || '',
       mainPoolCl: document.getElementById('mainPoolCl')?.value || '',
-      secondaryPoolPH: document.getElementById('secondaryPoolPH')?.value || '',
-      secondaryPoolCl: document.getElementById('secondaryPoolCl')?.value || ''
     };
+
+    // Include Pool 2 only when its section is visible
+    const secondarySection = document.getElementById('secondaryPoolSection');
+    if (secondarySection && !secondarySection.classList.contains('hidden')) {
+      entry.secondaryPoolPH = document.getElementById('secondaryPoolPH')?.value || '';
+      entry.secondaryPoolCl = document.getElementById('secondaryPoolCl')?.value || '';
+    }
 
     // Include optional pool sections if visible
     ['3', '4', '5'].forEach(n => {
