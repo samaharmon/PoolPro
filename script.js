@@ -5265,12 +5265,14 @@ function setupChemForm() {
           const clRule = getRuleForReading(poolRules, i, method, 'cl', clVal);
           const phResponse = getRuleResponse(phRule);
           const clResponse = getRuleResponse(clRule);
+          const phVisible = phResponse && stripHtml(phResponse);
+          const clVisible = clResponse && stripHtml(clResponse);
 
-          if (phResponse || clResponse) {
+          if (phVisible || clVisible) {
             html += `<div class="modal-pool-section">`;
             html += `<h4 class="modal-pool-label">${escapeHtml(poolLabel)} <span class="modal-rule-method">(${escapeHtml(methodLabel)} rules)</span></h4>`;
 
-            if (phResponse) {
+            if (phVisible) {
               const isMajor = getRuleConcernLevel(phRule) === 'major';
               checkboxIdx++;
               html += `<div class="modal-rule-item${isMajor ? ' modal-rule-major' : ''}">`;
@@ -5285,7 +5287,7 @@ function setupChemForm() {
               html += `</div>`;
             }
 
-            if (clResponse) {
+            if (clVisible) {
               const isMajor = getRuleConcernLevel(clRule) === 'major';
               checkboxIdx++;
               html += `<div class="modal-rule-item${isMajor ? ' modal-rule-major' : ''}">`;
@@ -5305,25 +5307,40 @@ function setupChemForm() {
         }
 
         if (checkboxIdx === 0) {
-          html += '<p style="margin-top:10px;">All chemistry values are within normal range.</p>';
+          // No feedback items — skip the modal entirely; show thank-you banner + confetti
+          if (typeof confetti === 'function') {
+            confetti({
+              particleCount: 120,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#69140e', '#ffffff', '#c8a47e', '#ff6b6b', '#ffd700'],
+            });
+          }
+          const banner = document.createElement('div');
+          banner.className = 'chem-success-banner';
+          banner.textContent = 'Thank you for your submission!';
+          document.body.appendChild(banner);
+          requestAnimationFrame(() => banner.classList.add('visible'));
+          setTimeout(() => {
+            banner.classList.remove('visible');
+            setTimeout(() => banner.remove(), 400);
+          }, 3500);
+        } else {
+          feedbackModal.dataset.majorItems = majorLines.join('\n');
+          modalContent.innerHTML = html;
+          showSharedModalOverlay();
+          openPoolProModal(feedbackModal, 'block');
+          if (allClear && typeof confetti === 'function') {
+            confetti({
+              particleCount: 120,
+              spread: 70,
+              origin: { y: 0.6 },
+              colors: ['#69140e', '#ffffff', '#c8a47e', '#ff6b6b', '#ffd700'],
+            });
+          }
         }
-
-        feedbackModal.dataset.majorItems = majorLines.join('\n');
-        modalContent.innerHTML = html;
-        showSharedModalOverlay();
-        openPoolProModal(feedbackModal, 'block');
       } else {
         alert('Chemistry log submitted successfully!');
-      }
-
-      // Fire confetti if all chemistry values are within acceptable range
-      if (allClear && typeof confetti === 'function') {
-        confetti({
-          particleCount: 120,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#69140e', '#ffffff', '#c8a47e', '#ff6b6b', '#ffd700'],
-        });
       }
 
       // Reset form fields

@@ -5704,6 +5704,28 @@ body.dark-mode .alerts-reminder-list-meta {
   border-top-color: #ff7700;
 }
 
+.chem-success-banner {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-12px);
+  background: #2a6e2a;
+  color: #fff;
+  padding: 14px 36px;
+  border-radius: 8px;
+  font-size: 1.1em;
+  font-weight: 600;
+  z-index: 10100;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.chem-success-banner.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 .dashboard-info-modal,
 .chem-controller-modal {
   position: fixed;
