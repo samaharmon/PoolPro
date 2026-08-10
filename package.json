@@ -1,0 +1,20 @@
+{
+  "name": "poolpro",
+  "version": "1.0.0",
+  "description": "",
+  "main": "agreement.js",
+  "scripts": {
+    "test:capture": "playwright test",
+    "test:compare": "VISUAL_MODE=compare playwright test",
+    "test:update": "VISUAL_MODE=compare playwright test --update-snapshots",
+    "test:report": "playwright show-report tests/report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "serve": "^14.2.6"
+  }
+}
