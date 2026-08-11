@@ -740,6 +740,21 @@ input[type="password"] {
   max-width: 100%;
 }
 
+/* Prevent iOS from auto-zooming into inputs with font-size < 16px */
+@media (hover: none) and (pointer: coarse) {
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  input[type="password"],
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 #dateFilter {
     color: black;
     width: 80px;
