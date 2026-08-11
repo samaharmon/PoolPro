@@ -5451,7 +5451,7 @@ let operationalAutosaveQueued = false;
 let dashboardMetricsFilters = {
   market: 'all',
   pool: 'all',
-  time: 'All Time',
+  time: 'This Calendar Year',
 };
 
 async function refreshSanitationSelections() {
@@ -6410,11 +6410,11 @@ async function loadDashboardData() {
     const optionalDoc = optionalDocs;
     const [sanSnap, chemSnap, dutySnap, managerialSnap, desSnap, inventorySnap, resolvedSupplySnap, trainingScheduleSnap] = await Promise.all([
       getDoc(doc(db, 'settings', 'sanitation')),
-      getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'))),
-      fullAccess ? optionalDocs('cleanliness reports', getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('chemical inventory logs', getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('DES pre-inspections', getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('inventory reports', getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc')))) : Promise.resolve(null),
+      getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'), limit(500))),
+      fullAccess ? optionalDocs('cleanliness reports', getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null),
+      fullAccess ? optionalDocs('chemical inventory logs', getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null),
+      fullAccess ? optionalDocs('DES pre-inspections', getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null),
+      fullAccess ? optionalDocs('inventory reports', getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null),
       fullAccess ? optionalDoc('resolved supply needs', getDoc(doc(db, 'settings', 'resolvedSupplyNeeds'))) : Promise.resolve(null),
       fullAccess ? optionalDoc('training schedule', getDoc(doc(db, 'settings', 'trainingSchedule'))) : Promise.resolve(null),
     ]);
@@ -13299,9 +13299,10 @@ function renderMetricsLineChart(container, {
   `).join('');
 
   const circles = points.map((point) => `
-    <circle cx="${point.x}" cy="${point.y}" r="4.8" fill="#69140e">
+    <circle cx="${point.x}" cy="${point.y}" r="5.5" fill="#69140e" stroke="#f0c9b6" stroke-width="1.4">
       <title>${escapeHtml(`${point.label}: ${valueFormatter(point.value)}`)}</title>
     </circle>
+    <text x="${point.x}" y="${point.y - 10}" text-anchor="middle" class="emp-graph-point-label">${escapeHtml(valueFormatter(point.value))}</text>
   `).join('');
 
   card.insertAdjacentHTML('beforeend', `
@@ -13429,12 +13430,12 @@ function renderDashboardMetrics() {
       <option value="all">All Pools</option>
     </select>
     <select id="dashboardMetricsTimeFilter" class="training-filter-select">
-      <option value="All Time">All Time</option>
+      <option value="This Calendar Year">This Calendar Year</option>
       <option value="Past Week">Past Week</option>
       <option value="Past 2 Weeks">Past 2 Weeks</option>
       <option value="Past Month">Past Month</option>
       <option value="Past 3 Months">Past 3 Months</option>
-      <option value="This Calendar Year">This Calendar Year</option>
+      <option value="All Time">All Time</option>
     </select>
   `;
   container.appendChild(filterBar);

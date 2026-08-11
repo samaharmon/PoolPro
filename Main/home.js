@@ -1944,22 +1944,28 @@ async function authenticateSupervisor(email, password, accessMode = 'supervisor'
 
   try {
     await signInWithEmailAndPassword(auth, e, p);
-    await auth.currentUser?.reload();
+    // Only reload if not yet verified — avoids an unnecessary round-trip for verified accounts
+    if (!auth.currentUser?.emailVerified) await auth.currentUser?.reload();
     if (!auth.currentUser?.emailVerified) {
       const verifyUrl = new URL(window.location.href);
       verifyUrl.search = '';
       verifyUrl.hash = '';
       verifyUrl.searchParams.set('accessMode', normalizeAccessMode(accessMode));
       verifyUrl.searchParams.set('target', getDestinationPath());
+      let verifyEmailSent = false;
       await sendEmailVerification(auth.currentUser, {
         url: verifyUrl.toString(),
         handleCodeInApp: false,
-      }).catch((verifyErr) => {
+      }).then(() => { verifyEmailSent = true; }).catch((verifyErr) => {
         console.warn('Could not send supervisor verification email:', verifyErr);
       });
       await signOut(auth).catch(() => {});
       clearSupervisorSession();
-      throw new Error('Verify your email before opening PoolPro. A verification email has been sent if Firebase allowed it.');
+      throw new Error(
+        verifyEmailSent
+          ? 'A verification email was sent to your address. Check your inbox and spam/junk folder, then sign in again.'
+          : 'Your email is not yet verified. Please contact your supervisor to manually verify your account, or try signing in again to resend the verification email.'
+      );
     }
     await assertAccessModeAllowed(accessMode, getIdentityKeysForSupervisor(e));
     markSupervisorLoggedIn(e, accessMode);

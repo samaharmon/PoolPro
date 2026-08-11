@@ -16,8 +16,8 @@ const DUTY_FIRESTORE_BATCH_SIZE = 120;
 const DUTY_UPLOAD_IMAGE_MAX_SIDE = 960;
 const DUTY_UPLOAD_IMAGE_QUALITY = 0.58;
 const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 250 * 1024;
-const DUTY_UPLOAD_CONCURRENCY = 1;
-const DUTY_STORAGE_UPLOAD_TIMEOUT_MS = 12000;
+const DUTY_UPLOAD_CONCURRENCY = 4;
+const DUTY_STORAGE_UPLOAD_TIMEOUT_MS = 30000;
 const CLEANLINESS_REPORT_QUESTION_TYPES = [
   { id: 'deck', label: 'Deck photos', instructions: 'Submit clear photos showing the full deck area.', minPhotos: 2 },
   { id: 'pool', label: 'Pool photos', instructions: 'Submit clear photos showing the pool water and surrounding edge.', minPhotos: 2 },
@@ -950,10 +950,15 @@ function collectCustomCleanlinessRequirements() {
     const label = row.querySelector('.duties-custom-requirement-checkline span')?.textContent?.trim() || '';
     const uploadId = row.dataset.uploadId || '';
     const minPhotos = uploadId ? parseInt(document.getElementById(uploadId)?.dataset.min || '0', 10) : 0;
+    // Photo-based requirements are complete when enough photos are uploaded.
+    // Checkbox-only requirements (no photos) use the checkbox.
+    const completed = minPhotos > 0 && uploadId
+      ? collectPhotosFromGroup(uploadId).length >= minPhotos
+      : checkbox?.checked === true;
     return {
       id: checkbox?.dataset.requirementId || '',
       label,
-      completed: checkbox?.checked === true,
+      completed,
       minPhotos,
       photoKey: uploadId ? `custom_${checkbox?.dataset.requirementId || ''}` : '',
     };

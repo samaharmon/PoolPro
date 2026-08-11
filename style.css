@@ -4641,12 +4641,20 @@ body.resource-pdf-fullscreen-open {
   }
 
   .resource-esign-body {
-    grid-template-rows: minmax(150px, auto) auto;
+    /* Allow the PDF and actions to both scroll within the body on narrow screens */
+    grid-template-rows: minmax(120px, 1fr) auto;
+    overflow-y: auto;
+  }
+
+  .resource-esign-pdf-scroll {
+    /* Don't constrain the PDF area on small screens — let the body scroll handle it */
+    max-height: none;
   }
 
   .resource-esign-actions {
     padding-top: 14px;
-    padding-bottom: max(18px, calc(12px + env(safe-area-inset-bottom, 0px)));
+    /* Push above virtual keyboard when present */
+    padding-bottom: max(18px, calc(12px + env(safe-area-inset-bottom, 0px) + var(--poolpro-keyboard-inset, 0px)));
   }
 
   .resource-esign-checkbox {
@@ -6167,10 +6175,14 @@ body.dark-mode .dashboard-market-heading {
   display: grid;
   grid-template-columns: 1fr;
   gap: 22px;
+  min-width: 0;
 }
 
 .dashboard-metrics-chart-card {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 0;
   background: transparent;
   border: none;
@@ -6190,12 +6202,15 @@ body.dark-mode .dashboard-market-heading {
 
 .emp-graph-wrap {
   width: 100%;
+  min-width: 0;
   overflow-x: auto;
+  overflow-y: visible;
 }
 
 .dashboard-metrics-scroll-shell {
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   position: relative;
   overflow: hidden;
   outline: 1px solid rgba(255, 255, 255, 0.14);
@@ -6298,6 +6313,13 @@ body.dark-mode .dashboard-market-heading {
   font-size: 13px;
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
   font-weight: 700;
+}
+
+.emp-graph-point-label {
+  fill: #f0c9b6;
+  font-size: 10px;
+  font-family: Arial, sans-serif;
+  pointer-events: none;
 }
 
 .emp-graph-point {
