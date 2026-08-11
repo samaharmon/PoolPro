@@ -4099,6 +4099,15 @@ textarea,
   font-weight: 700;
 }
 
+.resource-esign-header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
 .resource-esign-close {
   border: 0;
   background: transparent;
@@ -4107,6 +4116,29 @@ textarea,
   line-height: 1;
   cursor: pointer;
   padding: 0;
+}
+
+.resource-esign-download-icon {
+  border: 0;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.18s ease;
+}
+
+.resource-esign-download-icon:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.resource-esign-download-icon:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .resource-esign-body {
@@ -4667,14 +4699,13 @@ body.resource-pdf-fullscreen-open {
   }
 
   .resource-esign-button-row {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    justify-content: stretch;
+    display: flex;
+    flex-wrap: wrap;
     gap: 10px;
   }
 
   .resource-esign-button-row .agreement-btn {
-    width: 100%;
+    flex: 1 1 auto;
     padding: 12px 10px;
     white-space: normal;
   }

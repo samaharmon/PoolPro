@@ -9732,7 +9732,12 @@ function getResourceESignModal() {
           <p id="resourceESignSubtitle">Review the full document before signing.</p>
           <p class="resource-esign-enlarge-note">Click document to enlarge.</p>
         </div>
-        <button type="button" class="resource-esign-close" aria-label="Close">&times;</button>
+        <div class="resource-esign-header-actions">
+          <button type="button" class="resource-esign-close" aria-label="Close">&times;</button>
+          <button type="button" class="resource-esign-download-icon" id="resourceESignDownloadBtn" disabled aria-label="Download PDF">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+        </div>
       </div>
       <div class="resource-esign-body">
         <div class="resource-esign-pdf-scroll" id="resourceESignPdfScroll">
@@ -9752,8 +9757,6 @@ function getResourceESignModal() {
           </div>
           <div class="resource-esign-button-row">
             <button type="button" class="agreement-btn resource-esign-signees-btn hidden" id="resourceESignSigneesBtn">List of Signees</button>
-            <button type="button" class="agreement-btn" id="resourceESignDownloadBtn" disabled>Download PDF</button>
-            <button type="button" class="agreement-btn" id="resourceESignCancelBtn">Cancel</button>
             <button type="submit" class="agreement-btn primary" id="resourceESignSubmitBtn" disabled>Sign Document</button>
           </div>
           <div class="resource-esign-message" id="resourceESignMessage" aria-live="polite"></div>
@@ -9767,7 +9770,6 @@ function getResourceESignModal() {
     if (event.target === modal) closeResourceESignModal();
   });
   modal.querySelector('.resource-esign-close')?.addEventListener('click', closeResourceESignModal);
-  modal.querySelector('#resourceESignCancelBtn')?.addEventListener('click', closeResourceESignModal);
   modal.querySelector('#resourceESignForm')?.addEventListener('submit', handleResourceESignSubmit);
   modal.querySelector('#resourceESignSignatureInput')?.addEventListener('input', () => syncResourceESignSubmitState(modal));
   modal.querySelector('#resourceESignSignatureInput')?.addEventListener('focus', () => {
@@ -10056,7 +10058,7 @@ function resetResourceESignModal(modal, resource, options = {}) {
   const signeesBtn = modal.querySelector('#resourceESignSigneesBtn');
   const submitBtn = modal.querySelector('#resourceESignSubmitBtn');
   const context = getResourceESignContext();
-  const showSignees = !!options.openedFromSettings && isSupervisor() && isResourceESignPdf(resource);
+  const showSignees = isSupervisor() && isResourceESignPdf(resource);
 
   modal.dataset.resourceId = resource?.id || '';
   modal.dataset.scrollUnlocked = 'false';
