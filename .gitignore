@@ -3,3 +3,5 @@ tests/screenshots/
 tests/results/
 tests/report/
 tests/snapshots/
+tests/.auth/
+.env
