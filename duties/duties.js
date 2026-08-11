@@ -1083,11 +1083,12 @@ function ensureDutiesUploadModal() {
   modal.innerHTML = `
     <div class="duties-upload-progress-card">
       <h2>Uploading Cleanliness Report</h2>
-      <p class="duties-upload-progress-warning">Keep this page open until every photo finishes uploading.</p>
+      <p class="duties-upload-do-not-close"><strong>DO NOT CLOSE THE WINDOW UNTIL UPLOAD IS COMPLETE!</strong></p>
       <div class="duties-upload-progress-track" aria-hidden="true">
         <div class="duties-upload-progress-bar" id="dutiesUploadProgressBar"></div>
       </div>
       <p class="duties-upload-progress-count" id="dutiesUploadProgressCount">Starting upload...</p>
+      <p class="duties-upload-time-remaining" id="dutiesUploadTimeRemaining"></p>
       <p class="duties-upload-progress-detail" id="dutiesUploadProgressDetail"></p>
     </div>
   `;
@@ -1107,15 +1108,27 @@ function showDutiesUploadProgress(totalPhotos) {
   });
 }
 
-function updateDutiesUploadProgress({ completed = 0, total = 0, message = '', error = false } = {}) {
+function updateDutiesUploadProgress({ completed = 0, total = 0, message = '', error = false, timeRemaining = null } = {}) {
   const modal = ensureDutiesUploadModal();
   modal.classList.toggle('duties-upload-progress-error', !!error);
   const bar = modal.querySelector('#dutiesUploadProgressBar');
   const count = modal.querySelector('#dutiesUploadProgressCount');
+  const timeEl = modal.querySelector('#dutiesUploadTimeRemaining');
   const detail = modal.querySelector('#dutiesUploadProgressDetail');
   const percent = total ? Math.min(100, Math.round((completed / total) * 100)) : (error ? 100 : 15);
   if (bar) bar.style.width = `${percent}%`;
   if (count) count.textContent = total ? `${completed} of ${total} photos uploaded` : 'Saving report';
+  if (timeEl) {
+    if (timeRemaining !== null && timeRemaining > 0 && !error) {
+      const mins = Math.floor(timeRemaining / 60);
+      const secs = timeRemaining % 60;
+      timeEl.textContent = mins > 0
+        ? `~${mins} min ${secs} sec remaining`
+        : `~${secs} sec remaining`;
+    } else {
+      timeEl.textContent = '';
+    }
+  }
   if (detail) detail.textContent = message;
 }
 
@@ -1271,6 +1284,7 @@ async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgr
   const totalPhotos = uploadTasks.length;
   let uploadedCount = 0;
   let nextTaskIndex = 0;
+  const startTime = Date.now();
   const results = Object.fromEntries(uploadGroups.map((group) => [group.resultKey, []]));
 
   async function runNextUpload() {
@@ -1283,6 +1297,7 @@ async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgr
           total: totalPhotos,
           label: task.group.label,
           fileName: task.file.name || `Photo ${task.index + 1}`,
+          startTime,
         });
       }
       const uploadedPhoto = await uploadDutyPhoto({
@@ -1300,6 +1315,7 @@ async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgr
           total: totalPhotos,
           label: task.group.label,
           fileName: task.file.name || `Photo ${task.index + 1}`,
+          startTime,
         });
       }
     }
@@ -1315,6 +1331,7 @@ async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgr
       completed: totalPhotos,
       total: totalPhotos,
       done: true,
+      startTime,
     });
   }
 
@@ -1452,7 +1469,13 @@ window.submitDutiesForm = async function () {
       submissionId: submissionRef.id,
       pool,
       uploadGroups,
-      onProgress: ({ completed, total, label, fileName, done }) => {
+      onProgress: ({ completed, total, label, fileName, done, startTime }) => {
+        let timeRemaining = null;
+        if (startTime && completed > 0 && !done && completed < total) {
+          const elapsed = Date.now() - startTime;
+          const secsRemaining = Math.ceil(((elapsed / completed) * (total - completed)) / DUTY_UPLOAD_CONCURRENCY / 1000);
+          timeRemaining = Math.max(1, secsRemaining);
+        }
         const message = done || completed >= total
           ? `Uploads complete. Saving report...`
           : completed > 0
@@ -1462,6 +1485,7 @@ window.submitDutiesForm = async function () {
           completed: done ? total : completed,
           total,
           message,
+          timeRemaining,
         });
         if (!msgEl || !total) return;
         msgEl.style.color = '#333';

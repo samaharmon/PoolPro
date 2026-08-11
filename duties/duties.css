@@ -602,11 +602,21 @@ body.dark-mode .duties-custom-requirement-row {
   font-size: 28px;
 }
 
-.duties-upload-progress-warning {
-  margin: 0 0 18px;
+.duties-upload-do-not-close {
+  margin: 0 0 16px;
+  color: #ff5c5c;
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.duties-upload-time-remaining {
+  margin: 10px 0 0;
   color: #ffd966;
-  font-size: 16px;
-  font-weight: bold;
+  font-size: 15px;
+  font-weight: 600;
+  min-height: 1.2em;
 }
 
 .duties-upload-progress-track {
@@ -640,7 +650,6 @@ body.dark-mode .duties-custom-requirement-row {
   background: #c0392b;
 }
 
-.duties-upload-progress-error .duties-upload-progress-warning,
 .duties-upload-progress-error .duties-upload-progress-detail {
   color: #ff8a8a;
 }
