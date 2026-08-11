@@ -13,8 +13,8 @@ const DUTY_FIRESTORE_STORAGE = 'firestoreDutyPhoto';
 const DUTY_STORAGE_SOURCE = 'firebaseStorage';
 const DUTY_FIRESTORE_CHUNK_SIZE = 700000;
 const DUTY_FIRESTORE_BATCH_SIZE = 120;
-const DUTY_UPLOAD_IMAGE_MAX_SIDE = 960;
-const DUTY_UPLOAD_IMAGE_QUALITY = 0.58;
+const DUTY_UPLOAD_IMAGE_MAX_SIDE = 800;
+const DUTY_UPLOAD_IMAGE_QUALITY = 0.42;
 const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 250 * 1024;
 const DUTY_UPLOAD_CONCURRENCY = 4;
 const DUTY_STORAGE_UPLOAD_TIMEOUT_MS = 30000;
@@ -512,20 +512,20 @@ function updateCustomCleanlinessRequirements(settings) {
     const minPhotos = getCleanlinessQuestionMinPhotos(item.id, settings);
     const uploadId = `customUpload_${item.id.replace(/[^a-z0-9_-]/gi, '_')}`;
     const row = document.createElement('div');
-    row.className = 'duties-custom-requirement-row';
+    row.className = 'duties-photo-group duties-custom-requirement-row';
     row.dataset.requirementId = item.id;
     row.dataset.uploadId = uploadId;
+    row.dataset.label = label;
+    const badgeText = minPhotos > 0 ? `${minPhotos} required` : 'required';
     row.innerHTML = `
-      <label class="duties-custom-requirement-checkline">
-        <input type="checkbox" class="duties-custom-requirement-check" data-requirement-id="${escapeHtmlUnsafe(item.id)}">
-        <span>${escapeHtmlUnsafe(label)}</span>
-      </label>
-      ${instructions ? `<p class="duties-custom-requirement-instructions">${escapeHtmlUnsafe(instructions)}</p>` : ''}
+      <h3 class="duties-photo-group-title">
+        ${escapeHtmlUnsafe(label)}
+        <span class="duties-req-badge">${escapeHtmlUnsafe(badgeText)}</span>
+      </h3>
+      ${instructions ? `<p class="duties-group-desc">${escapeHtmlUnsafe(instructions)}</p>` : ''}
       ${minPhotos > 0 ? `
-        <div class="duties-custom-upload-wrap">
-          <div class="duties-multi-upload duties-custom-upload" id="${escapeHtmlUnsafe(uploadId)}" data-category="customRequirements" data-min="${escapeHtmlUnsafe(minPhotos)}" data-max="${escapeHtmlUnsafe(Math.max(minPhotos, 10))}"></div>
-          <button type="button" class="duties-add-photo-btn duties-custom-add-photo" data-upload-id="${escapeHtmlUnsafe(uploadId)}">+ Add Photo</button>
-        </div>
+        <div class="duties-multi-upload duties-custom-upload" id="${escapeHtmlUnsafe(uploadId)}" data-category="customRequirements" data-min="${escapeHtmlUnsafe(minPhotos)}" data-max="${escapeHtmlUnsafe(Math.max(minPhotos, 10))}"></div>
+        <button type="button" class="duties-add-photo-btn duties-custom-add-photo" data-upload-id="${escapeHtmlUnsafe(uploadId)}">+ Add Photo</button>
       ` : ''}
     `;
     rows.appendChild(row);
@@ -946,21 +946,19 @@ function collectPhotosFromGroup(groupId) {
 function collectCustomCleanlinessRequirements() {
   const rows = Array.from(document.querySelectorAll('#customCleanlinessRequirementsRows .duties-custom-requirement-row'));
   return rows.map((row) => {
-    const checkbox = row.querySelector('.duties-custom-requirement-check');
-    const label = row.querySelector('.duties-custom-requirement-checkline span')?.textContent?.trim() || '';
+    const id = row.dataset.requirementId || '';
+    const label = row.dataset.label || '';
     const uploadId = row.dataset.uploadId || '';
     const minPhotos = uploadId ? parseInt(document.getElementById(uploadId)?.dataset.min || '0', 10) : 0;
-    // Photo-based requirements are complete when enough photos are uploaded.
-    // Checkbox-only requirements (no photos) use the checkbox.
     const completed = minPhotos > 0 && uploadId
       ? collectPhotosFromGroup(uploadId).length >= minPhotos
-      : checkbox?.checked === true;
+      : true;
     return {
-      id: checkbox?.dataset.requirementId || '',
+      id,
       label,
       completed,
       minPhotos,
-      photoKey: uploadId ? `custom_${checkbox?.dataset.requirementId || ''}` : '',
+      photoKey: uploadId ? `custom_${id}` : '',
     };
   }).filter((item) => item.id || item.label);
 }
@@ -1083,7 +1081,7 @@ function ensureDutiesUploadModal() {
   modal.innerHTML = `
     <div class="duties-upload-progress-card">
       <h2>Uploading Cleanliness Report</h2>
-      <p class="duties-upload-do-not-close"><strong>DO NOT CLOSE THE WINDOW UNTIL UPLOAD IS COMPLETE!</strong></p>
+      <p class="duties-upload-do-not-close"><strong>DO NOT CLOSE OR LEAVE THIS SITE!</strong> You may turn your screen off, but closing or navigating away will cancel the upload.</p>
       <div class="duties-upload-progress-track" aria-hidden="true">
         <div class="duties-upload-progress-bar" id="dutiesUploadProgressBar"></div>
       </div>
@@ -1401,7 +1399,7 @@ window.submitDutiesForm = async function () {
 
   document.querySelectorAll('.duties-custom-upload').forEach((upload) => {
     const row = upload.closest('.duties-custom-requirement-row');
-    const label = row?.querySelector('.duties-custom-requirement-checkline span')?.textContent?.trim() || 'Additional Requirement';
+    const label = row?.dataset.label || 'Additional Requirement';
     const min = parseInt(upload.dataset.min || '0', 10);
     if (min > 0) requiredGroups.push({ id: upload.id, label, min });
   });
@@ -1443,7 +1441,7 @@ window.submitDutiesForm = async function () {
       ...Array.from(document.querySelectorAll('.duties-custom-upload')).map((upload) => {
         const row = upload.closest('.duties-custom-requirement-row');
         const requirementId = row?.dataset.requirementId || upload.id;
-        const label = row?.querySelector('.duties-custom-requirement-checkline span')?.textContent?.trim() || 'Additional Requirement';
+        const label = row?.dataset.label || 'Additional Requirement';
         return {
           groupId: upload.id,
           category: `customRequirements/${requirementId}`,
@@ -1548,7 +1546,21 @@ window.submitDutiesForm = async function () {
       total: totalPhotos,
       message: 'Report saved. You may leave this page now.',
     });
-    hideDutiesUploadProgress(1000);
+    hideDutiesUploadProgress(800);
+    if (!managerialPage) {
+      if (typeof confetti === 'function') {
+        confetti({ particleCount: 120, spread: 80, origin: { y: 0.55 }, colors: ['#69140e', '#f0c9b6', '#fff', '#2a6e2a'] });
+      }
+      const banner = document.createElement('div');
+      banner.className = 'chem-success-banner';
+      banner.textContent = 'Report submitted successfully!';
+      document.body.appendChild(banner);
+      requestAnimationFrame(() => banner.classList.add('visible'));
+      setTimeout(() => {
+        banner.classList.remove('visible');
+        setTimeout(() => banner.remove(), 400);
+      }, 3500);
+    }
     resetForm();
   } catch (err) {
     console.error('[Duties] Submit error:', err);
