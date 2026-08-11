@@ -4,9 +4,10 @@
   "description": "",
   "main": "agreement.js",
   "scripts": {
-    "test:capture": "playwright test",
-    "test:compare": "VISUAL_MODE=compare playwright test",
-    "test:update": "VISUAL_MODE=compare playwright test --update-snapshots",
+    "test:capture": "playwright test --project=desktop tests/visual.spec.js",
+    "test:compare": "VISUAL_MODE=compare playwright test --project=desktop tests/visual.spec.js",
+    "test:update": "VISUAL_MODE=compare playwright test --update-snapshots --project=desktop tests/visual.spec.js",
+    "test:diagnose": "playwright test --project=desktop tests/diagnose.spec.js",
     "test:report": "playwright show-report tests/report"
   },
   "keywords": [],
