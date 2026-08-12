@@ -13,10 +13,10 @@ const DUTY_FIRESTORE_STORAGE = 'firestoreDutyPhoto';
 const DUTY_STORAGE_SOURCE = 'firebaseStorage';
 const DUTY_FIRESTORE_CHUNK_SIZE = 700000;
 const DUTY_FIRESTORE_BATCH_SIZE = 120;
-const DUTY_UPLOAD_IMAGE_MAX_SIDE = 800;
-const DUTY_UPLOAD_IMAGE_QUALITY = 0.42;
+const DUTY_UPLOAD_IMAGE_MAX_SIDE = 720;
+const DUTY_UPLOAD_IMAGE_QUALITY = 0.35;
 const DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES = 250 * 1024;
-const DUTY_UPLOAD_CONCURRENCY = 4;
+const DUTY_UPLOAD_CONCURRENCY = 6;
 const DUTY_STORAGE_UPLOAD_TIMEOUT_MS = 30000;
 const CLEANLINESS_REPORT_QUESTION_TYPES = [
   { id: 'deck', label: 'Deck photos', instructions: 'Submit clear photos showing the full deck area.', minPhotos: 2 },
@@ -1282,18 +1282,32 @@ async function uploadDutyPhoto({ submissionId, pool, category, file, index }) {
 }
 
 async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgress }) {
-  const uploadTasks = uploadGroups.flatMap((group) =>
+  const rawTasks = uploadGroups.flatMap((group) =>
     group.files.map((file, index) => ({ group, file, index }))
   );
-  const totalPhotos = uploadTasks.length;
-  let uploadedCount = 0;
-  let nextTaskIndex = 0;
+  const totalPhotos = rawTasks.length;
   const startTime = Date.now();
   const results = Object.fromEntries(uploadGroups.map((group) => [group.resultKey, []]));
 
+  if (totalPhotos === 0) {
+    if (typeof onProgress === 'function') onProgress({ completed: 0, total: 0, done: true, startTime });
+    return results;
+  }
+
+  // Compress all photos simultaneously before any network uploads begin
+  const preparedTasks = await Promise.all(
+    rawTasks.map(async (task) => ({
+      ...task,
+      uploadPayload: await prepareDutyPhotoForUpload(task.file),
+    }))
+  );
+
+  let uploadedCount = 0;
+  let nextTaskIndex = 0;
+
   async function runNextUpload() {
-    while (nextTaskIndex < uploadTasks.length) {
-      const task = uploadTasks[nextTaskIndex];
+    while (nextTaskIndex < preparedTasks.length) {
+      const task = preparedTasks[nextTaskIndex];
       nextTaskIndex += 1;
       if (typeof onProgress === 'function') {
         onProgress({
@@ -1304,13 +1318,24 @@ async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgr
           startTime,
         });
       }
-      const uploadedPhoto = await uploadDutyPhoto({
-        submissionId,
-        pool,
-        category: task.group.category,
-        file: task.file,
-        index: task.index,
-      });
+      const safeName = String(task.file.name || 'photo.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+      const uniqueId = window.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const photoId = `${Date.now()}_${task.group.category}_${task.index}_${uniqueId}_${safeName}`;
+      let uploadedPhoto;
+      try {
+        uploadedPhoto = await uploadDutyPhotoToStorage({
+          submissionId, pool, category: task.group.category,
+          file: task.file, index: task.index, safeName, photoId,
+          uploadPayload: task.uploadPayload,
+        });
+      } catch (err) {
+        console.warn('[Duties] Firebase Storage upload failed; using Firestore fallback.', err);
+        uploadedPhoto = await uploadDutyPhotoToFirestore({
+          submissionId, pool, category: task.group.category,
+          file: task.file, index: task.index, safeName, photoId,
+          uploadPayload: task.uploadPayload,
+        });
+      }
       results[task.group.resultKey].push(uploadedPhoto);
       uploadedCount += 1;
       if (typeof onProgress === 'function') {
@@ -1325,18 +1350,11 @@ async function uploadDutyPhotoGroups({ submissionId, pool, uploadGroups, onProgr
     }
   }
 
-  const workerCount = Math.min(DUTY_UPLOAD_CONCURRENCY, totalPhotos);
-  if (workerCount > 0) {
-    await Promise.all(Array.from({ length: workerCount }, runNextUpload));
-  }
+  const workerCount = Math.min(DUTY_UPLOAD_CONCURRENCY, preparedTasks.length);
+  await Promise.all(Array.from({ length: workerCount }, runNextUpload));
 
-  if (typeof onProgress === 'function' && totalPhotos > 0) {
-    onProgress({
-      completed: totalPhotos,
-      total: totalPhotos,
-      done: true,
-      startTime,
-    });
+  if (typeof onProgress === 'function') {
+    onProgress({ completed: totalPhotos, total: totalPhotos, done: true, startTime });
   }
 
   Object.values(results).forEach((items) => items.sort((a, b) => Number(a.index || 0) - Number(b.index || 0)));

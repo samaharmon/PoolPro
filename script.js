@@ -12313,7 +12313,11 @@ function isReportInPeriod(report, period) {
   return !!date && date >= period.start && date <= period.end;
 }
 
-function renderInspectionDateFilter(container, managerialPeriod, desPeriod) {
+function formatShortDate(date) {
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function renderInspectionDateFilter(container, managerialPeriod) {
   const filter = document.createElement('div');
   filter.className = 'dashboard-date-filter dashboard-inspection-date-filter';
 
@@ -12329,22 +12333,9 @@ function renderInspectionDateFilter(container, managerialPeriod, desPeriod) {
   prevButton.setAttribute('aria-label', 'Previous inspection week');
   prevButton.addEventListener('click', () => shiftInspectionDate(-7));
 
-  const dateField = document.createElement('label');
-  dateField.className = 'dashboard-filter-field dashboard-inspection-date-field';
-  const dateText = document.createElement('span');
-  dateText.textContent = 'Date';
-  const dateInput = document.createElement('input');
-  dateInput.type = 'date';
-  dateInput.className = 'training-filter-select dashboard-date-input';
-  dateInput.value = dashboardInspectionDateFilter || getTodayDateValue();
-  dateInput.setAttribute('aria-label', 'Inspection report date');
-  dateInput.addEventListener('change', () => {
-    dashboardInspectionDateFilter = dateInput.value || getTodayDateValue();
-    dashboardManagerialPage = 1;
-    renderInspectionReports();
-  });
-  dateField.appendChild(dateText);
-  dateField.appendChild(dateInput);
+  const weekDisplay = document.createElement('span');
+  weekDisplay.className = 'training-filter-select dashboard-date-input dashboard-inspection-week-display';
+  weekDisplay.textContent = `${formatShortDate(managerialPeriod.start)} – ${formatShortDate(managerialPeriod.end)}`;
 
   const nextButton = document.createElement('button');
   nextButton.type = 'button';
@@ -12354,20 +12345,10 @@ function renderInspectionDateFilter(container, managerialPeriod, desPeriod) {
   nextButton.setAttribute('aria-label', 'Next inspection week');
   nextButton.addEventListener('click', () => shiftInspectionDate(7));
 
-  const managerialChip = document.createElement('span');
-  managerialChip.className = 'dashboard-date-filter-chip';
-  managerialChip.textContent = `Chemical Inventory Log: ${formatInspectionPeriodDate(managerialPeriod.start)} - ${formatInspectionPeriodDate(managerialPeriod.end)}`;
-
-  const desChip = document.createElement('span');
-  desChip.className = 'dashboard-date-filter-chip';
-  desChip.textContent = `DES: ${formatInspectionPeriodDate(desPeriod.start)} - ${formatInspectionPeriodDate(desPeriod.end)}`;
-
   filter.appendChild(label);
   filter.appendChild(prevButton);
-  filter.appendChild(dateField);
+  filter.appendChild(weekDisplay);
   filter.appendChild(nextButton);
-  filter.appendChild(managerialChip);
-  filter.appendChild(desChip);
   container.appendChild(filter);
 }
 
@@ -12444,7 +12425,7 @@ function renderInspectionReports() {
     renderRowsForPools([dashboardPoolFilter], tbody);
     table.appendChild(tbody);
     section.appendChild(table);
-    renderInspectionDateFilter(section, managerialPeriod, desPeriod);
+    renderInspectionDateFilter(section, managerialPeriod);
     container.appendChild(section);
     wrapResponsiveTables(container);
     return;
@@ -12469,7 +12450,7 @@ function renderInspectionReports() {
     renderRowsForPools(poolNames, tbody);
     table.appendChild(tbody);
     section.appendChild(table);
-    renderInspectionDateFilter(section, managerialPeriod, desPeriod);
+    renderInspectionDateFilter(section, managerialPeriod);
     container.appendChild(section);
     renderedAny = true;
   });
@@ -13829,14 +13810,19 @@ function openDesPreInspectionModal(sub) {
           <p><strong>Submitted:</strong> ${ts ? ts.toLocaleString() : '—'}</p>
         </div>
         <section class="des-inspection-item-list">
-          ${items.length ? items.map((item) => `
-            <article class="des-inspection-review-item">
-              <h3>${esc(item.label || item.id || 'Inspection item')}</h3>
-              <p><strong>Answer:</strong> ${esc(item.answer || '—')}</p>
-              ${item.notes ? `<div class="duty-report-notes"><strong>Notes:</strong><span>${esc(item.notes)}</span></div>` : ''}
-              ${photoHtml(item.photos)}
-            </article>
-          `).join('') : '<p>No inspection item details were recorded.</p>'}
+          ${items.length ? items.map((item) => {
+            const answerLower = (item.answer || '').trim().toLowerCase();
+            const isYes = answerLower === 'yes';
+            return `
+              <article class="des-inspection-review-item">
+                <p class="des-inspection-question">${esc(item.label || item.id || 'Inspection item')}</p>
+                <p class="des-inspection-answer${isYes ? '' : ' des-inspection-answer--fail'}">
+                  <strong>Answer:</strong> ${esc(item.answer || '—')}
+                </p>
+                ${item.notes ? `<p class="des-inspection-notes"><strong>Notes:</strong> ${esc(item.notes)}</p>` : ''}
+                ${photoHtml(item.photos)}
+              </article>`;
+          }).join('') : '<p>No inspection item details were recorded.</p>'}
         </section>
       </div>
     </div>`;

@@ -23,6 +23,11 @@
   margin: 0 0 18px;
 }
 
+.inventory-section-card .inventory-directions {
+  padding: 14px 16px 0;
+  margin: 0 0 12px;
+}
+
 .inventory-supply-sections,
 .inventory-urgent-list,
 .inventory-chemical-fields {

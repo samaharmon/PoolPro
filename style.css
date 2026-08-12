@@ -5209,9 +5209,21 @@ td.concern-major {
   min-height: 42px;
 }
 
-.dashboard-date-input {
+.dashboard-date-input,
+.dashboard-inspection-week-display {
   width: 150px !important;
   min-width: 120px;
+}
+
+.dashboard-inspection-week-display {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  width: auto !important;
+  min-width: 170px;
+  cursor: default;
+  user-select: none;
 }
 
 .dashboard-date-nav {
@@ -5221,29 +5233,26 @@ td.concern-major {
 }
 
 .dashboard-date-arrow {
-  background: #444;
-  color: #fff;
-  border: 1px solid #ccc;
-  min-height: 42px;
-  width: 36px;
-  font-size: 18px;
-  font-weight: bold;
+  border: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #fff !important;
+  font-size: 24px;
+  line-height: 1;
+  padding: 0 6px;
+  margin: 0 2px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
   flex-shrink: 0;
-  transition: background-color 0.12s ease;
+  transition: opacity 0.12s ease, transform 0.12s ease;
 }
 
 .dashboard-date-arrow:hover {
-  background: #555;
+  opacity: 0.8;
+  transform: scale(1.1);
 }
 
 .dashboard-date-arrow:active {
-  background: #333 !important;
-  transform: none;
+  transform: scale(0.95) !important;
 }
 
 .dashboard-date-filter {
@@ -7488,6 +7497,45 @@ body.dark-mode .dash-value-popover {
   background:
     repeating-linear-gradient(45deg, rgba(105, 20, 14, 0.55), rgba(105, 20, 14, 0.55) 10px, rgba(31, 31, 31, 0.92) 10px, rgba(31, 31, 31, 0.92) 20px);
   cursor: default;
+}
+
+.des-inspection-item-list {
+  margin: 0;
+  padding: 0;
+}
+
+.des-inspection-review-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #3a3a3a;
+}
+
+.des-inspection-review-item:last-child {
+  border-bottom: none;
+}
+
+.des-inspection-question {
+  font-size: 13px;
+  font-weight: 600;
+  color: #c0c0c0;
+  margin: 0 0 3px;
+  line-height: 1.4;
+}
+
+.des-inspection-answer {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
+}
+
+.des-inspection-answer--fail {
+  color: #ff6b6b;
+  font-weight: 700;
+}
+
+.des-inspection-notes {
+  font-size: 12px;
+  color: #aaa;
+  margin: 4px 0 0;
 }
 
 .duty-report-notes {
