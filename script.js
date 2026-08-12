@@ -5803,7 +5803,7 @@ function refreshOperationalStatusLatestMap() {
 
 async function loadOperationalStatusLogs() {
   try {
-    const q = query(collection(db, 'operationalStatusLogs'), orderBy('timestamp', 'desc'));
+    const q = query(collection(db, 'operationalStatusLogs'), orderBy('timestamp', 'desc'), limit(200));
     const snap = await getDocs(q);
     operationalStatusLogs = snap.docs.map((docSnap) => normalizeOperationalStatusRecord(docSnap.data(), docSnap.id));
     refreshOperationalStatusLatestMap();
@@ -6281,13 +6281,13 @@ function renderDashboardFilterBar(container, onChange, { includeDate = true } = 
   const poolField = document.createElement('label');
   poolField.className = 'dashboard-filter-field';
   const poolLabel = document.createElement('span');
-  poolLabel.textContent = 'Pool';
+  poolLabel.textContent = 'Facility';
   const poolSelect = document.createElement('select');
   poolSelect.className = 'training-filter-select';
-  poolSelect.setAttribute('aria-label', 'Filter dashboard by pool');
+  poolSelect.setAttribute('aria-label', 'Filter dashboard by facility');
   const allOption = document.createElement('option');
   allOption.value = 'all';
-  allOption.textContent = 'All Pools';
+  allOption.textContent = 'All';
   poolSelect.appendChild(allOption);
 
   getDashboardPoolOptions().forEach(({ market, pools }) => {
@@ -6307,20 +6307,35 @@ function renderDashboardFilterBar(container, onChange, { includeDate = true } = 
     poolSelect.value = 'all';
   }
 
-  const dateField = document.createElement('label');
+  const dateField = document.createElement('div');
   dateField.className = 'dashboard-filter-field';
   const dateLabel = document.createElement('span');
   dateLabel.textContent = 'Date';
+  const dateNav = document.createElement('div');
+  dateNav.className = 'dashboard-date-nav';
+  const prevDay = document.createElement('button');
+  prevDay.type = 'button';
+  prevDay.className = 'dashboard-date-arrow';
+  prevDay.textContent = '←';
+  prevDay.setAttribute('aria-label', 'Previous day');
   const dateInput = document.createElement('input');
   dateInput.type = 'date';
   dateInput.className = 'training-filter-select dashboard-date-input';
   dateInput.value = dashboardDateFilter || getTodayDateValue();
   dateInput.setAttribute('aria-label', 'Filter dashboard by date');
+  const nextDay = document.createElement('button');
+  nextDay.type = 'button';
+  nextDay.className = 'dashboard-date-arrow';
+  nextDay.textContent = '→';
+  nextDay.setAttribute('aria-label', 'Next day');
+  dateNav.appendChild(prevDay);
+  dateNav.appendChild(dateInput);
+  dateNav.appendChild(nextDay);
 
   poolField.appendChild(poolLabel);
   poolField.appendChild(poolSelect);
   dateField.appendChild(dateLabel);
-  dateField.appendChild(dateInput);
+  dateField.appendChild(dateNav);
   filterBar.appendChild(label);
   filterBar.appendChild(poolField);
   if (includeDate) filterBar.appendChild(dateField);
@@ -6337,6 +6352,17 @@ function renderDashboardFilterBar(container, onChange, { includeDate = true } = 
     onChange?.();
   };
 
+  const shiftDay = (delta) => {
+    const d = new Date(dateInput.value);
+    if (!isNaN(d.getTime())) {
+      d.setDate(d.getDate() + delta);
+      dateInput.value = d.toISOString().slice(0, 10);
+      handleChange();
+    }
+  };
+
+  prevDay.addEventListener('click', () => shiftDay(-1));
+  nextDay.addEventListener('click', () => shiftDay(1));
   poolSelect.addEventListener('change', handleChange);
   if (includeDate) dateInput.addEventListener('change', handleChange);
 }
@@ -6407,19 +6433,30 @@ async function loadDashboardData() {
         return null;
       }
     };
-    const optionalDoc = optionalDocs;
-    const [sanSnap, chemSnap, dutySnap, managerialSnap, desSnap, inventorySnap, resolvedSupplySnap, trainingScheduleSnap] = await Promise.all([
-      getDoc(doc(db, 'settings', 'sanitation')),
-      getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'), limit(500))),
-      fullAccess ? optionalDocs('cleanliness reports', getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('chemical inventory logs', getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('DES pre-inspections', getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null),
-      fullAccess ? optionalDocs('inventory reports', getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null),
-      fullAccess ? optionalDoc('resolved supply needs', getDoc(doc(db, 'settings', 'resolvedSupplyNeeds'))) : Promise.resolve(null),
-      fullAccess ? optionalDoc('training schedule', getDoc(doc(db, 'settings', 'trainingSchedule'))) : Promise.resolve(null),
-    ]);
+
+    // Start all queries simultaneously
+    const sanPromise = getDoc(doc(db, 'settings', 'sanitation'));
+    const chemPromise = getDocs(query(collection(db, 'poolSubmissions'), orderBy('timestamp', 'desc'), limit(500)));
+    const opStatusPromise = loadOperationalStatusLogs();
+    const dutyPromise = fullAccess ? optionalDocs('cleanliness reports', getDocs(query(collection(db, 'dutySubmissions'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null);
+    const managerialPromise = fullAccess ? optionalDocs('chemical inventory logs', getDocs(query(collection(db, 'managerialReports'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null);
+    const desPromise = fullAccess ? optionalDocs('DES pre-inspections', getDocs(query(collection(db, 'desPreInspections'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null);
+    const inventoryPromise = fullAccess ? optionalDocs('inventory reports', getDocs(query(collection(db, 'inventorySubmissions'), orderBy('timestamp', 'desc'), limit(200)))) : Promise.resolve(null);
+    const resolvedSupplyPromise = fullAccess ? optionalDocs('resolved supply needs', getDoc(doc(db, 'settings', 'resolvedSupplyNeeds'))) : Promise.resolve(null);
+    const trainingSchedulePromise = fullAccess ? optionalDocs('training schedule', getDoc(doc(db, 'settings', 'trainingSchedule'))) : Promise.resolve(null);
+
+    // Phase 1: render as soon as sanitation settings + chemistry logs are ready
+    const [sanSnap, chemSnap] = await Promise.all([sanPromise, chemPromise]);
     sanitationSelections = sanSnap.exists() ? (sanSnap.data().pools || {}) : {};
     allLogs = chemSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+    dashboardDataLoaded = true;
+    await renderActiveDashboardTab();
+
+    // Phase 2: await remaining queries and re-render with full data
+    const [dutySnap, managerialSnap, desSnap, inventorySnap, resolvedSupplySnap, trainingScheduleSnap] = await Promise.all([
+      dutyPromise, managerialPromise, desPromise, inventoryPromise, resolvedSupplyPromise, trainingSchedulePromise,
+    ]);
+    await opStatusPromise;
     allDutyReports = dutySnap ? dutySnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     allManagerialReports = managerialSnap ? managerialSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
     allDesPreInspections = desSnap ? desSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })) : [];
@@ -6430,8 +6467,6 @@ async function loadDashboardData() {
     }
     supplyResolvedItems = resolvedSupplySnap?.exists?.() ? (resolvedSupplySnap.data().items || {}) : {};
     supplyPendingResolvedItems.clear();
-    await loadOperationalStatusLogs();
-    dashboardDataLoaded = true;
     await renderActiveDashboardTab();
   } catch (err) {
     console.error('[ChemLog] Error loading dashboard data:', err);

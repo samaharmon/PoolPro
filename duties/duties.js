@@ -1049,7 +1049,13 @@ async function prepareDutyPhotoForUpload(file) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas is unavailable for image compression.');
     ctx.drawImage(image, 0, 0, width, height);
-    const blob = await canvasToBlob(canvas, 'image/jpeg', DUTY_UPLOAD_IMAGE_QUALITY);
+    let blob = await canvasToBlob(canvas, 'image/jpeg', DUTY_UPLOAD_IMAGE_QUALITY);
+    if (blob.size > 500 * 1024) {
+      for (const q of [0.32, 0.22, 0.14]) {
+        if (blob.size <= 500 * 1024) break;
+        blob = await canvasToBlob(canvas, 'image/jpeg', q);
+      }
+    }
     if (blob.size && file.size && blob.size >= file.size && file.size <= DUTY_UPLOAD_COMPRESS_THRESHOLD_BYTES) {
       return {
         body: file,

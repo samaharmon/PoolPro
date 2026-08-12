@@ -5210,8 +5210,40 @@ td.concern-major {
 }
 
 .dashboard-date-input {
-  width: 180px !important;
-  min-width: 180px;
+  width: 150px !important;
+  min-width: 120px;
+}
+
+.dashboard-date-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.dashboard-date-arrow {
+  background: #444;
+  color: #fff;
+  border: 1px solid #ccc;
+  min-height: 42px;
+  width: 36px;
+  font-size: 18px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background-color 0.12s ease;
+}
+
+.dashboard-date-arrow:hover {
+  background: #555;
+}
+
+.dashboard-date-arrow:active {
+  background: #333 !important;
+  transform: none;
 }
 
 .dashboard-date-filter {
@@ -7399,6 +7431,11 @@ body.dark-mode .dash-value-popover {
 
 .photo-view-nav--next {
   right: 18px;
+}
+
+.photo-view-nav:active {
+  transform: translateY(calc(-50% + 1px));
+  background-color: transparent !important;
 }
 
 .duty-report-meta {

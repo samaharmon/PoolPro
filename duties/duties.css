@@ -51,6 +51,15 @@ body.dark-mode .duties-group-desc {
   display: none !important;
 }
 
+@keyframes dutiesFormReveal {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.duties-form-fields:not(.hidden-by-shift) {
+  animation: dutiesFormReveal 0.3s ease;
+}
+
 .duties-shift-section {
   padding-bottom: 24px;
 }
