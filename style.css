@@ -6253,6 +6253,10 @@ body.dark-mode .dashboard-market-heading {
   margin-bottom: 24px;
 }
 
+.dashboard-metrics-filter-bar #dashboardMetricsTimeFilter {
+  width: 180px;
+}
+
 .dashboard-metrics-section {
   width: 100%;
   margin-bottom: 40px;
