@@ -203,9 +203,36 @@
   opacity: 0.48;
 }
 
+.todo-card-form-row {
+  display: flex;
+}
+
+.todo-form-link-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 5px 14px;
+  background: var(--poolpro-accent-gradient, linear-gradient(135deg, #69140e, #202834));
+  border: none;
+  border-radius: 0;
+  color: #fff;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+
+.todo-form-link-btn:hover,
+.todo-form-link-btn:focus-visible {
+  opacity: 0.82;
+}
+
 .todo-card-manage {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-start;
@@ -241,6 +268,10 @@
 
 .todo-action-toggle button:hover,
 .todo-action-toggle button:focus-visible {
+  background: #7b1510;
+}
+
+.todo-action-toggle button.is-editing {
   background: #7b1510;
 }
 

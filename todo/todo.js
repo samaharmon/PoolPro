@@ -24,6 +24,17 @@ const PROOF_CHUNK_SIZE = 350000;
 const SELECTED_POOL_FALLBACK_MS = 6 * 60 * 60 * 1000;
 const URGENCY_RANK = { high: 0, medium: 1, low: 2 };
 
+const FORM_PROOF_URLS = {
+  poolChemistry: '../chem/chem.html',
+  inventory: '../inventory/inventory.html',
+  chemicalInventory: '../inventory/inventory.html',
+  cleanlinessOpening: '../duties/duties.html',
+  cleanlinessClosing: '../duties/duties.html',
+  desLogbooks: '../des/des.html',
+  desPreInspection: '../des/des.html',
+  operationalStatus: '../operational/operational.html',
+};
+
 const FORM_PROOF_CONFIG = {
   poolChemistry: {
     label: 'Pool Chemistry Log',
@@ -90,6 +101,7 @@ const state = {
   pendingProofTask: null,
   formCompletionCache: new Map(),
   autoCompleting: new Set(),
+  editingTaskId: '',
 };
 
 const els = {};
@@ -259,13 +271,16 @@ function renderTaskList() {
         <span class="todo-chip urgency-${escapeHtml(task.urgency)}">${escapeHtml(formatUrgency(task.urgency))}</span>
         <span class="todo-chip">${escapeHtml(formatDueDate(due))}</span>
         <span class="todo-chip">${escapeHtml(getTimeRemainingLabel(due, task.completed))}</span>
-        <span class="todo-chip">${escapeHtml(proofLabel)}</span>
+        ${!isFormProof ? `<span class="todo-chip">${escapeHtml(proofLabel)}</span>` : ''}
       </div>
+      ${isFormProof ? `<div class="todo-card-form-row">
+        <button type="button" class="todo-form-link-btn" data-todo-form-link="${escapeHtml(FORM_PROOF_URLS[task.proofForm] || '')}">${escapeHtml(proofLabel)}</button>
+      </div>` : ''}
       ${task.description ? `<p class="todo-card-desc">${escapeHtml(task.description)}</p>` : ''}
       ${canEdit ? `
         <div class="todo-card-manage">
           <div class="todo-action-toggle" role="group" aria-label="Task actions">
-            <button type="button" data-todo-edit="${escapeHtml(task.id)}">Edit</button>
+            <button type="button" class="${state.editingTaskId === task.id ? 'is-editing' : ''}" data-todo-edit="${escapeHtml(task.id)}">Edit</button>
             <button type="button" data-todo-delete="${escapeHtml(task.id)}">Delete</button>
           </div>
           ${canForceComplete ? `<button type="button" class="todo-force-complete-btn" data-todo-force-complete="${escapeHtml(task.id)}">Force Complete</button>` : ''}
@@ -285,6 +300,12 @@ function renderTaskList() {
   });
   els.list.querySelectorAll('[data-todo-force-complete]').forEach((button) => {
     button.addEventListener('click', () => forceCompleteTask(button.dataset.todoForceComplete));
+  });
+  els.list.querySelectorAll('[data-todo-form-link]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const url = button.dataset.todoFormLink;
+      if (url) window.location.href = url;
+    });
   });
 }
 
@@ -652,6 +673,8 @@ function editTask(taskId) {
   if (!canManageTasks()) return;
   const task = state.tasks.find((item) => item.id === taskId);
   if (!task) return;
+  state.editingTaskId = taskId;
+  renderTaskList();
   fillTaskForm(task, { mode: 'edit' });
 }
 
@@ -701,7 +724,12 @@ async function deleteTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   const label = task?.title || 'this task';
   if (!window.confirm(`Delete "${label}"?`)) return;
-  await deleteDoc(doc(db, TASKS_COLLECTION, taskId));
+  try {
+    await deleteDoc(doc(db, TASKS_COLLECTION, taskId));
+  } catch (error) {
+    console.error('[PoolPro] Error deleting task:', error);
+    setFormMessage('Unable to delete the task. Check permissions.', true);
+  }
 }
 
 async function toggleFavorite(taskId) {
@@ -723,14 +751,19 @@ async function toggleFavorite(taskId) {
 async function forceCompleteTask(taskId) {
   const task = state.tasks.find((item) => item.id === taskId);
   if (!canForceCompleteTask(task)) return;
-  await updateTaskCompletion(task, true, {
-    proof: {
-      type: 'force',
-      note: 'Supervisor force completed this task without uploaded or submitted proof.',
-      submittedAtIso: new Date().toISOString(),
-      submittedBy: getCurrentUserInfo(),
-    },
-  });
+  try {
+    await updateTaskCompletion(task, true, {
+      proof: {
+        type: 'force',
+        note: 'Supervisor force completed this task without uploaded or submitted proof.',
+        submittedAtIso: new Date().toISOString(),
+        submittedBy: getCurrentUserInfo(),
+      },
+    });
+  } catch (error) {
+    console.error('[PoolPro] Error force completing task:', error);
+    setFormMessage('Unable to force complete the task. Check permissions.', true);
+  }
 }
 
 function clearTaskForm({ keepMessage = false } = {}) {
@@ -746,6 +779,10 @@ function clearTaskForm({ keepMessage = false } = {}) {
   syncProofControls();
   if (els.saveBtn) els.saveBtn.textContent = 'Save Task';
   if (!keepMessage) setFormMessage('');
+  if (state.editingTaskId) {
+    state.editingTaskId = '';
+    renderTaskList();
+  }
 }
 
 async function runAutoCompletionChecks() {
@@ -801,11 +838,11 @@ async function hasMatchingFormSubmission(task) {
 function getTaskCompletionPeriod(task) {
   const due = toDate(task.requiredCompletionAtIso) || toDate(task.createdAtIso);
   if (!due) return null;
-  const start = new Date(due);
+  const earliestDate = toDate(task.startsAtIso) || toDate(task.createdAtIso) || due;
+  const start = new Date(earliestDate);
   start.setHours(0, 0, 0, 0);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  end.setMilliseconds(end.getMilliseconds() - 1);
+  const end = new Date(due);
+  end.setHours(23, 59, 59, 999);
   return { start, end };
 }
 

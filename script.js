@@ -5533,6 +5533,13 @@ function getFacilityPoolLabel(poolDoc, poolIdx) {
   return `Pool ${poolIdx + 1}`;
 }
 
+function getFacilityPoolNameOnly(poolDoc, poolIdx) {
+  const rulesPool = poolDoc?.rules?.pools?.[poolIdx];
+  const customName = (rulesPool?.poolName || '').trim();
+  if (customName) return customName;
+  return poolIdx === 0 ? 'Main Pool' : `Pool ${poolIdx + 1}`;
+}
+
 function poolRequiresWeeklyBackwashing(poolDoc, poolIdx) {
   const rulesPool = poolDoc?.rules?.pools?.[poolIdx];
   return rulesPool?.requiresWeeklyBackwashing !== false;
@@ -12919,7 +12926,7 @@ function renderOperationalDashboard() {
           const tr = document.createElement('tr');
           tr.innerHTML = `
             <td>${escapeHtml(log.facilityName || '—')}</td>
-            <td>${escapeHtml(log.poolLabel || `Pool ${Number(log.poolIndex || 0) + 1}`)}</td>
+            <td>${escapeHtml(getFacilityPoolNameOnly(selectedPoolDoc, Number(log.poolIndex || 0)))}</td>
             <td>${escapeHtml(log.fillStatus || '—')}</td>
             <td>${escapeHtml(log.bleachStatus || '—')}</td>
             <td>${escapeHtml(log.weeklyBackwashStatus ? formatWeeklyBackwashStatus(log.weeklyBackwashStatus) : '—')}</td>
@@ -12999,7 +13006,7 @@ function renderOperationalDashboard() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${escapeHtml(facilityName)}</td>
-          <td>${escapeHtml(getFacilityPoolLabel(poolDoc, poolIdx))}</td>
+          <td>${escapeHtml(getFacilityPoolNameOnly(poolDoc, poolIdx))}</td>
           <td>${escapeHtml(latestFillLog?.fillStatus || '—')}</td>
           <td>${escapeHtml(latestBleachLog?.bleachStatus || '—')}</td>
           <td>${escapeHtml(latestBackwashLog?.weeklyBackwashStatus ? formatWeeklyBackwashStatus(latestBackwashLog.weeklyBackwashStatus) : '—')}</td>
