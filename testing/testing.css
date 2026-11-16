@@ -362,15 +362,22 @@ body.dark-mode .test-rescuer-remove-btn {
 }
 
 .test-table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
+  width: 100%;
 }
 
 .test-rubric-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
-  min-width: 520px;
+  min-width: 0;
+  table-layout: auto;
+}
+
+.test-rubric-table td,
+.test-rubric-table th {
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 /* Section header row (dark red full-width) */
@@ -738,26 +745,9 @@ body.dark-mode .test-rubric-note {
 }
 
 @media (max-width: 768px) {
-  .test-table-wrap {
-    overflow-x: visible;
-  }
-
   .test-rubric-card {
     overflow-x: hidden;
     padding: 20px 14px;
-  }
-
-  .test-rubric-table {
-    min-width: 0;
-    width: 100%;
-    display: block;
-    overflow-x: hidden;
-  }
-
-  .test-rubric-table thead,
-  .test-rubric-table tbody {
-    display: block;
-    width: 100%;
   }
 
   .test-criterion-text,
