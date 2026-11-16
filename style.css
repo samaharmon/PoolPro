@@ -6014,6 +6014,18 @@ body > canvas {
   white-space: nowrap;
 }
 
+/* Urgent supply need rows get a thick red border */
+.supply-urgent-need-row td {
+  border-top: 3px solid #69140e !important;
+  border-bottom: 3px solid #69140e !important;
+}
+.supply-urgent-need-row td:first-child {
+  border-left: 3px solid #69140e !important;
+}
+.supply-urgent-need-row td:last-child {
+  border-right: 3px solid #69140e !important;
+}
+
 .dashboard-link-button,
 .supply-expand-btn {
   border: 0;
@@ -6379,7 +6391,7 @@ body.dark-mode .dashboard-market-heading {
 }
 
 .dashboard-metrics-filter-bar #dashboardMetricsTimeFilter {
-  width: 180px;
+  width: auto;
 }
 
 .dashboard-metrics-section {
@@ -7311,6 +7323,30 @@ body.dark-mode .dash-value-popover {
   font-weight: bold;
   font-size: 14px;
   white-space: nowrap;
+}
+
+/* Supervisor dashboard filter bars: "Filter By:" on its own row, equal-width options below */
+#supervisorDashboard .filter-by-label {
+  flex: 0 0 100%;
+  font-size: 1.4rem;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+#supervisorDashboard .dashboard-filter-field {
+  flex: 1 1 150px;
+  max-width: 280px;
+}
+
+#supervisorDashboard .dashboard-filter-field .training-filter-select {
+  width: 100%;
+}
+
+#supervisorDashboard .training-filter-bar > .training-filter-select,
+#supervisorDashboard .emp-global-filter-bar > .training-filter-select {
+  flex: 1 1 150px;
+  max-width: 280px;
+  width: auto;
 }
 
 .training-filter-select {

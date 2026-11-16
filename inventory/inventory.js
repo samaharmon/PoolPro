@@ -631,7 +631,7 @@ function addUrgentRow(value = '') {
       <option value="">Select item</option>
       ${createSupplyOptions()}
     </select>
-    <button type="button" class="editAndSave inventory-remove-item">Remove</button>
+    <button type="button" class="inventory-remove-item" aria-label="Remove item">&times;</button>
   `;
   const select = row.querySelector('select');
   if (value) select.value = value;
@@ -715,7 +715,7 @@ function addWeeklyCustomRow() {
       <option value="">Select level</option>
       ${INVENTORY_STATUSES.map((status) => `<option value="${status}">${status}</option>`).join('')}
     </select>
-    <button type="button" class="editAndSave inventory-remove-item">Remove</button>
+    <button type="button" class="inventory-remove-item" aria-label="Remove item">&times;</button>
   `;
   row.querySelector('.inventory-remove-item')?.addEventListener('click', () => row.remove());
   list.appendChild(row);

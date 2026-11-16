@@ -12666,6 +12666,9 @@ function renderNeededSuppliesSection(container, rows) {
   } else {
     neededGroups.forEach((group) => {
       const tr = document.createElement('tr');
+      if (group.rows.some((r) => r.report?.formType === 'urgent')) {
+        tr.classList.add('supply-urgent-need-row');
+      }
       const checkCell = document.createElement('td');
       const facilityList = document.createElement('div');
       facilityList.className = 'supply-needed-facility-checklist';
