@@ -68,6 +68,7 @@
               <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
               <a href="employees.html" class="dropdown-item supervisor-only active-page" data-nav="employees">Performance Tracking</a>
               <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
+              <a href="../Editor/newRules.html" class="dropdown-item supervisor-only" data-nav="site-editor" onclick="goToEditor(); return false;">Site Editor</a>
               <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
               <a href="#" class="dropdown-item logout" data-nav="logout" id="empLogoutBtn">Logout</a>
             </div>
@@ -210,10 +211,6 @@
       <div class="modal-header">
         <h2>Settings</h2>
         <span class="close" onclick="closeSettings()">&times;</span>
-      </div>
-      <div class="settings-section">
-        <h3>Website Setup</h3>
-        <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
       </div>
       <div class="settings-section">
         <h3>Market</h3>

@@ -2402,9 +2402,18 @@ body.dark-mode #trainingNotesInput {
    Attendance / roster modal
    ========================= */
 
+.attendance-modal {
+  z-index: 2000;
+  align-items: flex-start;
+  overflow-y: auto;
+  padding-top: max(env(safe-area-inset-top, 0px) + 70px, 70px);
+}
+
 .attendance-modal .modal-content.large {
   max-width: 1000px;
   width: 90%;
+  margin-top: 0;
+  margin-bottom: 24px;
 }
 
 .attendance-modal .modal-title {
@@ -2477,6 +2486,22 @@ body.dark-mode #trainingNotesInput {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
   gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .attendance-modal-body {
+    grid-template-columns: 1fr;
+  }
+  .attendance-add-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .attendance-add-grid input {
+    min-width: 0;
+    width: 100%;
+  }
+  .attendance-add-grid > button {
+    grid-column: 1 / -1;
+  }
 }
 
 .attendance-add-grid input {
@@ -6166,6 +6191,67 @@ body > canvas {
   padding: 10px 12px;
   font-size: 1rem;
   font-weight: 800;
+}
+
+/* Staff-size edit/save toggle in compliance table header */
+.compliance-staff-th {
+  white-space: nowrap;
+}
+
+.compliance-staff-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 4px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.compliance-staff-toggle button {
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  border: none;
+  padding: 2px 7px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.6;
+  transition: background 0.15s, color 0.15s;
+}
+
+.compliance-staff-toggle button:hover {
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+}
+
+.compliance-staff-toggle .compliance-staff-edit-btn.active,
+.compliance-staff-toggle .compliance-staff-save-btn.active {
+  background: rgba(105,20,14,0.85);
+  color: #fff;
+}
+
+.compliance-staff-toggle .compliance-staff-edit-btn {
+  border-right: 1px solid rgba(255,255,255,0.2);
+}
+
+/* Staff size cell overlay — covers input when not editing */
+.compliance-staff-cell {
+  position: relative;
+}
+
+.compliance-staff-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(80,80,80,0.55);
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+
+.compliance-staff-overlay.hidden {
+  display: none;
 }
 
 .dashboard-report-shift-tabs {

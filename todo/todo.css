@@ -480,10 +480,12 @@
 }
 
 .todo-checkbox-field > span {
-  display: inline;
+  display: flex;
+  align-items: center;
+  align-self: center;
   min-height: 0;
   margin: 0;
-  line-height: 1;
+  line-height: 1.3;
   color: #fff;
 }
 

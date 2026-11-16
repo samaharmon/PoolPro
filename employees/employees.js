@@ -945,13 +945,10 @@ function renderFacilityComplianceScores() {
   intro.textContent = 'Daily task scores are based on tasks due today for each facility.';
   container.appendChild(intro);
 
-  const actions = document.createElement('div');
-  actions.className = 'dashboard-compliance-actions';
-  actions.innerHTML = `
-    <button type="button" class="submit-btn" id="facilityComplianceSaveSizes">Save Staff Sizes</button>
-    <span id="facilityComplianceMessage" class="form-message"></span>
-  `;
-  container.appendChild(actions);
+  const messageEl = document.createElement('span');
+  messageEl.id = 'facilityComplianceMessage';
+  messageEl.className = 'form-message';
+  container.appendChild(messageEl);
 
   const groups = getCompliancePoolsByMarket();
   if (!groups.length) {
@@ -966,6 +963,7 @@ function renderFacilityComplianceScores() {
   groups.forEach(({ market, pools }) => {
     const section = document.createElement('section');
     section.className = 'emp-market-section dashboard-compliance-section';
+    let staffEditMode = false;
 
     const heading = document.createElement('h3');
     heading.className = 'emp-market-heading';
@@ -981,7 +979,12 @@ function renderFacilityComplianceScores() {
       <thead>
         <tr>
           <th>Facility</th>
-          <th>Staff Size</th>
+          <th class="compliance-staff-th">
+            Staff Size
+            <span class="compliance-staff-toggle" aria-label="Toggle staff size editing">
+              <button type="button" class="compliance-staff-edit-btn" data-action="edit">Edit</button><button type="button" class="compliance-staff-save-btn" data-action="save">Save</button>
+            </span>
+          </th>
           <th>Tasks Complete Today</th>
           <th>Daily Task Score</th>
           <th>Signed Up for In-Service</th>
@@ -1007,8 +1010,9 @@ function renderFacilityComplianceScores() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHtml(facilityName)}</td>
-        <td>
-          <input type="number" min="0" step="1" class="dashboard-compliance-staff-input" data-compliance-facility="${escapeHtml(facilityKey)}" value="${escapeHtml(staffSize)}" aria-label="Staff size for ${escapeHtml(facilityName)}">
+        <td class="compliance-staff-cell">
+          <div class="compliance-staff-overlay"></div>
+          <input type="number" min="0" step="1" class="dashboard-compliance-staff-input" data-compliance-facility="${escapeHtml(facilityKey)}" value="${escapeHtml(staffSize)}" aria-label="Staff size for ${escapeHtml(facilityName)}" disabled>
         </td>
         <td>${stats.completedTasks} / ${stats.taskTotal}</td>
         <td class="${scoreClass}">${stats.taskScore === null ? 'No tasks due today' : `${stats.taskScore}%`}</td>
@@ -1016,6 +1020,27 @@ function renderFacilityComplianceScores() {
         <td>${stats.trainingCompleted}</td>
       `;
       tbody.appendChild(tr);
+    });
+
+    const setStaffEditMode = (editing) => {
+      staffEditMode = editing;
+      table.querySelectorAll('.dashboard-compliance-staff-input').forEach((inp) => {
+        inp.disabled = !editing;
+      });
+      table.querySelectorAll('.compliance-staff-overlay').forEach((ov) => {
+        ov.style.display = editing ? 'none' : '';
+      });
+      const editBtn = table.querySelector('.compliance-staff-edit-btn');
+      const saveBtn = table.querySelector('.compliance-staff-save-btn');
+      if (editBtn) editBtn.classList.toggle('active', !editing);
+      if (saveBtn) saveBtn.classList.toggle('active', editing);
+    };
+    setStaffEditMode(false);
+
+    table.querySelector('.compliance-staff-edit-btn')?.addEventListener('click', () => setStaffEditMode(true));
+    table.querySelector('.compliance-staff-save-btn')?.addEventListener('click', async () => {
+      setStaffEditMode(false);
+      await saveFacilityComplianceStaffSizes();
     });
 
     scrollWrap.appendChild(table);
@@ -1032,15 +1057,11 @@ function renderFacilityComplianceScores() {
       else facilityComplianceStaffSizes[key] = value;
     });
   });
-
-  container.querySelector('#facilityComplianceSaveSizes')?.addEventListener('click', saveFacilityComplianceStaffSizes);
 }
 
 async function saveFacilityComplianceStaffSizes() {
   const message = document.getElementById('facilityComplianceMessage');
-  const button = document.getElementById('facilityComplianceSaveSizes');
   try {
-    if (button) button.disabled = true;
     if (message) {
       message.textContent = 'Saving...';
       message.classList.remove('error', 'success');
@@ -1063,7 +1084,7 @@ async function saveFacilityComplianceStaffSizes() {
       message.classList.remove('success');
     }
   } finally {
-    if (button) button.disabled = false;
+    // no button to re-enable; save is triggered by the toggle
   }
 }
 
