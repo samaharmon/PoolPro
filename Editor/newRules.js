@@ -1645,9 +1645,9 @@ function setupEditorAccordions() {
     supplySection.insertAdjacentElement('afterend', ruleSection);
   }
 
-  wrapSectionAccordion(document.getElementById('poolMetadataSection'), 'Pool Metadata');
-  wrapSectionAccordion(document.getElementById('cleanlinessReportSection'), 'Cleanliness Report Sections');
-  wrapSectionAccordion(document.getElementById('supplyInfoSection'), 'Supply Info');
+  wrapSectionAccordion(document.getElementById('poolMetadataSection'), 'General Information');
+  wrapSectionAccordion(document.getElementById('cleanlinessReportSection'), 'Cleanliness Reports');
+  wrapSectionAccordion(document.getElementById('supplyInfoSection'), 'Supplies Information');
   wrapSectionAccordion(document.getElementById('ruleEditorSection'), 'Pool Chemistry Log Feedback Editor');
 
   document.querySelectorAll('#poolRuleBlocks .pool-rule-block').forEach((block) => {
@@ -1777,6 +1777,13 @@ async function maybeMigrateLegacyRules(poolDoc) {
   return updatedDoc;
 }
 
+function updateEditorPoolNameDisplay(name) {
+  const el = document.getElementById('editorCurrentPoolName');
+  if (el) el.textContent = name || '';
+  const deleteBtn = document.getElementById('editorTopDeleteBtn');
+  if (deleteBtn) deleteBtn.hidden = !name || name === 'New Pool';
+}
+
 async function loadPoolIntoEditor(poolDoc, loadToken = null) {
   if (!poolDoc) return;
 
@@ -1809,6 +1816,7 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
   if (poolNameInput) {
     poolNameInput.value = getPoolName(normalizedDoc);
   }
+  updateEditorPoolNameDisplay(getPoolName(normalizedDoc));
 
   if (numPoolsInput) {
     const savedCount = normalizedDoc.numPools || normalizedDoc.poolCount || 1;
@@ -2711,6 +2719,7 @@ async function cloneRockbridgePresets() {
 }
 
 function resetPoolEditorState() {
+  updateEditorPoolNameDisplay('');
   // Clear in-memory rule state
   Object.keys(ruleStateByPool).forEach((k) => delete ruleStateByPool[k]);
   Object.keys(activeSanitationByPool).forEach((k) => delete activeSanitationByPool[k]);
@@ -2808,6 +2817,7 @@ function attachEditorEvents() {
       if (poolSelect) poolSelect.value = '';
 
       resetPoolEditorState();
+      updateEditorPoolNameDisplay('New Pool');
 
       // Auto-apply Rockbridge defaults for new pools
       applyRockbridgeMetadataFromCache();
@@ -3045,6 +3055,12 @@ function setupDeletePool() {
 
   if (deleteBtn.dataset.deletePoolBound === 'true') return;
   deleteBtn.dataset.deletePoolBound = 'true';
+
+  const topDeleteBtn = document.getElementById('editorTopDeleteBtn');
+  if (topDeleteBtn && topDeleteBtn.dataset.deletePoolBound !== 'true') {
+    topDeleteBtn.dataset.deletePoolBound = 'true';
+    topDeleteBtn.addEventListener('click', () => deleteBtn.click());
+  }
 
   const closeModal = () => {
     modal.classList.remove('visible');
@@ -3521,6 +3537,8 @@ function onSaveSuccess(poolId) {
   showMessage('Saved', 'success');
   refreshPools();
   currentPoolId = poolId;
+  const poolNameInput = document.getElementById('editorPoolName');
+  updateEditorPoolNameDisplay(poolNameInput?.value || '');
 }
 
 window.initEditor = initEditor;

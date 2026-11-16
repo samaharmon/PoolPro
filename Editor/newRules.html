@@ -60,17 +60,23 @@
         </div>
     <div class="container">
         <h2 class="page-content-title">Facility Metadata</h2>
+        <div id="editorTopControls">
+            <div class="form-row" id="editorModeRow" style="gap: 10px;">
+                <button type="button" id="editorModeAdd" class="editAndSave mode-toggle">
+                    Add new pool
+                </button>
+                <button type="button" id="editorModeEdit" class="editAndSave mode-toggle">
+                    Edit existing pool
+                </button>
+                <button type="button" id="editorTopDeleteBtn" class="editAndSave" hidden>
+                    Delete Current Pool
+                </button>
+            </div>
+            <div id="editorCurrentPoolName"></div>
+        </div>
         <div class="form-container" id="ruleEditorContent">
             <div class="section" id="poolRuleEditorSection">
-                <h2>General Information</h2>
-                <div class="form-row" id="editorModeRow" style="gap: 10px;">
-                    <button type="button" id="editorModeAdd" class="editAndSave mode-toggle">
-                        Add new pool
-                    </button>
-                    <button type="button" id="editorModeEdit" class="editAndSave mode-toggle">
-                        Edit existing pool
-                    </button>
-                </div>
+                <div class="form-row" id="editorModeRowPlaceholder" style="display:none;"></div>
                 <div class="form-group hidden" id="editorPoolSelectWrapper">
                     <label for="editorPoolSelect">Choose a pool to edit</label>
                     <select id="editorPoolSelect" class="button-shadow">
@@ -85,7 +91,7 @@
 
                 <div class="section hidden" id="poolMetadataSection">
                     <div class="metadata-content">
-                        <h3>Pool Metadata</h3>
+                        <h3>General Information</h3>
 
                         <div class="form-group">
                             <label for="editorPoolName">Pool name</label>
@@ -194,7 +200,7 @@
                 <div class="section hidden" id="cleanlinessReportSection">
                     <div class="cleanliness-report-content">
                         <h3>Cleanliness Report</h3>
-                        <p class="section-subtitle">Choose which Cleanliness Report question types appear for this facility.</p>
+                        <p class="section-subtitle">Select the requirements for each Cleanliness Report.</p>
                         <div id="cleanlinessQuestionRows" class="cleanliness-question-rows"></div>
                     </div>
                     <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px; justify-content: flex-start; align-items: center;">

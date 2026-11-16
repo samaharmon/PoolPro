@@ -325,25 +325,81 @@ function renderTaskTable(host, tasks, favoritesOnly) {
     host.innerHTML = '<p class="todo-table-empty">Select a pool.</p>';
     return;
   }
+
+  if (favoritesOnly) {
+    renderFavoritesTable(host, tasks);
+  } else {
+    renderHistoryTable(host, tasks);
+  }
+}
+
+function renderFavoritesTable(host, tasks) {
   if (!tasks.length) {
-    host.innerHTML = `<p class="todo-table-empty">${favoritesOnly ? 'No favorite tasks yet.' : 'No task history yet.'}</p>`;
+    host.innerHTML = '<p class="todo-table-empty">No favorite tasks yet.</p>';
     return;
   }
-  const sorted = [...tasks].sort((a, b) => {
-    const favoriteDiff = Number(!!b.favorite) - Number(!!a.favorite);
-    if (favoritesOnly && favoriteDiff) return favoriteDiff;
-    return (toDate(b.createdAtIso)?.getTime() || 0) - (toDate(a.createdAtIso)?.getTime() || 0);
-  });
+  const sorted = [...tasks].sort((a, b) =>
+    (toDate(b.updatedAtIso)?.getTime() || 0) - (toDate(a.updatedAtIso)?.getTime() || 0)
+  );
   host.innerHTML = `
     <table class="todo-table">
       <thead>
         <tr>
           <th>Favorite</th>
           <th>Title</th>
-          <th>Facility</th>
+          <th>Starts</th>
+          <th>Ends</th>
+          <th>Urgency</th>
+          <th>Proof Required</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${sorted.map((task) => `
+          <tr class="todo-table-row" data-todo-table-row="${escapeHtml(task.id)}">
+            <td>
+              <button type="button" class="todo-heart-btn${task.favorite ? ' is-favorite' : ''}" data-todo-favorite="${escapeHtml(task.id)}" aria-label="${task.favorite ? 'Remove favorite' : 'Favorite task'}">
+                <span class="todo-heart-icon" aria-hidden="true">♥</span>
+              </button>
+            </td>
+            <td class="todo-table-title-cell">
+              <div class="todo-table-title-text">${escapeHtml(task.title || 'Untitled Task')}</div>
+              <div class="todo-table-row-actions" aria-label="Task actions">
+                <button type="button" data-todo-table-edit="${escapeHtml(task.id)}">Edit</button>
+                <button type="button" data-todo-table-delete="${escapeHtml(task.id)}">Delete</button>
+                <button type="button" data-todo-table-redeploy="${escapeHtml(task.id)}">Redeploy</button>
+              </div>
+            </td>
+            <td>${escapeHtml(formatStartDate(toDate(task.startsAtIso)))}</td>
+            <td>${escapeHtml(formatDueDate(toDate(task.requiredCompletionAtIso)))}</td>
+            <td>${escapeHtml(formatUrgency(task.urgency))}</td>
+            <td>${escapeHtml(getFavoritesProofLabel(task))}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  attachTableListeners(host);
+  wrapTodoTables(host);
+}
+
+function renderHistoryTable(host, tasks) {
+  const completed = tasks.filter((task) => task.completed);
+  if (!completed.length) {
+    host.innerHTML = '<p class="todo-table-empty">No task history yet.</p>';
+    return;
+  }
+  const sorted = [...completed].sort((a, b) =>
+    (toDate(b.completedAtIso)?.getTime() || 0) - (toDate(a.completedAtIso)?.getTime() || 0)
+  );
+  host.innerHTML = `
+    <table class="todo-table">
+      <thead>
+        <tr>
+          <th>Favorite</th>
+          <th>Title</th>
           <th>Starts</th>
           <th>Urgency</th>
-          <th>Due</th>
+          <th>Ends</th>
           <th>Status</th>
           <th>Proof</th>
         </tr>
@@ -364,17 +420,31 @@ function renderTaskTable(host, tasks, favoritesOnly) {
                 <button type="button" data-todo-table-redeploy="${escapeHtml(task.id)}">Redeploy</button>
               </div>
             </td>
-            <td>${escapeHtml(task.facilityName || 'All facilities')}</td>
             <td>${escapeHtml(formatStartDate(toDate(task.startsAtIso)))}</td>
             <td>${escapeHtml(formatUrgency(task.urgency))}</td>
             <td>${escapeHtml(formatDueDate(toDate(task.requiredCompletionAtIso)))}</td>
-            <td>${task.completed ? 'Complete' : 'Incomplete'}</td>
+            <td>Complete — ${escapeHtml(task.completedAtIso ? formatDueDate(toDate(task.completedAtIso)) : '—')}</td>
             <td>${getTaskProofHistoryHtml(task)}</td>
           </tr>
         `).join('')}
       </tbody>
     </table>
   `;
+  attachTableListeners(host);
+  wrapTodoTables(host);
+}
+
+function getFavoritesProofLabel(task) {
+  if (!task.proofType || task.proofType === 'none') return 'None';
+  if (task.proofType === 'images') {
+    const minimum = getMinimumPhotoCount(task);
+    return `${minimum} image${minimum === 1 ? '' : 's'}`;
+  }
+  if (task.proofType === 'explanation') return 'Explanation';
+  if (task.proofType === 'form') return FORM_PROOF_CONFIG[task.proofForm]?.label || 'Form submission';
+  return 'None';
+}
+function attachTableListeners(host) {
   host.querySelectorAll('[data-todo-favorite]').forEach((button) => {
     button.addEventListener('click', () => toggleFavorite(button.dataset.todoFavorite));
   });
@@ -396,7 +466,6 @@ function renderTaskTable(host, tasks, favoritesOnly) {
   host.querySelectorAll('[data-todo-table-redeploy]').forEach((button) => {
     button.addEventListener('click', () => redeployTask(button.dataset.todoTableRedeploy));
   });
-  wrapTodoTables(host);
 }
 
 function toggleTableRowActions(row) {
@@ -1066,7 +1135,7 @@ function getTaskProofHistoryHtml(task) {
       <span>${escapeHtml(by)} completed this task without proof.</span>
     </div>`;
   }
-  return '<span class="todo-proof-summary">Completed with no proof required.</span>';
+  return 'N/A';
 }
 
 async function openProofImageFromButton(button) {

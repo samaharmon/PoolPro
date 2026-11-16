@@ -13,6 +13,35 @@
     border-radius: 0;
     box-shadow: 0 8px 10px rgba(0, 0, 0, 0.2);
 }
+
+/* Editor top controls (mode buttons + pool name display above form-container) */
+#editorTopControls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 16px 14px;
+}
+
+#editorModeRow {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+#editorCurrentPoolName {
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  min-height: 2.6rem;
+  line-height: 1.1;
+}
+
+/* Override global overflow-x: hidden on form-container so sticky works */
+#ruleEditorContent {
+  overflow: visible !important;
+}
  
 
 .section {
@@ -44,6 +73,20 @@
   font-weight: 800;
   text-align: left;
   cursor: pointer;
+}
+
+/* Section-level accordion toggles float as user scrolls */
+.editor-section-accordion-toggle {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+/* Cleanliness shift headers float just below the section header */
+.cleanliness-shift-card .editor-accordion-toggle {
+  position: sticky;
+  top: 44px;
+  z-index: 15;
 }
 
 .editor-accordion-toggle:hover {
@@ -344,9 +387,7 @@
   cursor: pointer;
 }
 
-.cleanliness-shift-card {
-  overflow: hidden;
-}
+/* .cleanliness-shift-card overflow: hidden removed — would prevent sticky on child toggle */
 
 .cleanliness-shift-card .editor-accordion-toggle {
   border: none;
@@ -386,9 +427,25 @@
 }
 
 .cleanliness-question-label-input,
+.cleanliness-new-question-label {
+  width: 100%;
+}
+
 .cleanliness-question-instructions-input,
 .cleanliness-new-question-instructions {
   width: 100%;
+  padding: 10px;
+  border-bottom: 2px solid #69140e;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-radius: 0;
+  background-color: #C8C8C8;
+  color: #000;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 14px;
+  resize: vertical;
+  box-sizing: border-box;
 }
 
 .cleanliness-min-photo-inline,

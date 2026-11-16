@@ -381,6 +381,23 @@
   transform: translateX(100%);
 }
 
+.todo-status-toggle:not(.is-disabled) {
+  cursor: pointer;
+}
+
+.todo-status-toggle:not(.is-disabled) span {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.todo-status-toggle:not(.is-disabled) span:hover {
+  background-color: rgba(255, 255, 255, 0.14);
+}
+
+.todo-status-toggle:not(.is-disabled) span:active {
+  background-color: rgba(255, 255, 255, 0.26);
+}
+
 .todo-status-toggle.is-disabled {
   opacity: 0.58;
   cursor: not-allowed;
@@ -432,43 +449,41 @@
   flex: 0 0 auto;
   appearance: none;
   -webkit-appearance: none;
-  width: 22px !important;
-  height: 22px !important;
-  border: 2px solid #69140e;
+  width: 18px !important;
+  height: 18px !important;
+  border: 1px solid #69140e;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.08);
-  display: inline-grid;
-  place-items: center;
+  background-color: white;
+  display: inline-block;
+  position: relative;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease;
   box-shadow: none;
   margin: 0;
 }
 
-.todo-checkbox-field input[type="checkbox"]::after {
-  content: "";
-  width: 7px;
-  height: 13px;
-  border: solid #fff;
-  border-width: 0 3px 3px 0;
-  transform: rotate(45deg) scale(0);
-  transform-origin: center;
-  transition: transform 0.14s ease;
-}
-
 .todo-checkbox-field input[type="checkbox"]:checked {
-  background: #69140e;
-  border-color: #ff7d7d;
+  background-color: #69140e;
+  border-color: #69140e;
 }
 
 .todo-checkbox-field input[type="checkbox"]:checked::after {
-  transform: rotate(45deg) scale(1);
+  content: '✓';
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
 }
 
 .todo-checkbox-field > span {
   display: inline;
   min-height: 0;
   margin: 0;
+  line-height: 1;
+  color: #fff;
 }
 
 .todo-fieldset {

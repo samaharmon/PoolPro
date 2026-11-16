@@ -746,8 +746,34 @@ body.dark-mode .test-rubric-note {
 
 @media (max-width: 768px) {
   .test-rubric-card {
-    overflow-x: hidden;
+    /* No overflow-x: hidden — that creates an iOS independent scroll context */
     padding: 20px 14px;
+  }
+
+  /* Convert entire table to block layout so table auto-width algorithm
+     cannot make it wider than the viewport */
+  .test-rubric-table,
+  .test-rubric-table thead,
+  .test-rubric-table tbody {
+    display: block !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .test-rubric-table .test-section-header,
+  .test-rubric-table .test-col-header {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .test-rubric-table .test-section-header th {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
   }
 
   .test-criterion-text,
@@ -758,7 +784,7 @@ body.dark-mode .test-rubric-note {
   }
 
   .test-rubric-table .test-col-header {
-    display: none;
+    display: none !important;
   }
 
   .test-rubric-table .test-row {
