@@ -19,8 +19,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 28px 16px 28px;
+  gap: 16px;
+  padding: 24px 16px 20px;
 }
 
 #editorModeRow {
@@ -29,7 +29,8 @@
 }
 
 #editorModeAdd,
-#editorModeEdit {
+#editorModeEdit,
+#editorTopDeleteBtn {
   min-width: 200px;
   min-height: 72px;
   font-size: 1.15rem;
@@ -49,7 +50,7 @@
   font-weight: 800;
   color: #fff;
   text-align: center;
-  min-height: 2.6rem;
+  min-height: 0;
   line-height: 1.1;
 }
 
@@ -90,9 +91,11 @@
   cursor: pointer;
 }
 
-/* Floating page header height — sticky tops offset by this amount */
+/* Floating page header height — sticky tops offset by this amount.
+   74px = logo(54) + padding-top(8) + padding-bottom(8) + border-bottom(2) + border-top(2).
+   Adjust dynamically for iPhone safe-area notch. */
 :root {
-  --editor-floating-header-h: 60px;
+  --editor-floating-header-h: calc(74px + env(safe-area-inset-top, 0px));
 }
 
 /* Section-level accordion toggles float as user scrolls, below the page header */
@@ -102,7 +105,7 @@
   z-index: 20;
 }
 
-/* Sticky action bar sitting just below the section toggle */
+/* Sticky action bar sitting just below the section toggle (44px = section toggle min-height) */
 .editor-section-sticky-actions {
   position: sticky;
   top: calc(var(--editor-floating-header-h) + 44px);
@@ -120,10 +123,10 @@
   display: none !important;
 }
 
-/* Cleanliness shift headers float below the section toggle + its sticky actions bar */
+/* Cleanliness shift headers float below the section toggle (44px) + sticky actions bar (~50px) */
 .cleanliness-shift-card .editor-accordion-toggle {
   position: sticky;
-  top: calc(var(--editor-floating-header-h) + 44px + 42px);
+  top: calc(var(--editor-floating-header-h) + 44px + 50px);
   z-index: 15;
 }
 

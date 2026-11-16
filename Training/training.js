@@ -1522,6 +1522,19 @@ function openRosterModal(sessionId) {
       deleteTd.appendChild(deleteBtn);
       tr.appendChild(deleteTd);
 
+      // Attendance checkbox (2nd column)
+      const cbTd = document.createElement('td');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.className = 'market-filter-checkbox';
+      cb.checked = !!a.attended;
+      cb.addEventListener('change', () => {
+        a.attended = cb.checked;
+        saveSessions();
+      });
+      cbTd.appendChild(cb);
+      tr.appendChild(cbTd);
+
       // Text cells: Preferred First Name, Last Name, Home Pool, Phone Number
       const cellValues = [
         resolvedAttendee.firstName || resolvedAttendee.name || '',  // Preferred First Name
@@ -1534,19 +1547,6 @@ function openRosterModal(sessionId) {
         td.textContent = val;
         tr.appendChild(td);
       });
-
-      // Attendance checkbox
-      const cbTd = document.createElement('td');
-      const cb = document.createElement('input');
-      cb.type = 'checkbox';
-      cb.className = 'market-filter-checkbox';
-      cb.checked = !!a.attended;
-      cb.addEventListener('change', () => {
-        a.attended = cb.checked;
-        saveSessions();
-      });
-      cbTd.appendChild(cb);
-      tr.appendChild(cbTd);
       tbody.appendChild(tr);
     });
     if (rosterChanged) saveSessions();

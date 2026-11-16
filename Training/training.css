@@ -1,7 +1,7 @@
 /* Base page styling to match main ChemLog app */
 
 html {
-  --poolpro-accent-gradient: linear-gradient(135deg, rgba(105, 20, 14, 0.92), rgba(32, 40, 52, 0.92));
+  --poolpro-accent-gradient: linear-gradient(135deg, #69140e, #202834);
   background-color: #000;
   min-height: 100%;
 }
@@ -628,9 +628,18 @@ select {
 /* Grid for the add‑participant inputs */
 .attendance-add-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr 1fr auto;
   gap: 10px;
   align-items: center;
+}
+
+@media (max-width: 540px) {
+  .attendance-add-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .attendance-add-grid > button {
+    grid-column: 1 / -1;
+  }
 }
 
 /* Make all inputs (including phone) and the home pool select match */
@@ -4514,13 +4523,15 @@ body {
 
 /* iPhone-safe attendance roster modal */
 .attendance-modal {
-  align-items: center;
+  z-index: 2000;
+  align-items: flex-start;
   justify-content: center;
   padding:
-    calc(10px + env(safe-area-inset-top, 0px))
+    max(env(safe-area-inset-top, 0px) + 70px, 70px)
     10px
     calc(10px + env(safe-area-inset-bottom, 0px));
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   opacity: 0;
   transition: opacity 0.25s ease;
 }
@@ -4533,8 +4544,8 @@ body {
   width: min(1100px, calc(100vw - 20px));
   max-width: calc(100vw - 20px);
   height: auto;
-  max-height: calc(100dvh - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
-  margin: 0 auto;
+  max-height: calc(100dvh - 90px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  margin: 0 auto 24px;
   padding: 0;
   display: flex;
   flex-direction: column;

@@ -43,7 +43,12 @@
             <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
             <a href="training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
             <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
-            <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
+            <a href="../operational/operational.html" class="dropdown-item" data-nav="operational-status">Operational Status Log</a>
+            <a href="../inventory/inventory.html" class="dropdown-item" data-nav="inventory">Inventory</a>
+            <a href="../todo/todo.html" class="dropdown-item" data-nav="todo-list">To Do List</a>
+            <a href="../resources/resources.html" class="dropdown-item" data-nav="resources">Resources</a>
+            <a href="../des/des.html" class="dropdown-item" data-nav="des-pre-inspection">DES Pre-Inspection</a>
+            <a href="../chem/chem.html#supervisorDashboard" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
             <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
             <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
             <a href="../testing/testing.html" class="dropdown-item supervisor-only" data-nav="testing">Auditing Forms</a>
@@ -278,11 +283,11 @@
           <thead>
             <tr>
               <th aria-label="Remove participant"></th>
+              <th>Attendance</th>
               <th>Preferred First Name</th>
               <th>Last Name</th>
               <th>Home Pool</th>
               <th>Phone Number</th>
-              <th>Attendance</th>
             </tr>
           </thead>
           <tbody id="attendanceTableBody">
