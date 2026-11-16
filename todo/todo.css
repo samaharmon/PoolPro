@@ -57,6 +57,13 @@
   background: #2c2c2c;
 }
 
+.todo-generator-section,
+.todo-history-section {
+  border-top: 2px solid rgba(105, 20, 14, 0.55);
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
 .todo-pool-select-wrap {
   max-width: 460px;
   margin-bottom: 0;
@@ -355,7 +362,7 @@
 }
 
 .todo-form-grid-main {
-  grid-template-columns: minmax(280px, 1fr) minmax(220px, 360px);
+  grid-template-columns: repeat(2, 1fr);
   align-items: start;
 }
 
@@ -368,9 +375,8 @@
   margin-bottom: 6px;
 }
 
-.todo-due-field,
-.todo-start-field {
-  max-width: 390px;
+.todo-description-field {
+  margin-bottom: 0;
 }
 
 .todo-task-form textarea,
@@ -391,11 +397,41 @@
   padding-bottom: 6px;
 }
 
-.todo-checkbox-field input {
+.todo-checkbox-field input[type="checkbox"] {
   flex: 0 0 auto;
-  width: 26px !important;
-  height: 26px;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 22px !important;
+  height: 22px !important;
+  border: 2px solid #69140e;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.08);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
   box-shadow: none;
+  margin: 0;
+}
+
+.todo-checkbox-field input[type="checkbox"]::after {
+  content: "";
+  width: 7px;
+  height: 13px;
+  border: solid #fff;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg) scale(0);
+  transform-origin: center;
+  transition: transform 0.14s ease;
+}
+
+.todo-checkbox-field input[type="checkbox"]:checked {
+  background: #69140e;
+  border-color: #ff7d7d;
+}
+
+.todo-checkbox-field input[type="checkbox"]:checked::after {
+  transform: rotate(45deg) scale(1);
 }
 
 .todo-checkbox-field > span {
@@ -816,8 +852,6 @@
     flex-direction: column;
   }
 
-  .todo-due-field,
-  .todo-start-field,
   .todo-repeat-count-field {
     max-width: none;
   }

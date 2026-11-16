@@ -183,7 +183,7 @@ body.dark-mode .test-rubric-title {
 
 .test-header-field label {
   font-size: 13px;
-  font-weight: bold;
+  font-weight: normal;
   color: #555;
   min-width: 68px;
   text-align: right;
@@ -197,6 +197,9 @@ body.dark-mode .test-header-field label {
 .test-header-date {
   flex: 1;
   padding: 5px 9px;
+  height: 34px;
+  min-height: 34px;
+  box-sizing: border-box;
   font-size: 13px;
   font-family: inherit;
   border: none;
@@ -356,6 +359,9 @@ body.dark-mode .test-rescuer-remove-btn {
 
 .test-section {
   margin-bottom: 20px;
+}
+
+.test-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
@@ -731,14 +737,21 @@ body.dark-mode .test-rubric-note {
   }
 }
 
-@media (max-width: 640px) {
-  .test-section {
+@media (max-width: 768px) {
+  .test-table-wrap {
     overflow-x: visible;
   }
 
   .test-rubric-table {
     min-width: 0;
     table-layout: fixed;
+    width: 100%;
+  }
+
+  .test-criterion-text,
+  .test-criterion-answer {
+    word-break: break-word;
+    overflow-wrap: break-word;
   }
 
   .test-rubric-table .test-col-header {
@@ -754,6 +767,7 @@ body.dark-mode .test-rubric-note {
   .test-rubric-table .test-row td {
     display: block;
     width: 100%;
+    box-sizing: border-box;
     border: 0;
     padding: 9px 10px;
   }
@@ -796,7 +810,9 @@ body.dark-mode .test-rubric-note {
   opacity: 1 !important;
 }
 
-.test-rubric-table thead th {
+.test-rubric-table thead th,
+.test-rubric-table thead td {
   background-color: transparent !important;
   background-image: none !important;
+  position: static !important;
 }

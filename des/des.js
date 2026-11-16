@@ -316,6 +316,7 @@ async function handleSubmit(event) {
     submitBtn.disabled = true;
     submitBtn.textContent = 'Submitting...';
     setMessage('');
+    if (typeof showFormLoading === 'function') showFormLoading('Submitting…');
 
     const totalPhotos = items.reduce((sum, item) => sum + item.files.length, 0);
     let uploadedPhotos = 0;
@@ -368,6 +369,7 @@ async function handleSubmit(event) {
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = 'Submit';
+    if (typeof hideFormLoading === 'function') hideFormLoading();
   }
 }
 

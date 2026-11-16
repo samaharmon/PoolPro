@@ -142,6 +142,25 @@ function hidePageLoadingOverlay() {
   setTimeout(() => overlay.classList.add('hidden'), waitMs);
 }
 
+function showFormLoading(message = 'Saving…') {
+  let overlay = document.getElementById('poolproSubmitOverlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'poolproSubmitOverlay';
+    overlay.className = 'poolpro-submit-overlay';
+    overlay.setAttribute('aria-live', 'polite');
+    overlay.innerHTML = '<div class="poolpro-loading-spinner" role="status"></div><span class="poolpro-submit-overlay-label"></span>';
+    document.body.appendChild(overlay);
+  }
+  overlay.querySelector('.poolpro-submit-overlay-label').textContent = message;
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+}
+
+function hideFormLoading() {
+  const overlay = document.getElementById('poolproSubmitOverlay');
+  if (overlay) overlay.classList.remove('visible');
+}
+
 function showPageLoadingOverlay() {
   pageLoadingStartedAt = Date.now();
   if (pageLoadingTimer) clearTimeout(pageLoadingTimer);
@@ -5153,6 +5172,7 @@ function setupChemForm() {
     try {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Submitting…';
+      showFormLoading('Submitting…');
       const poolDocForSubmission = await getFreshPoolDoc(poolId, pool);
       poolName = getPoolName(poolDocForSubmission) || poolName;
       entry.poolLocation = poolName;
@@ -5270,7 +5290,7 @@ function setupChemForm() {
 
           if (phVisible || clVisible) {
             html += `<div class="modal-pool-section">`;
-            html += `<h4 class="modal-pool-label">${escapeHtml(poolLabel)} <span class="modal-rule-method">(${escapeHtml(methodLabel)} rules)</span></h4>`;
+            html += `<h4 class="modal-pool-label">${escapeHtml(poolLabel)}</h4>`;
 
             if (phVisible) {
               const isMajor = getRuleConcernLevel(phRule) === 'major';
@@ -5354,6 +5374,7 @@ function setupChemForm() {
       console.error('[ChemLog] Error submitting chemistry log:', err);
       alert('Error submitting log. Please try again.');
     } finally {
+      hideFormLoading();
       submitBtn.disabled = false;
       submitBtn.textContent = 'Submit';
     }

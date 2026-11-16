@@ -428,6 +428,9 @@ function buildSection(section, rubric) {
   const wrap = document.createElement('div');
   wrap.className = 'test-section';
 
+  const tableWrap = document.createElement('div');
+  tableWrap.className = 'test-table-wrap';
+
   const table = document.createElement('table');
   table.className = 'test-rubric-table';
 
@@ -488,7 +491,8 @@ function buildSection(section, rubric) {
   }
 
   table.appendChild(tbody);
-  wrap.appendChild(table);
+  tableWrap.appendChild(table);
+  wrap.appendChild(tableWrap);
   return wrap;
 }
 
@@ -631,7 +635,7 @@ function updateScore(rubric) {
   const badge = document.getElementById('testResultBadge');
   badge.textContent = passed ? 'PASS' : 'FAIL';
   badge.className = `test-result-badge ${passed ? 'pass' : 'fail'}`;
-  document.getElementById('testAutoFailNote').classList.toggle('hidden', !(autoFailed && !passed));
+  document.getElementById('testAutoFailNote').classList.toggle('hidden', !(autoFailed && score > 0));
 }
 
 // ============================================================

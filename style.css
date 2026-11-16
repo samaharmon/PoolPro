@@ -115,6 +115,38 @@ body.page-loaded {
     }
 }
 
+/* Form-submission loading overlay — blocks interaction */
+.poolpro-submit-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 19000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: rgba(0, 0, 0, 0.75);
+    pointer-events: all;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+.poolpro-submit-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease;
+}
+.poolpro-submit-overlay .poolpro-loading-spinner {
+    width: 48px;
+    height: 48px;
+}
+.poolpro-submit-overlay-label {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+}
+
 /* Dark mode fade transition — class added after initial load to prevent flash */
 body.dark-mode-transition,
 body.dark-mode-transition *,
@@ -5797,6 +5829,13 @@ body.dark-mode .alerts-reminder-list-meta {
 
 .dashboard-cell-flag--chem-log {
   border-top-color: #ff7700;
+}
+
+/* Confetti canvas appended to body — must sit above all modals */
+body > canvas {
+  z-index: 20000 !important;
+  pointer-events: none !important;
+  position: fixed !important;
 }
 
 .chem-success-banner {

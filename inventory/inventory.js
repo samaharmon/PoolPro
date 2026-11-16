@@ -855,6 +855,7 @@ async function handleInventorySubmit(event) {
     els.submit.disabled = true;
     els.submit.textContent = 'Submitting...';
     setMessage('');
+    if (typeof showFormLoading === 'function') showFormLoading('Submitting…');
 
     if (type === 'chemical') {
       const chemicalValues = collectChemicalInventoryValues();
@@ -942,6 +943,7 @@ async function handleInventorySubmit(event) {
   } finally {
     els.submit.disabled = false;
     els.submit.textContent = 'Submit';
+    if (typeof hideFormLoading === 'function') hideFormLoading();
   }
 }
 

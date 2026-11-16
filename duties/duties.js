@@ -1449,6 +1449,7 @@ window.submitDutiesForm = async function () {
   const submitBtn = document.getElementById('dutiesSubmitBtn');
   if (submitBtn) submitBtn.disabled = true;
   if (msgEl) { msgEl.style.color = '#333'; msgEl.textContent = 'Submitting…'; }
+  if (typeof showFormLoading === 'function') showFormLoading('Submitting…');
 
   try {
     const submissionRef = doc(collection(db, managerialPage ? 'managerialReports' : 'dutySubmissions'));
@@ -1601,6 +1602,7 @@ window.submitDutiesForm = async function () {
     }
   } finally {
     if (submitBtn) submitBtn.disabled = false;
+    if (typeof hideFormLoading === 'function') hideFormLoading();
   }
 };
 
