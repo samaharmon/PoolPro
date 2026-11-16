@@ -1575,12 +1575,26 @@ function wrapSectionAccordion(section, title) {
   content.id = contentId;
   toggle.setAttribute('aria-controls', contentId);
 
+  // Build sticky actions bar — will hold Edit/Save/Delete buttons for this section
+  const stickyActions = document.createElement('div');
+  stickyActions.className = 'editor-section-sticky-actions';
+  stickyActions.dataset.sectionActionsFor = section.id || '';
+  stickyActions.hidden = true;
+
   Array.from(section.childNodes).forEach((node) => content.appendChild(node));
-  section.append(toggle, content);
+  section.append(toggle, stickyActions, content);
   section.classList.add('editor-accordion', 'editor-section-accordion');
   section.dataset.editorAccordionReady = 'true';
+
   toggle.addEventListener('click', () => setEditorAccordionState(toggle, content, !content.hidden));
   setEditorAccordionState(toggle, content, true);
+
+  // Move this section's .metadata-actions-row (edit/save/delete buttons) into the sticky bar
+  const actionsRow = content.querySelector('.metadata-actions-row');
+  if (actionsRow) {
+    stickyActions.appendChild(actionsRow);
+    stickyActions.hidden = false;
+  }
 }
 
 function wrapPoolRuleBlockAccordion(block) {
@@ -2812,6 +2826,7 @@ function attachEditorEvents() {
     addModeBtn.addEventListener('click', async () => {
       activePoolLoadToken += 1;
       toggleMode('add');
+      document.getElementById('ruleEditorContent')?.removeAttribute('hidden');
 
       currentPoolId = '';
       if (poolSelect) poolSelect.value = '';
@@ -2836,6 +2851,7 @@ function attachEditorEvents() {
     editModeBtn.dataset.editorModeBound = 'true';
     editModeBtn.addEventListener('click', () => {
       activePoolLoadToken += 1;
+      document.getElementById('ruleEditorContent')?.removeAttribute('hidden');
       currentPoolId = '';
       if (poolSelect) poolSelect.value = '';
 

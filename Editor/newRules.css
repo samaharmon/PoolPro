@@ -28,6 +28,14 @@
   flex-wrap: wrap;
 }
 
+#editorModeAdd,
+#editorModeEdit {
+  min-width: 200px;
+  min-height: 72px;
+  font-size: 1.15rem;
+  padding: 18px 32px;
+}
+
 #editorCurrentPoolName {
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
   font-size: clamp(1.6rem, 4vw, 2.2rem);
@@ -75,17 +83,40 @@
   cursor: pointer;
 }
 
-/* Section-level accordion toggles float as user scrolls */
+/* Floating page header height — sticky tops offset by this amount */
+:root {
+  --editor-floating-header-h: 60px;
+}
+
+/* Section-level accordion toggles float as user scrolls, below the page header */
 .editor-section-accordion-toggle {
   position: sticky;
-  top: 0;
+  top: var(--editor-floating-header-h);
   z-index: 20;
 }
 
-/* Cleanliness shift headers float just below the section header */
+/* Sticky action bar sitting just below the section toggle */
+.editor-section-sticky-actions {
+  position: sticky;
+  top: calc(var(--editor-floating-header-h) + 44px);
+  z-index: 19;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 14px;
+  background: #262626;
+  border-bottom: 1px solid #444;
+}
+
+.editor-section-sticky-actions[hidden] {
+  display: none !important;
+}
+
+/* Cleanliness shift headers float below the section toggle + its sticky actions bar */
 .cleanliness-shift-card .editor-accordion-toggle {
   position: sticky;
-  top: 44px;
+  top: calc(var(--editor-floating-header-h) + 44px + 42px);
   z-index: 15;
 }
 

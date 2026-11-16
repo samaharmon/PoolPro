@@ -163,6 +163,21 @@ function bindEvents() {
     if (event.target === els.proofModal) closeProofModal();
   });
   els.proofSubmit?.addEventListener('click', submitProofAndCompleteTask);
+
+  document.getElementById('todoSubmissionClose')?.addEventListener('click', closeSubmissionModal);
+  document.getElementById('todoSubmissionModal')?.addEventListener('click', (event) => {
+    if (event.target === document.getElementById('todoSubmissionModal')) closeSubmissionModal();
+  });
+}
+
+function closeSubmissionModal() {
+  const modal = document.getElementById('todoSubmissionModal');
+  if (!modal) return;
+  modal.classList.remove('visible');
+  setTimeout(() => {
+    if (!modal.classList.contains('visible')) modal.classList.add('hidden');
+  }, 200);
+  modal.setAttribute('aria-hidden', 'true');
 }
 
 function loadPools() {
@@ -445,6 +460,9 @@ function getFavoritesProofLabel(task) {
   return 'None';
 }
 function attachTableListeners(host) {
+  host.querySelectorAll('[data-todo-view-submission]').forEach((button) => {
+    button.addEventListener('click', () => openSubmissionViewer(button.dataset.todoViewSubmission, button.dataset.todoViewForm));
+  });
   host.querySelectorAll('[data-todo-favorite]').forEach((button) => {
     button.addEventListener('click', () => toggleFavorite(button.dataset.todoFavorite));
   });
@@ -864,12 +882,14 @@ async function runAutoCompletionChecks() {
   await Promise.all(tasks.map(async (task) => {
     state.autoCompleting.add(task.id);
     try {
-      if (await hasMatchingFormSubmission(task)) {
+      const submissionId = await findMatchingFormSubmission(task);
+      if (submissionId) {
         await updateTaskCompletion(task, true, {
           completedBy: { name: 'Required form submission', id: 'form-submission:auto' },
           proof: {
             type: 'form',
             form: task.proofForm,
+            submissionId,
             autoCompletedAtIso: new Date().toISOString(),
           },
         });
@@ -882,34 +902,47 @@ async function runAutoCompletionChecks() {
   }));
 }
 
-async function hasMatchingFormSubmission(task) {
+async function findMatchingFormSubmission(task) {
   const config = FORM_PROOF_CONFIG[task.proofForm];
-  if (!config) return false;
+  if (!config) return null;
   const period = getTaskCompletionPeriod(task);
-  if (!period) return false;
+  if (!period) return null;
   const cacheKey = `${task.proofForm}::${task.facilityKey}::${period.start.toISOString()}::${period.end.toISOString()}`;
   if (state.formCompletionCache.has(cacheKey)) return state.formCompletionCache.get(cacheKey);
 
   const snap = await getDocs(query(collection(db, config.collection), orderBy(config.timeFields[0], 'desc'), limit(600)));
   const facilityKey = normalizeFacilityName(task.facilityName);
-  const matched = snap.docs.some((docSnap) => {
+  let matchedId = null;
+  for (const docSnap of snap.docs) {
     const data = docSnap.data() || {};
-    if (config.predicate && !config.predicate(data)) return false;
+    if (config.predicate && !config.predicate(data)) continue;
     const submissionFacility = getSubmissionFacilityKey(data, config.facilityFields);
-    if (submissionFacility !== facilityKey) return false;
+    if (submissionFacility !== facilityKey) continue;
     const submittedAt = getFirstDateValue(data, config.timeFields);
-    return submittedAt && submittedAt >= period.start && submittedAt <= period.end;
-  });
-  state.formCompletionCache.set(cacheKey, matched);
-  return matched;
+    if (submittedAt && submittedAt >= period.start && submittedAt <= period.end) {
+      matchedId = docSnap.id;
+      break;
+    }
+  }
+  state.formCompletionCache.set(cacheKey, matchedId);
+  return matchedId;
+}
+
+async function hasMatchingFormSubmission(task) {
+  return !!(await findMatchingFormSubmission(task));
 }
 
 function getTaskCompletionPeriod(task) {
   const due = toDate(task.requiredCompletionAtIso) || toDate(task.createdAtIso);
   if (!due) return null;
-  const earliestDate = toDate(task.startsAtIso) || toDate(task.createdAtIso) || due;
-  const start = new Date(earliestDate);
-  start.setHours(0, 0, 0, 0);
+  const created = toDate(task.createdAtIso);
+  const startsAt = toDate(task.startsAtIso);
+  const earliestBase = startsAt || created || due;
+  const startOfDay = new Date(earliestBase);
+  startOfDay.setHours(0, 0, 0, 0);
+  // Never before this task was created — prevents redeployed tasks from matching
+  // form submissions that belonged to the original task's time window
+  const start = created && startOfDay < created ? created : startOfDay;
   const end = new Date(due);
   end.setHours(23, 59, 59, 999);
   return { start, end };
@@ -1122,7 +1155,14 @@ function getTaskProofHistoryHtml(task) {
     </div>`;
   }
   if (proof.type === 'form') {
-    const formLabel = FORM_PROOF_CONFIG[proof.form || task.proofForm]?.label || 'Required form';
+    const formKey = proof.form || task.proofForm || '';
+    const formLabel = FORM_PROOF_CONFIG[formKey]?.label || 'Required form';
+    const submissionId = proof.submissionId || '';
+    if (submissionId) {
+      return `<div class="todo-proof-summary">
+        <button type="button" class="todo-proof-form-link" data-todo-view-submission="${escapeHtml(submissionId)}" data-todo-view-form="${escapeHtml(formKey)}">${escapeHtml(formLabel)}</button>
+      </div>`;
+    }
     return `<div class="todo-proof-summary">
       <strong>${escapeHtml(formLabel)}</strong>
       <span>Form submission completed this task.</span>
@@ -1136,6 +1176,52 @@ function getTaskProofHistoryHtml(task) {
     </div>`;
   }
   return 'N/A';
+}
+
+async function openSubmissionViewer(submissionId, formKey) {
+  if (!submissionId || !formKey) return;
+  const config = FORM_PROOF_CONFIG[formKey];
+  if (!config) return;
+
+  const modal = document.getElementById('todoSubmissionModal');
+  const titleEl = document.getElementById('todoSubmissionTitle');
+  const bodyEl = document.getElementById('todoSubmissionBody');
+  if (!modal || !titleEl || !bodyEl) return;
+
+  titleEl.textContent = config.label || 'Form Submission';
+  bodyEl.innerHTML = '<p class="todo-muted">Loading…</p>';
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => modal.classList.add('visible'));
+
+  try {
+    const snap = await getDoc(doc(db, config.collection, submissionId));
+    if (!snap.exists()) {
+      bodyEl.innerHTML = '<p class="todo-muted">Submission not found.</p>';
+      return;
+    }
+    const data = snap.data() || {};
+    const rows = Object.entries(data)
+      .filter(([key]) => !['__null', 'poolId', 'facilityId'].includes(key))
+      .map(([key, value]) => {
+        let display = value;
+        if (value && typeof value === 'object' && 'seconds' in value) {
+          display = new Date(value.seconds * 1000).toLocaleString();
+        } else if (Array.isArray(value)) {
+          display = value.join(', ');
+        } else if (typeof value === 'object' && value !== null) {
+          display = JSON.stringify(value);
+        }
+        const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase());
+        return `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(String(display ?? ''))}</td></tr>`;
+      });
+    bodyEl.innerHTML = rows.length
+      ? `<table class="todo-submission-table"><tbody>${rows.join('')}</tbody></table>`
+      : '<p class="todo-muted">No data available.</p>';
+  } catch (err) {
+    console.error('[PoolPro] Submission viewer error:', err);
+    bodyEl.innerHTML = '<p class="todo-muted">Unable to load submission.</p>';
+  }
 }
 
 async function openProofImageFromButton(button) {

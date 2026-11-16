@@ -456,6 +456,7 @@
   background-color: white;
   display: inline-block;
   position: relative;
+  vertical-align: middle;
   cursor: pointer;
   box-shadow: none;
   margin: 0;
@@ -914,4 +915,65 @@ table thead td {
   background-color: transparent !important;
   background-image: none !important;
   color: #fff !important;
+}
+
+/* Submission viewer modal */
+.todo-submission-card {
+  width: min(760px, 100%);
+  max-height: min(88vh, 860px);
+  overflow: auto;
+  border: 2px solid #7b1510;
+  background: #2c2c2c;
+  color: #fff;
+  padding: 28px;
+  display: grid;
+  gap: 16px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.5);
+  position: relative;
+}
+
+.todo-submission-body {
+  overflow: auto;
+}
+
+.todo-submission-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.93rem;
+}
+
+.todo-submission-table th,
+.todo-submission-table td {
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  vertical-align: top;
+  color: #f0f0f0;
+  text-align: left;
+  word-break: break-word;
+}
+
+.todo-submission-table th {
+  color: #ff9e9e;
+  font-weight: 800;
+  white-space: nowrap;
+  min-width: 140px;
+}
+
+/* Form-link button in proof column */
+.todo-proof-form-link {
+  border: 1px solid rgba(255, 122, 126, 0.65);
+  background: transparent;
+  color: #fff;
+  padding: 5px 8px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.todo-proof-form-link:hover,
+.todo-proof-form-link:focus-visible {
+  background: rgba(123, 21, 16, 0.42);
 }
