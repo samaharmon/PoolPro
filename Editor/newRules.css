@@ -38,7 +38,7 @@
   background: var(--poolpro-accent-gradient, linear-gradient(135deg, #69140e, #202834));
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
   color: #fff;
-  border: none;
+  border: 2px solid #fff;
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
   font-weight: bold;
   cursor: pointer;
@@ -102,6 +102,7 @@
 :root {
   --editor-floating-header-h: calc(74px + env(safe-area-inset-top, 0px));
   --editor-pool-rule-header-h: 56px;
+  --editor-section-actions-h: 50px;
 }
 
 /* Section-level accordion toggles float as user scrolls, below the page header */
@@ -129,17 +130,35 @@
   display: none !important;
 }
 
-/* Pool Chemistry: 2nd-degree headers (Pool 1, Pool 2…) float just below the section toggle */
+/* Hide sticky actions bar when section is collapsed */
+.editor-section-accordion.is-collapsed .editor-section-sticky-actions {
+  display: none !important;
+}
+
+/* Size the Edit/Save toggle inside sticky action bars to match per-block size */
+.editor-section-sticky-actions .theme-switch-track {
+  width: 110px;
+  height: 34px;
+}
+.editor-section-sticky-actions .theme-switch-text {
+  line-height: 34px;
+  font-size: 14px;
+}
+.editor-section-sticky-actions .theme-switch-thumb {
+  height: 34px;
+}
+
+/* Pool Chemistry: 2nd-degree headers (Pool 1, Pool 2…) float below section toggle + actions bar */
 .pool-rule-block .pool-rule-header {
   position: sticky;
-  top: calc(var(--editor-floating-header-h) + 44px);
+  top: calc(var(--editor-floating-header-h) + 44px + var(--editor-section-actions-h));
   z-index: 18;
 }
 
-/* Pool Chemistry: 3rd-degree headers (pH, Cl) float below the pool rule header */
+/* Pool Chemistry: 3rd-degree headers (pH, Cl) float below section toggle + actions + pool header */
 .rule-table-accordion-toggle {
   position: sticky;
-  top: calc(var(--editor-floating-header-h) + 44px + var(--editor-pool-rule-header-h));
+  top: calc(var(--editor-floating-header-h) + 44px + var(--editor-section-actions-h) + var(--editor-pool-rule-header-h));
   z-index: 17;
 }
 
@@ -897,7 +916,8 @@
     flex: 1;
 }
 
-#ruleEditorContent {
+#ruleEditorContent,
+#auditEditorContent {
     width: min(1320px, calc(100vw - 28px));
     max-width: min(1320px, calc(100vw - 28px));
     align-self: center;
@@ -1587,7 +1607,9 @@ table thead td {
 }
 
 #auditModeAdd,
-#auditModeEdit {
+#auditModeEdit,
+#auditTopDeleteBtn,
+#auditSaveAllBtn {
   min-width: 200px;
   min-height: 72px;
   font-size: 1.15rem;
@@ -1615,6 +1637,20 @@ table thead td {
    AUDIT EDITOR
    ================================================================ */
 
+/* Constrain input/select widths in the audit editor */
+#auditEditorContent input[type="text"],
+#auditEditorContent input[type="number"],
+#auditEditorContent select {
+  max-width: 400px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#auditEditorContent input[type="number"].audit-row-points {
+  max-width: 70px;
+  width: 70px;
+}
+
 .audit-section-block {
   border: 1px solid #ddd;
   border-radius: 4px;
@@ -1641,9 +1677,7 @@ body.dark-mode .audit-section-block {
   flex: 1;
 }
 
-.audit-remove-section-btn,
-.audit-remove-scenario-btn,
-.audit-remove-row-btn {
+.audit-remove-section-btn {
   background: transparent;
   border: 1px solid #c00;
   color: #c00;
@@ -1653,35 +1687,113 @@ body.dark-mode .audit-section-block {
   border-radius: 3px;
 }
 
-.audit-remove-section-btn:hover,
-.audit-remove-scenario-btn:hover,
+.audit-remove-section-btn:hover {
+  background: #c00;
+  color: #fff;
+}
+
+/* Requirement row block — relative so the X button can be positioned top-right */
+.audit-row-block {
+  position: relative;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 28px 12px 10px;
+  margin-bottom: 8px;
+  background: #fff;
+}
+
+body.dark-mode .audit-row-block {
+  background: #222;
+  border-color: #555;
+}
+
+/* CSS counter for "Requirement #N" labels */
+.audit-rows-container {
+  counter-reset: req-counter;
+}
+
+.audit-row-block {
+  counter-increment: req-counter;
+}
+
+.audit-req-num-label::before {
+  content: "Requirement #" counter(req-counter);
+}
+
+.audit-req-num-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+  display: block;
+  margin-bottom: 6px;
+}
+
+body.dark-mode .audit-req-num-label {
+  color: #bbb;
+}
+
+/* X button pinned to the top-right corner of the row block */
+.audit-remove-row-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: transparent;
+  border: none;
+  border-left: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+  border-radius: 0;
+  color: #c00;
+  font-size: 14px;
+  font-weight: bold;
+  padding: 2px 8px;
+  cursor: pointer;
+  line-height: 20px;
+}
+
 .audit-remove-row-btn:hover {
   background: #c00;
   color: #fff;
 }
 
-.audit-row-block {
-  border-top: 1px solid #e0e0e0;
-  padding: 8px 0 4px;
-  margin-bottom: 4px;
+.audit-row-text {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 2px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.4;
+  resize: vertical;
+  display: block;
+  background: #f9f9f9;
 }
 
-.audit-row-main {
+.audit-row-text[contenteditable="true"] {
+  background: #fff;
+  outline: none;
+  min-height: 60px;
+}
+
+.audit-row-text[contenteditable]:empty:not(:focus):before {
+  content: attr(data-placeholder);
+  color: #aaa;
+  pointer-events: none;
+}
+
+body.dark-mode .audit-row-text {
+  background: #333;
+  border-color: #666;
+  color: #f0f0f0;
+}
+
+.audit-row-footer {
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.audit-row-text-wrap {
-  flex: 1;
-}
-
-.audit-row-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
-  min-width: 100px;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+  flex-wrap: wrap;
 }
 
 .audit-row-points-wrap {
@@ -1690,18 +1802,32 @@ body.dark-mode .audit-section-block {
   gap: 6px;
 }
 
+.audit-row-points-wrap label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+
+body.dark-mode .audit-row-points-wrap label {
+  color: #bbb;
+}
+
 .audit-row-points {
-  width: 60px;
+  width: 70px;
+}
+
+.audit-row-autofail-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 .audit-row-autofail-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
   font-size: 12px;
   font-weight: 600;
   color: #c00;
-  cursor: pointer;
 }
 
 .audit-row-answer-group {
@@ -1720,17 +1846,19 @@ body.dark-mode .audit-field-label {
   color: #bbb;
 }
 
+/* Scenarios — neutral grey background */
 .audit-scenario-block {
-  border: 1px solid #c8d0d8;
+  position: relative;
+  border: 1px solid #ccc;
   border-radius: 4px;
-  padding: 10px 12px;
+  padding: 28px 12px 10px;
   margin-bottom: 10px;
-  background: #f4f7fa;
+  background: #f0f0f0;
 }
 
 body.dark-mode .audit-scenario-block {
-  background: #252c35;
-  border-color: #445;
+  background: #3a3a3a;
+  border-color: #555;
 }
 
 .audit-scenario-header {
@@ -1751,11 +1879,50 @@ body.dark-mode .audit-scenario-block {
   min-width: 120px;
 }
 
+/* X button top-right of scenario block */
+.audit-remove-scenario-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: transparent;
+  border: none;
+  border-left: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+  border-radius: 0;
+  color: #c00;
+  font-size: 14px;
+  font-weight: bold;
+  padding: 2px 8px;
+  cursor: pointer;
+  line-height: 20px;
+}
+
+.audit-remove-scenario-btn:hover {
+  background: #c00;
+  color: #fff;
+}
+
 .audit-add-row-btn,
 .audit-add-scenario-btn {
   margin-top: 6px;
   font-size: 12px;
   padding: 5px 12px;
+}
+
+/* "Multiple scenarios?" checkbox descriptor */
+.audit-scenarios-checkbox-wrap {
+  margin-bottom: 10px;
+}
+
+.audit-scenarios-descriptor {
+  font-size: 12px;
+  color: #777;
+  margin: 4px 0 0 26px;
+  line-height: 1.4;
+}
+
+body.dark-mode .audit-scenarios-descriptor {
+  color: #aaa;
 }
 
 .audit-scenario-scoring-row {

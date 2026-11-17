@@ -2159,7 +2159,7 @@ function wireBlockButtons(singleBlock) {
     // ruleEditorSection blocks use the single section-level toggle
     if (block.closest('#ruleEditorSection')) {
       const ruleButtons = block.querySelector('.rule-buttons');
-      if (ruleButtons) ruleButtons.hidden = true;
+      if (ruleButtons) ruleButtons.style.display = 'none';
       setBlockEnabled(block, false);
       return;
     }
@@ -3646,6 +3646,7 @@ function setupSiteEditorTabs() {
 
 let currentAuditId = '';
 let currentAuditMode = null; // 'add' | 'edit'
+let auditAutoSaveTimer = null;
 
 function auditsCollectionRef() {
   return collection(db, 'audits');
@@ -3671,14 +3672,13 @@ async function deleteAuditDoc(auditId) {
 
 function readAuditEditorToObject() {
   const title = document.getElementById('auditEditorTitle')?.value.trim() || '';
-  const rescuerLabel = document.getElementById('auditEditorRescuerLabel')?.value.trim() || 'Employee';
   const overallPassScore = parseInt(document.getElementById('auditEditorOverallPassScore')?.value, 10) || null;
 
   const sections = [];
   document.querySelectorAll('#auditSectionsContainer .audit-section-block').forEach((secBlock) => {
     const secTitle = secBlock.querySelector('.audit-section-title')?.value.trim() || '';
     const subheading = secBlock.querySelector('.audit-section-subheading')?.value.trim() || 'Requirements and Questions';
-    const rowType = secBlock.querySelector('.audit-section-row-type')?.value || 'rows';
+    const hasScenarios = secBlock.querySelector('.audit-section-has-scenarios')?.checked || false;
 
     const section = {
       title: secTitle,
@@ -3686,7 +3686,7 @@ function readAuditEditorToObject() {
       checkboxHeader: 'Correctly Demonstrated (✓)',
     };
 
-    if (rowType === 'scenarios') {
+    if (hasScenarios) {
       section.scenarios = [];
       secBlock.querySelectorAll('.audit-scenario-block').forEach((scenBlock) => {
         const label = scenBlock.querySelector('.audit-scenario-label')?.value.trim() || '';
@@ -3712,7 +3712,7 @@ function readAuditEditorToObject() {
     }
   });
 
-  const data = { title, rescuerLabel, sections };
+  const data = { title, sections };
   if (overallPassScore !== null) data.passScore = overallPassScore;
   return data;
 }
@@ -3721,47 +3721,131 @@ function readRowsFromContainer(container) {
   if (!container) return [];
   const rows = [];
   container.querySelectorAll('.audit-row-block').forEach((rowBlock) => {
-    const text = rowBlock.querySelector('.audit-row-text')?.value.trim() || '';
+    const textEl = rowBlock.querySelector('.audit-row-text');
+    const text = textEl
+      ? (textEl.getAttribute('contenteditable') !== null ? textEl.innerHTML.trim() : textEl.value.trim())
+      : '';
     const points = parseInt(rowBlock.querySelector('.audit-row-points')?.value, 10) || 1;
     const autoFail = rowBlock.querySelector('.audit-row-autofail')?.checked || false;
-    const answer = rowBlock.querySelector('.audit-row-answer')?.value.trim() || '';
     const row = { text, points };
     if (autoFail) row.autoFail = true;
-    if (answer) row.answer = answer;
     rows.push(row);
   });
   return rows;
+}
+
+function buildAuditRowFormattingToolbar(editorEl) {
+  const toolbar = document.createElement('div');
+  toolbar.className = 'formatting-toolbar';
+
+  let savedRange = null;
+
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (editorEl.contains(range.startContainer)) savedRange = range.cloneRange();
+  };
+
+  const restoreSelection = () => {
+    if (!savedRange) return;
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedRange);
+  };
+
+  const updateState = () => {
+    toolbar.querySelectorAll('.format-btn').forEach(btn => {
+      if (editorEl.getAttribute('contenteditable') !== 'true') { btn.classList.remove('active'); return; }
+      try { btn.classList.toggle('active', document.queryCommandState(btn.dataset.cmd)); } catch (_) {}
+    });
+  };
+
+  [{ label: 'B', cmd: 'bold', title: 'Bold' },
+   { label: 'I', cmd: 'italic', title: 'Italic' },
+   { label: 'U', cmd: 'underline', title: 'Underline' }].forEach(({ label, cmd, title }) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.title = title;
+    btn.className = 'format-btn';
+    btn.dataset.cmd = cmd;
+    btn.disabled = true;
+    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('click', () => {
+      editorEl.focus();
+      restoreSelection();
+      document.execCommand(cmd, false);
+      saveSelection();
+      updateState();
+    });
+    toolbar.appendChild(btn);
+  });
+
+  editorEl.addEventListener('focus', () => { saveSelection(); updateState(); });
+  editorEl.addEventListener('mouseup', () => { saveSelection(); updateState(); });
+  editorEl.addEventListener('keyup', () => { saveSelection(); updateState(); });
+
+  return toolbar;
 }
 
 function buildAuditRowBlock(rowData = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'audit-row-block';
 
-  wrap.innerHTML = `
-    <div class="audit-row-main">
-      <div class="audit-row-text-wrap">
-        <label class="audit-field-label">Criterion text</label>
-        <textarea class="audit-row-text adjustment-feedback" rows="2" placeholder="Requirement or question text">${escapeHtmlUnsafe(rowData.text || '')}</textarea>
-      </div>
-      <div class="audit-row-controls">
-        <div class="audit-row-points-wrap">
-          <label class="audit-field-label">Pts</label>
-          <input type="number" class="audit-row-points adjustment-feedback" min="1" value="${rowData.points || 1}">
-        </div>
-        <label class="audit-row-autofail-label">
-          <input type="checkbox" class="audit-row-autofail"${rowData.autoFail ? ' checked' : ''}>
-          Auto-Fail
-        </label>
-        <button type="button" class="audit-remove-row-btn editAndSave" title="Remove row">×</button>
-      </div>
-    </div>
-    <div class="form-group audit-row-answer-group">
-      <label class="audit-field-label">Answer text (optional)</label>
-      <input type="text" class="audit-row-answer adjustment-feedback" placeholder="Answer: ..." value="${escapeHtmlUnsafe(rowData.answer || '')}">
-    </div>
-  `;
+  // X button — absolute top-right
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'audit-remove-row-btn editAndSave';
+  removeBtn.title = 'Remove requirement';
+  removeBtn.textContent = '×';
+  removeBtn.addEventListener('click', () => wrap.remove());
+  wrap.appendChild(removeBtn);
 
-  wrap.querySelector('.audit-remove-row-btn').addEventListener('click', () => wrap.remove());
+  // Requirement label (number via CSS counter)
+  const reqLabel = document.createElement('span');
+  reqLabel.className = 'audit-req-num-label';
+  wrap.appendChild(reqLabel);
+
+  // Contenteditable text field + formatting toolbar
+  const textDiv = document.createElement('div');
+  textDiv.className = 'audit-row-text';
+  textDiv.setAttribute('contenteditable', 'true');
+  textDiv.innerHTML = sanitizeRuleMarkup(rowData.text || '');
+  textDiv.setAttribute('data-placeholder', 'Requirement or question text');
+
+  const toolbar = buildAuditRowFormattingToolbar(textDiv);
+  wrap.appendChild(toolbar);
+  wrap.appendChild(textDiv);
+
+  // Footer: Pts + Auto-Fail
+  const footer = document.createElement('div');
+  footer.className = 'audit-row-footer';
+
+  const ptsWrap = document.createElement('div');
+  ptsWrap.className = 'audit-row-points-wrap';
+  ptsWrap.innerHTML = `<label>Pts</label>`;
+  const ptsInput = document.createElement('input');
+  ptsInput.type = 'number';
+  ptsInput.className = 'audit-row-points adjustment-feedback';
+  ptsInput.min = '1';
+  ptsInput.value = rowData.points || 1;
+  ptsWrap.appendChild(ptsInput);
+
+  const afWrap = document.createElement('label');
+  afWrap.className = 'audit-row-autofail-wrap';
+  const afCb = document.createElement('input');
+  afCb.type = 'checkbox';
+  afCb.className = 'sanitation-checkbox audit-row-autofail';
+  if (rowData.autoFail) afCb.checked = true;
+  const afLabel = document.createElement('span');
+  afLabel.className = 'audit-row-autofail-label';
+  afLabel.textContent = 'Auto-Fail';
+  afWrap.append(afCb, afLabel);
+
+  footer.append(ptsWrap, afWrap);
+  wrap.appendChild(footer);
+
   return wrap;
 }
 
@@ -3770,15 +3854,22 @@ function buildAuditScenarioBlock(scenarioData = {}, scenarioIdx = 0) {
   wrap.className = 'audit-scenario-block';
   wrap.dataset.scenarioIdx = scenarioIdx;
 
+  // X button — absolute top-right
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'audit-remove-scenario-btn editAndSave';
+  removeBtn.title = 'Remove scenario';
+  removeBtn.textContent = '×';
+  wrap.appendChild(removeBtn);
+
   const header = document.createElement('div');
   header.className = 'audit-scenario-header';
   header.innerHTML = `
     <span class="audit-scenario-label-text">Scenario ${scenarioIdx + 1}</span>
     <div class="form-group audit-scenario-label-group">
-      <label class="audit-field-label">Label</label>
+      <label class="audit-field-label">Title</label>
       <input type="text" class="audit-scenario-label adjustment-feedback" value="${escapeHtmlUnsafe(scenarioData.label || `Scenario ${scenarioIdx + 1}`)}">
     </div>
-    <button type="button" class="audit-remove-scenario-btn editAndSave" title="Remove scenario">× Remove</button>
   `;
   wrap.appendChild(header);
 
@@ -3794,7 +3885,7 @@ function buildAuditScenarioBlock(scenarioData = {}, scenarioIdx = 0) {
   addRowBtn.addEventListener('click', () => rowsContainer.appendChild(buildAuditRowBlock()));
   wrap.appendChild(addRowBtn);
 
-  header.querySelector('.audit-remove-scenario-btn').addEventListener('click', () => wrap.remove());
+  removeBtn.addEventListener('click', () => wrap.remove());
   return wrap;
 }
 
@@ -3804,7 +3895,6 @@ function buildAuditSectionBlock(sectionData = {}, sectionIdx = 0) {
   wrap.dataset.sectionIdx = sectionIdx;
 
   const isScenario = !!(sectionData.scenarios && sectionData.scenarios.length);
-  const rowType = isScenario ? 'scenarios' : 'rows';
 
   wrap.innerHTML = `
     <div class="audit-section-header">
@@ -3819,24 +3909,23 @@ function buildAuditSectionBlock(sectionData = {}, sectionIdx = 0) {
       <label class="audit-field-label">Column subheading</label>
       <input type="text" class="audit-section-subheading adjustment-feedback" placeholder="Requirements and Questions" value="${escapeHtmlUnsafe(sectionData.subheading || 'Requirements and Questions')}">
     </div>
-    <div class="form-group">
-      <label class="audit-field-label">Row type</label>
-      <select class="audit-section-row-type adjustment-feedback">
-        <option value="rows"${rowType === 'rows' ? ' selected' : ''}>Standard rows</option>
-        <option value="scenarios"${rowType === 'scenarios' ? ' selected' : ''}>Scenarios</option>
-      </select>
+    <div class="audit-scenarios-checkbox-wrap">
+      <label class="market-option" style="cursor:pointer;">
+        <input type="checkbox" class="sanitation-checkbox audit-section-has-scenarios"${isScenario ? ' checked' : ''}>
+        Multiple scenarios?
+      </label>
+      <p class="audit-scenarios-descriptor">Select this option if the audit will have more than one possible testing scenario, with only one scenario required for each audit.</p>
     </div>
     <div class="audit-rows-area"></div>
   `;
 
   const rowsArea = wrap.querySelector('.audit-rows-area');
-  const rowTypeSelect = wrap.querySelector('.audit-section-row-type');
+  const scenariosCb = wrap.querySelector('.audit-section-has-scenarios');
 
   function renderRowsArea() {
     rowsArea.innerHTML = '';
-    const type = rowTypeSelect.value;
 
-    if (type === 'scenarios') {
+    if (scenariosCb.checked) {
       const scenariosWrap = document.createElement('div');
       scenariosWrap.className = 'audit-scenarios-wrap';
       (sectionData.scenarios || []).forEach((sc, i) =>
@@ -3868,7 +3957,7 @@ function buildAuditSectionBlock(sectionData = {}, sectionIdx = 0) {
     }
   }
 
-  rowTypeSelect.addEventListener('change', () => {
+  scenariosCb.addEventListener('change', () => {
     sectionData = { ...sectionData };
     renderRowsArea();
   });
@@ -3881,7 +3970,6 @@ function buildAuditSectionBlock(sectionData = {}, sectionIdx = 0) {
 
 function loadAuditIntoEditor(auditData) {
   document.getElementById('auditEditorTitle').value = auditData.title || '';
-  document.getElementById('auditEditorRescuerLabel').value = auditData.rescuerLabel || '';
   document.getElementById('auditEditorOverallPassScore').value = auditData.passScore != null ? auditData.passScore : '';
 
   const container = document.getElementById('auditSectionsContainer');
@@ -3890,40 +3978,59 @@ function loadAuditIntoEditor(auditData) {
     container.appendChild(buildAuditSectionBlock(sec, i))
   );
 
-  refreshAuditScoringInputs(auditData.sections || []);
+  refreshAuditScoringInputs();
 }
 
-function refreshAuditScoringInputs(sections) {
+function refreshAuditScoringInputs() {
   const wrap = document.getElementById('auditScoringInputs');
   if (!wrap) return;
+
+  // Preserve existing values before clearing
+  const existingValues = {};
+  wrap.querySelectorAll('.audit-scenario-scoring-row').forEach(row => {
+    const key = `${row.dataset.sectionIdx}-${row.dataset.scenarioIdx}`;
+    existingValues[key] = row.querySelector('input')?.value || '';
+  });
+
   wrap.innerHTML = '';
 
-  sections.forEach((sec, sIdx) => {
-    if (sec.scenarios && sec.scenarios.length) {
-      sec.scenarios.forEach((sc, scIdx) => {
-        const row = document.createElement('div');
-        row.className = 'audit-scenario-scoring-row form-group';
-        row.dataset.sectionIdx = sIdx;
-        row.dataset.scenarioIdx = scIdx;
-        const label = document.createElement('label');
-        label.className = 'audit-field-label';
-        label.textContent = `Pass score — ${sec.title || `Section ${sIdx + 1}`} › ${sc.label || `Scenario ${scIdx + 1}`}`;
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.className = 'adjustment-feedback';
-        input.min = '0';
-        input.value = sc.passScore != null ? sc.passScore : '';
-        input.placeholder = 'optional';
-        row.appendChild(label);
-        row.appendChild(input);
-        wrap.appendChild(row);
-      });
-    }
+  document.querySelectorAll('#auditSectionsContainer .audit-section-block').forEach((secBlock, sIdx) => {
+    const scenarios = secBlock.querySelectorAll('.audit-scenario-block');
+    if (!scenarios.length) return;
+
+    const secTitle = secBlock.querySelector('.audit-section-title')?.value.trim() || `Section ${sIdx + 1}`;
+    const scoringDisabled = document.getElementById('auditEditorOverallPassScore')?.disabled ?? true;
+
+    scenarios.forEach((scenBlock, scIdx) => {
+      const scLabel = scenBlock.querySelector('.audit-scenario-label')?.value.trim() || `Scenario ${scIdx + 1}`;
+      const row = document.createElement('div');
+      row.className = 'audit-scenario-scoring-row form-group';
+      row.dataset.sectionIdx = sIdx;
+      row.dataset.scenarioIdx = scIdx;
+
+      const label = document.createElement('label');
+      label.className = 'audit-field-label';
+      label.textContent = `Pass score — ${secTitle} › ${scLabel}`;
+
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.className = 'adjustment-feedback';
+      input.min = '0';
+      input.placeholder = 'optional';
+      input.disabled = scoringDisabled;
+
+      const key = `${sIdx}-${scIdx}`;
+      input.value = existingValues[key] ?? '';
+
+      row.appendChild(label);
+      row.appendChild(input);
+      wrap.appendChild(row);
+    });
   });
 }
 
 function setAuditEditorEnabled(enabled) {
-  ['auditEditorTitle', 'auditEditorRescuerLabel', 'auditEditorOverallPassScore'].forEach((id) => {
+  ['auditEditorTitle', 'auditEditorOverallPassScore'].forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.disabled = !enabled;
   });
@@ -3931,6 +4038,10 @@ function setAuditEditorEnabled(enabled) {
   if (addSecBtn) addSecBtn.disabled = !enabled;
   document.querySelectorAll('.audit-section-block input, .audit-section-block textarea, .audit-section-block select').forEach((el) => {
     el.disabled = !enabled;
+  });
+  document.querySelectorAll('.audit-section-block [contenteditable]').forEach((el) => {
+    el.setAttribute('contenteditable', enabled ? 'true' : 'false');
+    el.querySelectorAll && el.closest('.audit-row-block')?.querySelectorAll('.format-btn').forEach(btn => { btn.disabled = !enabled; });
   });
   document.querySelectorAll('.audit-remove-section-btn, .audit-add-row-btn, .audit-remove-row-btn, .audit-add-scenario-btn, .audit-remove-scenario-btn').forEach((btn) => {
     btn.disabled = !enabled;
@@ -3978,49 +4089,94 @@ async function populateAuditSelect() {
 }
 
 function wireAuditSectionButtons() {
-  ['editAuditInfoBtn', 'saveAuditInfoBtn', 'editAuditFormatBtn', 'saveAuditFormatBtn', 'editAuditScoringBtn', 'saveAuditScoringBtn'].forEach((id) => {
-    const btn = document.getElementById(id);
-    if (!btn) return;
+  const sectionDefs = [
+    {
+      editId: 'editAuditInfoBtn',
+      sectionEnabled: (en) => {
+        const el = document.getElementById('auditEditorTitle');
+        if (el) el.disabled = !en;
+      }
+    },
+    {
+      editId: 'editAuditFormatBtn',
+      sectionEnabled: (en) => {
+        const addSecBtn = document.getElementById('auditAddSectionBtn');
+        if (addSecBtn) addSecBtn.disabled = !en;
+        document.querySelectorAll('.audit-section-block input, .audit-section-block textarea, .audit-section-block select').forEach(el => { el.disabled = !en; });
+        document.querySelectorAll('.audit-section-block [contenteditable]').forEach(el => {
+          el.setAttribute('contenteditable', en ? 'true' : 'false');
+          el.closest('.audit-row-block')?.querySelectorAll('.format-btn').forEach(btn => { btn.disabled = !en; });
+        });
+        document.querySelectorAll('.audit-remove-section-btn, .audit-add-row-btn, .audit-remove-row-btn, .audit-add-scenario-btn, .audit-remove-scenario-btn').forEach(btn => { btn.disabled = !en; });
+      }
+    },
+    {
+      editId: 'editAuditScoringBtn',
+      sectionEnabled: (en) => {
+        const el = document.getElementById('auditEditorOverallPassScore');
+        if (el) el.disabled = !en;
+        document.querySelectorAll('#auditScoringInputs input').forEach(el => { el.disabled = !en; });
+      }
+    }
+  ];
 
-    const ruleButtons = btn.closest('.audit-rule-buttons');
+  sectionDefs.forEach(({ editId, sectionEnabled }) => {
+    const editBtn = document.getElementById(editId);
+    if (!editBtn) return;
+    const ruleButtons = editBtn.closest('.audit-rule-buttons');
     if (!ruleButtons || ruleButtons.querySelector('.theme-switch')) return;
 
-    btn.style.display = 'none';
+    editBtn.style.display = 'none';
+    const saveBtn = ruleButtons.querySelector('.pool-save-btn');
+    if (saveBtn) saveBtn.style.display = 'none';
 
     const { label } = buildEditSaveToggle(
-      () => setAuditEditorEnabled(true),
+      () => sectionEnabled(true),
       async () => {
         const ok = await saveAuditEditor();
-        if (ok) {
-          setAuditEditorEnabled(false);
-          return false;
-        }
-        setAuditEditorEnabled(true);
+        if (ok) { sectionEnabled(false); return false; }
+        sectionEnabled(true);
         return true;
       }
     );
     ruleButtons.appendChild(label);
   });
 
-  document.getElementById('auditAddSectionBtn')?.addEventListener('click', () => {
-    const container = document.getElementById('auditSectionsContainer');
-    const idx = container.querySelectorAll('.audit-section-block').length;
-    container.appendChild(buildAuditSectionBlock({}, idx));
-  });
+  const addSecBtn = document.getElementById('auditAddSectionBtn');
+  if (addSecBtn && !addSecBtn.dataset.addSectionBound) {
+    addSecBtn.dataset.addSectionBound = 'true';
+    addSecBtn.addEventListener('click', () => {
+      const container = document.getElementById('auditSectionsContainer');
+      const idx = container.querySelectorAll('.audit-section-block').length;
+      container.appendChild(buildAuditSectionBlock({}, idx));
+      scheduleAuditAutoSave();
+    });
+  }
 }
 
 function setupAuditModeButtons() {
   const addBtn = document.getElementById('auditModeAdd');
   const editBtn = document.getElementById('auditModeEdit');
   const deleteBtn = document.getElementById('auditTopDeleteBtn');
+  const saveAllBtn = document.getElementById('auditSaveAllBtn');
   const selectWrapper = document.getElementById('auditSelectWrapper');
   const editorContent = document.getElementById('auditEditorContent');
   const auditSelect = document.getElementById('auditSelect');
   const titleDisplay = document.getElementById('auditCurrentTitle');
 
+  function resetTogglesToSaved() {
+    editorContent?.querySelectorAll('.audit-rule-buttons .edit-save-toggle-input').forEach(cb => { cb.checked = true; });
+  }
+
+  function resetTogglesToEdit() {
+    editorContent?.querySelectorAll('.audit-rule-buttons .edit-save-toggle-input').forEach(cb => { cb.checked = false; });
+  }
+
   function showAuditEditor() {
     editorContent?.removeAttribute('hidden');
+    if (saveAllBtn) saveAllBtn.hidden = false;
     setAuditEditorEnabled(false);
+    resetTogglesToSaved();
     wireAuditSectionButtons();
   }
 
@@ -4031,9 +4187,10 @@ function setupAuditModeButtons() {
     editBtn?.classList.remove('active');
     selectWrapper?.classList.add('hidden');
     if (titleDisplay) titleDisplay.textContent = 'New Audit';
-    loadAuditIntoEditor({ title: '', rescuerLabel: 'Employee', sections: [] });
+    loadAuditIntoEditor({ title: '', sections: [] });
     showAuditEditor();
     setAuditEditorEnabled(true);
+    resetTogglesToEdit();
     if (deleteBtn) deleteBtn.hidden = true;
   });
 
@@ -4069,14 +4226,25 @@ function setupAuditModeButtons() {
     try {
       await deleteAuditDoc(currentAuditId);
       currentAuditId = '';
+      currentAuditMode = null;
       if (titleDisplay) titleDisplay.textContent = '';
       editorContent?.setAttribute('hidden', '');
+      if (saveAllBtn) saveAllBtn.hidden = true;
       auditSelect.value = '';
       await populateAuditSelect();
       showMessage('Audit deleted.', 'success');
     } catch (err) {
       showMessage(`Could not delete audit: ${err?.message || String(err)}`, 'error');
     }
+  });
+
+  saveAllBtn?.addEventListener('click', async () => {
+    const prevText = saveAllBtn.textContent;
+    saveAllBtn.disabled = true;
+    saveAllBtn.textContent = 'Saving…';
+    await saveAuditEditor();
+    saveAllBtn.disabled = false;
+    saveAllBtn.textContent = prevText;
   });
 
   // Set up accordion-style sections with wrapSectionAccordion
@@ -4086,9 +4254,42 @@ function setupAuditModeButtons() {
   });
 }
 
+function scheduleAuditAutoSave() {
+  if (auditAutoSaveTimer) clearTimeout(auditAutoSaveTimer);
+  auditAutoSaveTimer = setTimeout(async () => {
+    if (!currentAuditMode) return;
+    const title = document.getElementById('auditEditorTitle')?.value.trim();
+    if (!title) return;
+    await saveAuditEditor();
+  }, 10000);
+}
+
+function setupAuditAutoSave() {
+  const editorContent = document.getElementById('auditEditorContent');
+  if (!editorContent || editorContent.dataset.autoSaveBound) return;
+  editorContent.dataset.autoSaveBound = 'true';
+  editorContent.addEventListener('input', scheduleAuditAutoSave);
+  editorContent.addEventListener('change', scheduleAuditAutoSave);
+}
+
+function setupScoringObserver() {
+  const container = document.getElementById('auditSectionsContainer');
+  if (!container || container.dataset.scoringObserverActive) return;
+  container.dataset.scoringObserverActive = 'true';
+
+  const obs = new MutationObserver(() => refreshAuditScoringInputs());
+  obs.observe(container, { childList: true, subtree: true });
+
+  container.addEventListener('input', (e) => {
+    if (e.target.matches('.audit-scenario-label')) refreshAuditScoringInputs();
+  });
+}
+
 function initAuditEditor() {
   setupSiteEditorTabs();
   setupAuditModeButtons();
+  setupScoringObserver();
+  setupAuditAutoSave();
 }
 window.loadPoolIntoEditor = loadPoolIntoEditor;
 window.readEditorToObject = readEditorToObject;
