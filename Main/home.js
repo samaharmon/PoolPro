@@ -40,6 +40,10 @@ const EMAIL_AUTH_MODE_VERIFY = 'verifyEmail';
 const DEVICE_VERIFIED_KEY = 'poolproDeviceVerified';
 const LOGIN_ATTEMPT_STORAGE_KEY = 'poolproLoginAttempts';
 const LOGIN_ATTEMPT_DOC_PREFIX = 'loginAttempt__';
+const FIRST_VISIT_KEY = 'poolproHasVisited';
+
+let isFirstVisit = false;
+let hasShownFirstVisitPulse = false;
 const MAX_LOGIN_ATTEMPTS = 3;
 const LOGIN_ATTEMPT_LOCKOUT_MS = 15 * 60 * 1000;
 const CLEANLINESS_REMINDER_START_HOUR = 18;
@@ -1435,6 +1439,10 @@ function openModal(target) {
   requestAnimationFrame(() => modal.classList.add('visible'));
   resetForms();
   setModalView('login');
+  if (isFirstVisit && !hasShownFirstVisitPulse) {
+    hasShownFirstVisitPulse = true;
+    setTimeout(triggerFirstVisitCreateAccountPulse, 350);
+  }
 }
 
 function closeModal() {
@@ -2701,6 +2709,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   setRole(initialRole);
   setModalView('login');
+  initFirstVisitTip();
 });
 
 window.addEventListener('focus', async () => {
@@ -2731,3 +2740,39 @@ document.addEventListener('visibilitychange', async () => {
 window.addEventListener('pageshow', (event) => {
   if (event.persisted) window.location.reload();
 });
+
+// ---- First-time visitor tip ----
+
+function triggerFirstVisitCreateAccountPulse() {
+  const btn = document.getElementById('homeShowCreateAccountBtn');
+  if (!btn) return;
+  btn.classList.remove('first-visit-pulse');
+  void btn.offsetWidth; // force reflow so animation restarts cleanly
+  btn.classList.add('first-visit-pulse');
+  setTimeout(() => btn.classList.remove('first-visit-pulse'), 5500);
+}
+
+function initFirstVisitTip() {
+  try {
+    if (localStorage.getItem(FIRST_VISIT_KEY)) return;
+    localStorage.setItem(FIRST_VISIT_KEY, '1');
+  } catch (_) {
+    return; // storage blocked — skip feature
+  }
+
+  isFirstVisit = true;
+
+  const tip = document.getElementById('firstVisitTip');
+  if (!tip) return;
+
+  tip.hidden = false;
+
+  document.getElementById('firstVisitTipClose')?.addEventListener('click', () => {
+    tip.hidden = true;
+  });
+
+  // Auto-hide the tip once the user picks a role (opens the modal)
+  document.querySelectorAll('.home-menu-item').forEach((btn) => {
+    btn.addEventListener('click', () => { tip.hidden = true; }, { once: true });
+  });
+}

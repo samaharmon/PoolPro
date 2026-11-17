@@ -627,11 +627,11 @@ function addUrgentRow(value = '') {
   row.className = 'inventory-urgent-row';
   row.dataset.urgentRow = String(urgentRowCounter);
   row.innerHTML = `
+    <button type="button" class="inventory-remove-item" aria-label="Remove item">&times;</button>
     <select class="training-filter-select inventory-urgent-select" required>
       <option value="">Select item</option>
       ${createSupplyOptions()}
     </select>
-    <button type="button" class="inventory-remove-item" aria-label="Remove item">&times;</button>
   `;
   const select = row.querySelector('select');
   if (value) select.value = value;

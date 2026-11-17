@@ -96,6 +96,7 @@
    Adjust dynamically for iPhone safe-area notch. */
 :root {
   --editor-floating-header-h: calc(74px + env(safe-area-inset-top, 0px));
+  --editor-pool-rule-header-h: 56px;
 }
 
 /* Section-level accordion toggles float as user scrolls, below the page header */
@@ -121,6 +122,20 @@
 
 .editor-section-sticky-actions[hidden] {
   display: none !important;
+}
+
+/* Pool Chemistry: 2nd-degree headers (Pool 1, Pool 2…) float just below the section toggle */
+.pool-rule-block .pool-rule-header {
+  position: sticky;
+  top: calc(var(--editor-floating-header-h) + 44px);
+  z-index: 18;
+}
+
+/* Pool Chemistry: 3rd-degree headers (pH, Cl) float below the pool rule header */
+.rule-table-accordion-toggle {
+  position: sticky;
+  top: calc(var(--editor-floating-header-h) + 44px + var(--editor-pool-rule-header-h));
+  z-index: 17;
 }
 
 /* Cleanliness shift headers float below the section toggle (44px) + sticky actions bar (~50px) */

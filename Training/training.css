@@ -602,6 +602,13 @@ select {
   margin-bottom: 10px;
 }
 
+/* Attendance checkbox column — fit to content width */
+.attendance-table th:nth-child(2),
+.attendance-table td:nth-child(2) {
+  width: 1px;
+  white-space: nowrap;
+}
+
 .attendance-table thead tr {
   background-color: #000;
   color: #fff;

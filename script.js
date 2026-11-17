@@ -2902,21 +2902,10 @@ function ensureStandardSettingsSections() {
   const modalContent = document.querySelector('#settingsModal .settings-modal-content');
   if (!modalContent) return;
 
-  let websiteSection = Array.from(modalContent.querySelectorAll('.settings-section'))
-    .find((section) => (section.querySelector('h3')?.textContent || '').trim().toLowerCase() === 'website setup') || null;
-  if (!websiteSection) {
-    websiteSection = document.createElement('div');
-    websiteSection.className = 'settings-section';
-    websiteSection.innerHTML = `
-      <h3>Website Setup</h3>
-      <button id="siteEditor" class="submit-btn" onclick="goToEditor()">Go to the Site Editor</button>
-    `;
-    const scrollBody = modalContent.querySelector(':scope > .settings-modal-scroll');
-    const header = modalContent.querySelector(':scope > .modal-header');
-    if (scrollBody) scrollBody.prepend(websiteSection);
-    else if (header) header.insertAdjacentElement('afterend', websiteSection);
-    else modalContent.prepend(websiteSection);
-  }
+  // Remove any existing Website Setup sections
+  Array.from(modalContent.querySelectorAll('.settings-section'))
+    .filter((s) => (s.querySelector('h3')?.textContent || '').trim().toLowerCase() === 'website setup')
+    .forEach((s) => s.remove());
 
   if (document.getElementById('marketSection')) return;
 
@@ -3048,11 +3037,15 @@ function ensureStandardSettingsSections() {
     </div>
   `;
 
-  let anchor = websiteSection;
+  const scrollBody = modalContent.querySelector(':scope > .settings-modal-scroll');
+  const header = modalContent.querySelector(':scope > .modal-header');
+  let anchor = header || null;
   Array.from(wrapper.children).forEach((section) => {
     if (anchor) {
       anchor.insertAdjacentElement('afterend', section);
       anchor = section;
+    } else if (scrollBody) {
+      scrollBody.appendChild(section);
     } else {
       modalContent.appendChild(section);
     }

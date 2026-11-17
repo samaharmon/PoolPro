@@ -15,6 +15,11 @@
   width: 100%;
 }
 
+#inventoryFormType {
+  width: 100%;
+  min-width: 300px;
+}
+
 .inventory-intro-row {
   align-items: flex-end;
 }
@@ -71,7 +76,11 @@
 }
 
 .inventory-urgent-row {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.inventory-urgent-select {
+  width: 100%;
 }
 
 .inventory-custom-section {
@@ -153,9 +162,13 @@
 }
 
 @media (max-width: 720px) {
-  .inventory-supply-row,
-  .inventory-urgent-row {
+  .inventory-supply-row {
     grid-template-columns: 1fr;
+  }
+
+  /* Keep urgent rows as button + select side by side on mobile */
+  .inventory-urgent-row {
+    grid-template-columns: auto 1fr;
   }
 
   .inventory-chemical-cya-row {
