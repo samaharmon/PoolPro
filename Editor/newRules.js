@@ -621,6 +621,7 @@ function setMetadataEnabled(enabled) {
   const fields = [
     document.getElementById('editorPoolName'),
     document.getElementById('editorNumPools'),
+    document.getElementById('editorStaffSize'),
     ...document.querySelectorAll('input[name="editorMarket"]'),
   ];
 
@@ -1847,6 +1848,11 @@ async function loadPoolIntoEditor(poolDoc, loadToken = null) {
     });
   }
 
+  const staffSizeInput = document.getElementById('editorStaffSize');
+  if (staffSizeInput) {
+    staffSizeInput.value = normalizedDoc.staffSize != null ? String(normalizedDoc.staffSize) : '';
+  }
+
   renderSupplyInfo(normalizedDoc);
   renderCleanlinessReportSettings(normalizedDoc);
 
@@ -1988,10 +1994,14 @@ function readEditorToObject() {
     });
   });
 
+  const staffSizeInput = document.getElementById('editorStaffSize');
+  const staffSize = staffSizeInput ? (parseInt(staffSizeInput.value, 10) || 0) : 0;
+
   return {
     name,
     markets,
     numPools,
+    staffSize,
     supplyInfo: collectSupplyInfo(),
     cleanlinessReport: collectCleanlinessReportSettings(),
     rules: { pools },

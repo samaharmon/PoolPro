@@ -3426,12 +3426,18 @@ textarea,
   margin-top: 0;
 }
 
-/* Delete All button — smaller than standard action buttons */
+/* Delete All button — matches Choose File button height */
 #employeeDeleteAllBtn {
-  padding: 4px 12px;
-  font-size: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
   width: auto;
-  margin-top: 16px;
+  margin-top: 0;
+  align-self: center;
+}
+
+/* Select Pool (Home Pool) dropdown — match input height */
+#employeeHomePoolInput {
+  height: 44px;
 }
 
 .security-require-row {
@@ -3545,8 +3551,14 @@ textarea,
   display: grid;
   grid-template-columns: minmax(180px, 240px) minmax(260px, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: end;
   margin: 18px 0;
+}
+
+#roleAssignmentSelect {
+  height: 38px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 
 .roles-search-field {
@@ -3560,8 +3572,7 @@ textarea,
 }
 
 .employee-filter-bar .employee-search-field label {
-  font-size: 13px;
-  margin-bottom: 3px;
+  display: none;
 }
 
 .employee-filter-bar .employee-search-input {
@@ -3678,6 +3689,44 @@ textarea,
   text-align: left;
 }
 
+/* Role table accordion toggles (h4 replacement inside .roles-tables-grid) */
+.roles-table-accordion-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  border: none;
+  border-bottom: 1px solid #555;
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+  margin-bottom: 0;
+}
+
+.roles-table-accordion-toggle:hover {
+  background: rgba(105, 20, 14, 0.4);
+}
+
+.roles-table-caret {
+  font-size: 0.85rem;
+  transition: transform 0.2s;
+}
+
+.roles-table-collapsed .roles-table-caret {
+  transform: rotate(-90deg);
+}
+
+.roles-table-collapsed .table-scroll-wrap,
+.roles-table-collapsed .roles-pagination-row[data-role-pagination] {
+  display: none;
+}
+
 .roles-pagination-row {
   display: flex;
   align-items: center;
@@ -3701,9 +3750,9 @@ textarea,
 }
 
 .roles-permission-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
   margin-top: 8px;
 }
 
@@ -4856,6 +4905,12 @@ body.resource-pdf-fullscreen-open {
   width: 100%;
 }
 
+/* Remove sticky thead inside the settings modal employee/roles tables */
+#settingsModal .table-scroll-wrap table thead th,
+#settingsModal .table-scroll-wrap table thead td {
+  position: static;
+}
+
 #settingsModal .employee-add-row {
   grid-template-columns: repeat(3, 1fr) !important;
   align-items: end;
@@ -5053,6 +5108,7 @@ body.resource-pdf-fullscreen-open {
 #employeeFilterBar,
 #resourceFilterBar {
   margin-top: 18px !important;
+  align-items: center;
 }
 
 #settingsModal .training-filter-bar,
@@ -6193,78 +6249,6 @@ body > canvas {
   text-align: center;
 }
 
-.dashboard-compliance-staff-input {
-  width: 88px;
-  max-width: 100%;
-  background: #595959;
-  color: #fff;
-  border: 2px solid #ddd;
-  border-bottom: 4px solid #ddd;
-  padding: 10px 12px;
-  font-size: 1rem;
-  font-weight: 800;
-}
-
-/* Staff-size edit/save toggle in compliance table header */
-.compliance-staff-th {
-  white-space: nowrap;
-}
-
-.compliance-staff-toggle {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  border: 1px solid rgba(255,255,255,0.3);
-  border-radius: 4px;
-  overflow: hidden;
-  vertical-align: middle;
-}
-
-.compliance-staff-toggle button {
-  background: transparent;
-  color: rgba(255,255,255,0.7);
-  border: none;
-  padding: 2px 7px;
-  font-size: 0.7rem;
-  font-weight: 700;
-  cursor: pointer;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  line-height: 1.6;
-  transition: background 0.15s, color 0.15s;
-}
-
-.compliance-staff-toggle button:hover {
-  background: rgba(255,255,255,0.12);
-  color: #fff;
-}
-
-.compliance-staff-toggle .compliance-staff-edit-btn.active,
-.compliance-staff-toggle .compliance-staff-save-btn.active {
-  background: rgba(105,20,14,0.85);
-  color: #fff;
-}
-
-.compliance-staff-toggle .compliance-staff-edit-btn {
-  border-right: 1px solid rgba(255,255,255,0.2);
-}
-
-/* Staff size cell overlay — covers input when not editing */
-.compliance-staff-cell {
-  position: relative;
-}
-
-.compliance-staff-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(80,80,80,0.55);
-  pointer-events: none;
-  transition: opacity 0.2s;
-}
-
-.compliance-staff-overlay.hidden {
-  display: none;
-}
 
 .dashboard-report-shift-tabs {
   display: flex;

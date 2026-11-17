@@ -3,7 +3,7 @@
 import {
   db, auth,
   getDoc, setDoc, getDocs,
-  doc, collection, query, orderBy, limit, serverTimestamp,
+  doc, collection, query, orderBy, limit,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
@@ -23,7 +23,6 @@ let testingResults = [];   // [{ rubricKey, date, employeeId, poolName, question
 let questionTypeMap = {};  // { [rubricKey]: { [questionNumber]: "Topic label" } }
 let facilityTasks = [];
 let trainingSignups = [];
-let facilityComplianceStaffSizes = {};
 let typedRescuerAssignment = null;
 let pageInitialized = false;
 
@@ -197,7 +196,6 @@ async function init() {
     loadQuestionTypeMap(),
     loadFacilityTasks(),
     loadTrainingSignups(),
-    loadComplianceStaffSizes(),
   ]);
 
   buildPoolToMarket();
@@ -317,16 +315,6 @@ async function loadTrainingSignups() {
   } catch (err) {
     console.error('[Employees] Error loading training signups:', err);
     trainingSignups = [];
-  }
-}
-
-async function loadComplianceStaffSizes() {
-  try {
-    const snap = await getDoc(doc(db, 'settings', 'facilityComplianceStaffSizes'));
-    facilityComplianceStaffSizes = snap.exists() ? (snap.data().sizes || {}) : {};
-  } catch (err) {
-    console.error('[Employees] Error loading facility compliance staff sizes:', err);
-    facilityComplianceStaffSizes = {};
   }
 }
 
@@ -945,11 +933,6 @@ function renderFacilityComplianceScores() {
   intro.textContent = 'Daily task scores are based on tasks due today for each facility.';
   container.appendChild(intro);
 
-  const messageEl = document.createElement('span');
-  messageEl.id = 'facilityComplianceMessage';
-  messageEl.className = 'form-message';
-  container.appendChild(messageEl);
-
   const groups = getCompliancePoolsByMarket();
   if (!groups.length) {
     const empty = document.createElement('p');
@@ -963,7 +946,6 @@ function renderFacilityComplianceScores() {
   groups.forEach(({ market, pools }) => {
     const section = document.createElement('section');
     section.className = 'emp-market-section dashboard-compliance-section';
-    let staffEditMode = false;
 
     const heading = document.createElement('h3');
     heading.className = 'emp-market-heading';
@@ -979,12 +961,7 @@ function renderFacilityComplianceScores() {
       <thead>
         <tr>
           <th>Facility</th>
-          <th class="compliance-staff-th">
-            Staff Size
-            <span class="compliance-staff-toggle" aria-label="Toggle staff size editing">
-              <button type="button" class="compliance-staff-edit-btn" data-action="edit">Edit</button><button type="button" class="compliance-staff-save-btn" data-action="save">Save</button>
-            </span>
-          </th>
+          <th>Staff Size</th>
           <th>Tasks Complete Today</th>
           <th>Daily Task Score</th>
           <th>Signed Up for In-Service</th>
@@ -997,9 +974,8 @@ function renderFacilityComplianceScores() {
     const tbody = table.querySelector('tbody');
     pools.forEach((poolDoc) => {
       const facilityName = getPoolName(poolDoc);
-      const facilityKey = normalizeComplianceFacilityKey(facilityName);
       const stats = getComplianceStats(facilityName);
-      const staffSize = facilityComplianceStaffSizes[facilityKey] ?? '';
+      const staffSize = poolDoc.staffSize != null ? String(poolDoc.staffSize) : '—';
       const scoreClass = stats.taskScore === null
         ? ''
         : stats.taskScore >= 90
@@ -1010,10 +986,7 @@ function renderFacilityComplianceScores() {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${escapeHtml(facilityName)}</td>
-        <td class="compliance-staff-cell">
-          <div class="compliance-staff-overlay"></div>
-          <input type="number" min="0" step="1" class="dashboard-compliance-staff-input" data-compliance-facility="${escapeHtml(facilityKey)}" value="${escapeHtml(staffSize)}" aria-label="Staff size for ${escapeHtml(facilityName)}" disabled>
-        </td>
+        <td>${escapeHtml(staffSize)}</td>
         <td>${stats.completedTasks} / ${stats.taskTotal}</td>
         <td class="${scoreClass}">${stats.taskScore === null ? 'No tasks due today' : `${stats.taskScore}%`}</td>
         <td>${stats.trainingSignedUp}</td>
@@ -1022,70 +995,10 @@ function renderFacilityComplianceScores() {
       tbody.appendChild(tr);
     });
 
-    const setStaffEditMode = (editing) => {
-      staffEditMode = editing;
-      table.querySelectorAll('.dashboard-compliance-staff-input').forEach((inp) => {
-        inp.disabled = !editing;
-      });
-      table.querySelectorAll('.compliance-staff-overlay').forEach((ov) => {
-        ov.style.display = editing ? 'none' : '';
-      });
-      const editBtn = table.querySelector('.compliance-staff-edit-btn');
-      const saveBtn = table.querySelector('.compliance-staff-save-btn');
-      if (editBtn) editBtn.classList.toggle('active', !editing);
-      if (saveBtn) saveBtn.classList.toggle('active', editing);
-    };
-    setStaffEditMode(false);
-
-    table.querySelector('.compliance-staff-edit-btn')?.addEventListener('click', () => setStaffEditMode(true));
-    table.querySelector('.compliance-staff-save-btn')?.addEventListener('click', async () => {
-      setStaffEditMode(false);
-      await saveFacilityComplianceStaffSizes();
-    });
-
     scrollWrap.appendChild(table);
     section.appendChild(scrollWrap);
     container.appendChild(section);
   });
-
-  container.querySelectorAll('[data-compliance-facility]').forEach((input) => {
-    input.addEventListener('input', () => {
-      const key = input.dataset.complianceFacility || '';
-      const value = input.value === '' ? '' : Math.max(0, Number.parseInt(input.value, 10) || 0);
-      if (!key) return;
-      if (value === '') delete facilityComplianceStaffSizes[key];
-      else facilityComplianceStaffSizes[key] = value;
-    });
-  });
-}
-
-async function saveFacilityComplianceStaffSizes() {
-  const message = document.getElementById('facilityComplianceMessage');
-  try {
-    if (message) {
-      message.textContent = 'Saving...';
-      message.classList.remove('error', 'success');
-    }
-    await setDoc(doc(db, 'settings', 'facilityComplianceStaffSizes'), {
-      sizes: facilityComplianceStaffSizes,
-      updatedAt: serverTimestamp(),
-      updatedAtIso: new Date().toISOString(),
-    }, { merge: true });
-    if (message) {
-      message.textContent = 'Staff sizes saved.';
-      message.classList.remove('error');
-      message.classList.add('success');
-    }
-  } catch (err) {
-    console.error('[Employees] Error saving facility compliance staff sizes:', err);
-    if (message) {
-      message.textContent = 'Unable to save staff sizes.';
-      message.classList.add('error');
-      message.classList.remove('success');
-    }
-  } finally {
-    // no button to re-enable; save is triggered by the toggle
-  }
 }
 
 // ============================================================

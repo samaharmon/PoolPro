@@ -220,7 +220,7 @@ body.page-exiting .home-header {
   display: none;
   position: fixed;
   inset: 0;
-  z-index: 900;
+  z-index: 1100;
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.72);
@@ -798,7 +798,7 @@ body.page-exiting .home-header {
 /* ---- First-time visitor sticky note ---- */
 .first-visit-tip {
   position: fixed;
-  right: clamp(20px, 5vw, 60px);
+  left: calc(50% + 260px);
   top: 50%;
   transform: translateY(-50%) rotate(2deg);
   z-index: 90;
@@ -813,18 +813,6 @@ body.page-exiting .home-header {
   box-shadow: 3px 5px 18px rgba(0, 0, 0, 0.42);
   border-top: 10px solid #FFEC5C;
   animation: stickyNoteAppear 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-/* Arrow pointing left toward the buttons */
-.first-visit-tip::after {
-  content: "";
-  position: absolute;
-  left: -18px;
-  top: 50%;
-  transform: translateY(-50%);
-  border-width: 12px 18px 12px 0;
-  border-style: solid;
-  border-color: transparent #FFF9C4 transparent transparent;
 }
 
 .first-visit-tip p {
@@ -868,10 +856,9 @@ body.page-exiting .home-header {
   border-color: #FFD700;
 }
 
-/* Mobile: drop note below the menu, no side arrow */
-@media (max-width: 600px) {
+/* Mobile: drop note below the menu */
+@media (max-width: 700px) {
   .first-visit-tip {
-    right: auto;
     left: 50%;
     top: auto;
     bottom: 24px;
@@ -883,9 +870,5 @@ body.page-exiting .home-header {
   @keyframes stickyNoteAppear {
     from { opacity: 0; transform: translateX(-50%) rotate(-1deg) scale(0.75); }
     to   { opacity: 1; transform: translateX(-50%) rotate(-1deg) scale(1); }
-  }
-
-  .first-visit-tip::after {
-    display: none;
   }
 }

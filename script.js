@@ -1646,9 +1646,12 @@ async function handleCurrentPageLoginSubmit(event) {
 
 function maybeShowCurrentPageLoginModal() {
   if (!hasExpiredLifeguardSessionMarker() || hasActivePoolProSession()) return;
-  const modal = ensureCurrentPageLoginModal();
-  modal.classList.remove('hidden');
-  requestAnimationFrame(() => modal.querySelector('#poolproSessionLoginPassword')?.focus());
+  // Redirect to home so the user signs in again from the main screen
+  const parts = window.location.pathname.split('/').filter(Boolean);
+  parts.pop();
+  const subDirs = ['chem', 'Chem', 'training', 'Training', 'editor', 'Editor', 'main', 'Main', 'duties', 'Duties', 'managerial', 'Managerial', 'employees', 'Employees', 'testing', 'Testing', 'resources', 'Resources', 'operational', 'Operational', 'des', 'DES', 'inventory', 'Inventory', 'todo', 'Todo', 'ToDo'];
+  const last = parts[parts.length - 1] || '';
+  window.location.href = (subDirs.includes(last) ? '../' : '') + 'index.html';
 }
 
 function getStoredSupervisorEmail() {
@@ -2963,8 +2966,7 @@ function ensureStandardSettingsSections() {
       <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
         <span class="filter-by-label">Filter By:</span>
         <div class="settings-field roles-search-field employee-search-field">
-          <label for="employeeSettingsSearch">Search</label>
-          <input type="text" id="employeeSettingsSearch" class="employee-search-input" autocomplete="off" placeholder="Search employees">
+          <input type="text" id="employeeSettingsSearch" class="employee-search-input" autocomplete="off" placeholder="Search employees" aria-label="Search employees">
         </div>
         <select id="employeeMarketFilter" class="training-filter-select">
           <option value="all">Market</option>
@@ -9073,6 +9075,26 @@ function renderRolePermissionsTable() {
   });
 }
 
+function setupRoleTableAccordions() {
+  const grid = document.querySelector('#rolesPermissionsSettings .roles-tables-grid');
+  if (!grid) return;
+  grid.querySelectorAll(':scope > div').forEach((wrapper) => {
+    if (wrapper.dataset.accordionReady === 'true') return;
+    const h4 = wrapper.querySelector(':scope > h4');
+    if (!h4) return;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'roles-table-accordion-toggle';
+    toggle.innerHTML = `<span>${h4.textContent}</span><span class="roles-table-caret">▾</span>`;
+    h4.replaceWith(toggle);
+    wrapper.classList.add('roles-table-collapsed');
+    wrapper.dataset.accordionReady = 'true';
+    toggle.addEventListener('click', () => {
+      wrapper.classList.toggle('roles-table-collapsed');
+    });
+  });
+}
+
 function renderRolesPermissionsSettings() {
   const section = document.getElementById('rolesPermissionsSettings');
   if (!section) return;
@@ -9084,6 +9106,7 @@ function renderRolesPermissionsSettings() {
   renderRoleMembers('poolManager', 'poolManagerRoleBody');
   renderRoleMembers('supervisor', 'supervisorRoleBody');
   renderRolePermissionsTable();
+  setupRoleTableAccordions();
   wrapResponsiveTables(section);
   section.querySelectorAll('.table-scroll-wrap').forEach(updateTableScrollShadow);
 }

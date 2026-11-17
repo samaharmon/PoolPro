@@ -1908,12 +1908,14 @@ function openVerificationView({
     console.error('Unable to send initial verification email:', err);
     const code = err.code || '';
     const friendly = code === 'auth/operation-not-allowed'
-      ? 'Email/password sign-in is not enabled yet.'
+      ? 'Email verification is not enabled in Firebase Console. Enable it under Authentication → Sign-in method.'
       : code === 'auth/too-many-requests'
         ? 'Too many attempts. Wait a few minutes, then resend.'
       : code === 'auth/invalid-email'
         ? 'That email address is invalid.'
-      : (err.message || 'Unable to send the verification email.');
+      : code === 'auth/user-not-found'
+        ? 'Sign in again before requesting a verification email.'
+      : (err.message || 'Unable to send the verification email. Try resending or contact support.');
     setMessage(verifyMessageEl, friendly, true);
     verifyCooldownUntil = 0;
     updateVerifyCooldownUi();
@@ -1963,12 +1965,24 @@ async function authenticateSupervisor(email, password, accessMode = 'supervisor'
         verifyUrl.searchParams.set('accessMode', normalizeAccessMode(accessMode));
         verifyUrl.searchParams.set('target', getDestinationPath());
         let verifyEmailSent = false;
-        await sendEmailVerification(auth.currentUser, {
-          url: verifyUrl.toString(),
-          handleCodeInApp: false,
-        }).then(() => { verifyEmailSent = true; }).catch((verifyErr) => {
-          console.warn('Could not send supervisor verification email:', verifyErr);
-        });
+        await (async () => {
+          try {
+            await sendEmailVerification(auth.currentUser, { url: verifyUrl.toString(), handleCodeInApp: false });
+            verifyEmailSent = true;
+          } catch (verifyErr) {
+            const vc = verifyErr?.code || '';
+            if (vc === 'auth/unauthorized-continue-uri' || vc === 'auth/invalid-continue-uri') {
+              try {
+                await sendEmailVerification(auth.currentUser);
+                verifyEmailSent = true;
+              } catch (fallbackErr) {
+                console.warn('Could not send supervisor verification email (fallback):', fallbackErr);
+              }
+            } else {
+              console.warn('Could not send supervisor verification email:', verifyErr);
+            }
+          }
+        })();
         await signOut(auth).catch(() => {});
         clearSupervisorSession();
         throw new Error(
@@ -2127,15 +2141,23 @@ async function sendVerificationEmail({ isResend = false } = {}) {
   }
 
   auth.useDeviceLanguage();
-  await sendEmailVerification(auth.currentUser, {
-    url: buildVerificationActionUrl({
-      username: pendingVerification.username,
-      target: pendingVerification.target,
-      emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
-      accessMode: pendingVerification.accessMode,
-    }),
-    handleCodeInApp: false,
+  const continueUrl = buildVerificationActionUrl({
+    username: pendingVerification.username,
+    target: pendingVerification.target,
+    emailAuthMode: EMAIL_AUTH_MODE_VERIFY,
+    accessMode: pendingVerification.accessMode,
   });
+  try {
+    await sendEmailVerification(auth.currentUser, { url: continueUrl, handleCodeInApp: false });
+  } catch (sendErr) {
+    const errCode = sendErr?.code || '';
+    if (errCode === 'auth/unauthorized-continue-uri' || errCode === 'auth/invalid-continue-uri') {
+      // continueUrl domain not authorized in Firebase Console — send without it
+      await sendEmailVerification(auth.currentUser);
+    } else {
+      throw sendErr;
+    }
+  }
 
   savePendingVerificationContext({
     username: pendingVerification.username,
@@ -2216,6 +2238,7 @@ async function handleSubmit(event) {
   event.preventDefault();
   if (loginSubmitting) return;
   setLoginSubmitting(true);
+  showHomeActionLoadingOverlay();
   setMessage(messageEl, 'Signing in...');
 
   try {
@@ -2234,6 +2257,7 @@ async function handleSubmit(event) {
     window.location.href = getDestinationPath();
   } catch (err) {
     console.error('Home login failed:', err);
+    hideHomeActionLoadingOverlay();
     const code = err.code || '';
     const friendly = code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential'
       ? (currentRole !== 'supervisor'
@@ -2463,18 +2487,18 @@ async function activateHomeMenuButton(btn, event) {
   const now = Date.now();
   if (now - lastHomeMenuActivationAt < 500) return;
   lastHomeMenuActivationAt = now;
-  showHomeActionLoadingOverlay();
-
   try {
     const requestedMode = normalizeAccessMode(btn.dataset.accessRole || btn.dataset.target);
     pendingTarget = requestedMode === 'supervisor' ? 'supervisor' : 'chem';
 
     if (hasFreshSupervisorSession()) {
+      showHomeActionLoadingOverlay();
       try {
         await assertAccessModeAllowed(requestedMode, getIdentityKeysForSupervisor(getStoredSupervisorEmail()));
         persistAccessMode(requestedMode);
         window.location.href = getDestinationPath();
       } catch (err) {
+        hideHomeActionLoadingOverlay();
         openModal(requestedMode);
         setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
       }
@@ -2483,6 +2507,7 @@ async function activateHomeMenuButton(btn, event) {
 
     const storedLifeguardSession = getStoredLifeguardSession();
     if (storedLifeguardSession && requestedMode !== 'supervisor') {
+      showHomeActionLoadingOverlay();
       try {
         await assertAccessModeAllowed(requestedMode, [
           storedLifeguardSession.email,
@@ -2492,6 +2517,7 @@ async function activateHomeMenuButton(btn, event) {
         persistAccessMode(requestedMode);
         window.location.href = getDestinationPath();
       } catch (err) {
+        hideHomeActionLoadingOverlay();
         openModal(requestedMode);
         setMessage(messageEl, err.message || 'This account does not have access to that version of PoolPro.', true);
       }
