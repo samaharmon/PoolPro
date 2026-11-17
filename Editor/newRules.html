@@ -60,7 +60,13 @@
             </div>
         </div>
     <div class="container">
-        <h2 class="page-content-title">Facility Metadata</h2>
+        <h2 class="page-content-title">Site Editor</h2>
+        <div class="emp-page-tabs" id="siteEditorTabs">
+            <button class="emp-page-tab active" data-tab="facility-metadata">Facility Metadata</button>
+            <button class="emp-page-tab" data-tab="audits-inspections">Audits and Inspections</button>
+        </div>
+
+        <div id="facilityMetadataPanel" class="site-editor-tab-panel">
         <div id="editorTopControls">
             <div class="form-row" id="editorModeRow" style="gap: 10px;">
                 <button type="button" id="editorModeAdd" class="editAndSave mode-toggle">
@@ -167,7 +173,6 @@
                             <button type="button" class="pool-edit-btn editAndSave" id="editMetadataBtn" style="display:none;">Edit</button>
                             <button type="button" class="pool-save-btn editAndSave" id="saveMetadataBtn" style="display:none;" disabled>Save</button>
                         </div>
-                        <button type="button" id="deletePoolBtn" class="editAndSave">Delete Pool</button>
                     </div>
                 </div>
                 <div class="section hidden" id="supplyInfoSection">
@@ -1757,7 +1762,93 @@
                 </div>
             </div>
         </div>
-    </div> 
+        </div><!-- end facilityMetadataPanel -->
+
+        <div id="auditsInspectionsPanel" class="site-editor-tab-panel hidden">
+            <div id="auditTopControls">
+                <div class="form-row" id="auditModeRow" style="gap: 10px;">
+                    <button type="button" id="auditModeAdd" class="editAndSave mode-toggle">
+                        Add new audit
+                    </button>
+                    <button type="button" id="auditModeEdit" class="editAndSave mode-toggle">
+                        Edit existing audit
+                    </button>
+                    <button type="button" id="auditTopDeleteBtn" class="editAndSave" hidden>
+                        Delete Audit
+                    </button>
+                </div>
+                <div id="auditCurrentTitle"></div>
+            </div>
+            <div class="form-container" id="auditEditorContent" hidden>
+                <div class="form-group hidden" id="auditSelectWrapper">
+                    <label for="auditSelect">Choose an audit to edit</label>
+                    <select id="auditSelect" class="button-shadow">
+                        <option value="">Select an audit...</option>
+                    </select>
+                </div>
+
+                <!-- Section 1: General Information -->
+                <div class="section" id="auditGeneralInfoSection">
+                    <div class="audit-info-content">
+                        <h3>General Information</h3>
+                        <div class="form-group">
+                            <label for="auditEditorTitle">Audit Title</label>
+                            <input type="text" id="auditEditorTitle" class="adjustment-feedback" placeholder="e.g. Drop Test Rubric" disabled>
+                        </div>
+                        <div class="form-group">
+                            <label for="auditEditorRescuerLabel">Rescuer / Employee Label</label>
+                            <input type="text" id="auditEditorRescuerLabel" class="adjustment-feedback" placeholder="e.g. Rescuer" disabled>
+                        </div>
+                    </div>
+                    <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px;">
+                        <div class="rule-buttons audit-rule-buttons">
+                            <button type="button" class="pool-edit-btn editAndSave" id="editAuditInfoBtn" style="display:none;">Edit</button>
+                            <button type="button" class="pool-save-btn editAndSave" id="saveAuditInfoBtn" style="display:none;" disabled>Save</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Format and Content -->
+                <div class="section" id="auditFormatSection">
+                    <div class="audit-format-content">
+                        <h3>Format and Content</h3>
+                        <p class="section-subtitle">Build the sections, requirements, and scoring rows for this audit.</p>
+                        <div id="auditSectionsContainer">
+                            <!-- Dynamic audit section blocks added here by JS -->
+                        </div>
+                        <button type="button" id="auditAddSectionBtn" class="submit-btn secondary-btn" style="margin-top: 14px;" disabled>+ Add Section</button>
+                    </div>
+                    <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px;">
+                        <div class="rule-buttons audit-rule-buttons">
+                            <button type="button" class="pool-edit-btn editAndSave" id="editAuditFormatBtn" style="display:none;">Edit</button>
+                            <button type="button" class="pool-save-btn editAndSave" id="saveAuditFormatBtn" style="display:none;" disabled>Save</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Scoring -->
+                <div class="section" id="auditScoringSection">
+                    <div class="audit-scoring-content">
+                        <h3>Scoring</h3>
+                        <p class="section-subtitle">Set pass score thresholds. The overall pass score applies when scenarios are not used. Per-section pass scores apply when scenarios are used.</p>
+                        <div class="form-group">
+                            <label for="auditEditorOverallPassScore">Overall Pass Score</label>
+                            <input type="number" id="auditEditorOverallPassScore" class="adjustment-feedback" min="0" placeholder="optional" disabled>
+                        </div>
+                        <div id="auditScoringInputs">
+                            <!-- Per-scenario pass scores populated by JS -->
+                        </div>
+                    </div>
+                    <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px;">
+                        <div class="rule-buttons audit-rule-buttons">
+                            <button type="button" class="pool-edit-btn editAndSave" id="editAuditScoringBtn" style="display:none;">Edit</button>
+                            <button type="button" class="pool-save-btn editAndSave" id="saveAuditScoringBtn" style="display:none;" disabled>Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div><!-- end auditsInspectionsPanel -->
+    </div><!-- end container -->
 
 <!-- Delete pool confirmation modal -->
 <div id="deletePoolModal" class="feedback-modal" style="display: none;">

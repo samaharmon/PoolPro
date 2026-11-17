@@ -44,6 +44,11 @@
   cursor: pointer;
 }
 
+#editorModeAdd,
+#editorModeEdit {
+  border: 2px solid #fff;
+}
+
 #editorCurrentPoolName {
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
   font-size: clamp(1.6rem, 4vw, 2.2rem);
@@ -721,6 +726,12 @@
 .pool-weekly-backwash-checkbox:disabled {
   cursor: not-allowed;
 }
+
+.pool-rule-option-toggle.overlay-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+  cursor: not-allowed;
+}
  
 .rule-tables {
   display: flex;
@@ -1295,7 +1306,7 @@ body.dark-mode .pool-rule-block {
 #supplyInfoSection.overlay-disabled .supply-info-content,
 #cleanlinessReportSection.overlay-disabled .cleanliness-report-content {
   position: relative;
-  opacity: 0.6;
+  opacity: 0.85;
 }
 
 #poolMetadataSection.overlay-disabled .metadata-content::after,
@@ -1304,7 +1315,7 @@ body.dark-mode .pool-rule-block {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45); /* translucent grey layer */
+  background: rgba(0, 0, 0, 0.18);
   pointer-events: auto;
   z-index: 5;
   cursor: not-allowed;
@@ -1337,17 +1348,16 @@ body.dark-mode .pool-rule-block {
 #supplyInfoSection.overlay-disabled .supply-info-content,
 #cleanlinessReportSection.overlay-disabled .cleanliness-report-content {
     position: relative;
-    opacity: 0.6;          /* visual grey-out */
+    opacity: 0.85;
 }
 
-/* Optional: more explicit overlay */
 #poolMetadataSection.overlay-disabled .metadata-content::after,
 #supplyInfoSection.overlay-disabled .supply-info-content::after,
 #cleanlinessReportSection.overlay-disabled .cleanliness-report-content::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.58);
+    background: rgba(0, 0, 0, 0.18);
     pointer-events: auto;
     z-index: 5;
     cursor: not-allowed;
@@ -1544,4 +1554,222 @@ table thead td {
   background-color: transparent !important;
   background-image: none !important;
   color: #fff !important;
+}
+
+/* ================================================================
+   SITE EDITOR TABS
+   ================================================================ */
+
+#siteEditorTabs {
+  margin-bottom: 20px;
+  width: auto;
+}
+
+.site-editor-tab-panel {
+  display: block;
+}
+
+.site-editor-tab-panel.hidden {
+  display: none;
+}
+
+#auditTopControls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 16px 20px;
+}
+
+#auditModeRow {
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+#auditModeAdd,
+#auditModeEdit {
+  min-width: 200px;
+  min-height: 72px;
+  font-size: 1.15rem;
+  padding: 18px 32px;
+  background: var(--poolpro-accent-gradient, linear-gradient(135deg, #69140e, #202834));
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  border: 2px solid #fff;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+#auditCurrentTitle {
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-size: clamp(1.4rem, 3.5vw, 2rem);
+  font-weight: 800;
+  color: #fff;
+  text-align: center;
+  min-height: 0;
+  line-height: 1.1;
+}
+
+/* ================================================================
+   AUDIT EDITOR
+   ================================================================ */
+
+.audit-section-block {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  background: #fafafa;
+}
+
+body.dark-mode .audit-section-block {
+  background: #2a2a2a;
+  border-color: #555;
+}
+
+.audit-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.audit-section-num {
+  font-weight: bold;
+  font-size: 15px;
+  flex: 1;
+}
+
+.audit-remove-section-btn,
+.audit-remove-scenario-btn,
+.audit-remove-row-btn {
+  background: transparent;
+  border: 1px solid #c00;
+  color: #c00;
+  font-size: 12px;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.audit-remove-section-btn:hover,
+.audit-remove-scenario-btn:hover,
+.audit-remove-row-btn:hover {
+  background: #c00;
+  color: #fff;
+}
+
+.audit-row-block {
+  border-top: 1px solid #e0e0e0;
+  padding: 8px 0 4px;
+  margin-bottom: 4px;
+}
+
+.audit-row-main {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.audit-row-text-wrap {
+  flex: 1;
+}
+
+.audit-row-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  min-width: 100px;
+}
+
+.audit-row-points-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.audit-row-points {
+  width: 60px;
+}
+
+.audit-row-autofail-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c00;
+  cursor: pointer;
+}
+
+.audit-row-answer-group {
+  margin-top: 4px;
+}
+
+.audit-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  display: block;
+  margin-bottom: 3px;
+}
+
+body.dark-mode .audit-field-label {
+  color: #bbb;
+}
+
+.audit-scenario-block {
+  border: 1px solid #c8d0d8;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #f4f7fa;
+}
+
+body.dark-mode .audit-scenario-block {
+  background: #252c35;
+  border-color: #445;
+}
+
+.audit-scenario-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.audit-scenario-label-text {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.audit-scenario-label-group {
+  flex: 1;
+  min-width: 120px;
+}
+
+.audit-add-row-btn,
+.audit-add-scenario-btn {
+  margin-top: 6px;
+  font-size: 12px;
+  padding: 5px 12px;
+}
+
+.audit-scenario-scoring-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.audit-scenario-scoring-row .audit-field-label {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.audit-scenario-scoring-row input {
+  width: 80px;
 }

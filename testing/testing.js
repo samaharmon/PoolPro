@@ -41,7 +41,7 @@ const RUBRICS = [
       {
         title: 'EAP and Rapid/Primary Assessment',
         subheading: 'Requirements and Questions',
-        checkboxHeader: 'Correctly Demonstrated (X)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
         rows: [
           { text: 'Rescuing lifeguard recognized the submerged silhouette within 30 seconds of the silhouette hitting the pool bottom.', points: 1 },
           { text: 'Rescuing lifeguard blew whistle 3 times (loudly) to activate the EAP.', points: 1 },
@@ -55,7 +55,7 @@ const RUBRICS = [
       {
         title: 'Basic Life Support Techniques',
         subheading: 'Questions for the Rescuing Lifeguard (Choose 1 Scenario)',
-        checkboxHeader: 'Correctly Demonstrated (X)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
         scenarios: [
           {
             label: 'Scenario 1',
@@ -89,7 +89,7 @@ const RUBRICS = [
       {
         title: 'Rapid Assessment',
         subheading: 'Requirements and Questions',
-        checkboxHeader: 'Correctly Demonstrated (X)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
         rows: cloneRows(CPR_RAPID_ASSESSMENT_ROWS),
       }
     ]
@@ -103,13 +103,13 @@ const RUBRICS = [
       {
         title: 'Rapid Assessment',
         subheading: 'Requirements and Questions',
-        checkboxHeader: 'Correctly Demonstrated (X)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
         rows: cloneRows(CPR_RAPID_ASSESSMENT_ROWS),
       },
       {
         title: 'Basic Life Support Techniques',
         subheading: 'Requirements and Questions (Choose 1 Scenario)',
-        checkboxHeader: 'Correctly Demonstrated (X)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
         scenarios: [
           {
             label: 'Scenario 1: CPR on an Adult',
@@ -151,7 +151,7 @@ const RUBRICS = [
       {
         title: 'Rapid Assessment',
         subheading: 'Requirements and Questions',
-        checkboxHeader: 'Correctly Demonstrated (X)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
         rows: [
           { text: 'Rescuer ensured the scene was safe and put on gloves.', points: 2 },
           { text: 'Rescuer checked for verbal and physical responsiveness.', points: 1 },
@@ -162,7 +162,7 @@ const RUBRICS = [
       {
         title: 'Basic Life Support Techniques',
         subheading: 'Requirements and Questions (Choose 1 Scenario)',
-        checkboxHeader: 'Correctly Demonstrated (X)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
         scenarios: [
           {
             label: 'Scenario 1: Rescue Breathing on an Adult',
@@ -220,7 +220,7 @@ const RUBRICS = [
       {
         title: 'Off-Stand Behavior',
         subheading: 'Requirements',
-        checkboxHeader: 'Correctly Demonstrated (X)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
         rows: [
           { text: 'Lifeguard does not remain in the guard room for more than 30 seconds at a time.', points: 1 },
           { text: 'Lifeguard is actively participating in cleaning or maintenance tasks or is watching the pool (as an extra guard).', points: 1 },
@@ -450,7 +450,7 @@ function buildSection(section, rubric) {
   const thReq = document.createElement('th');
   thReq.textContent = section.subheading || 'Requirements';
   const thCheck = document.createElement('th');
-  thCheck.textContent = section.checkboxHeader || 'Correctly Demonstrated (X)';
+  thCheck.textContent = section.checkboxHeader || 'Correctly Demonstrated (✓)';
   thCheck.style.width = '150px';
   colRow.appendChild(thReq);
   colRow.appendChild(thCheck);
