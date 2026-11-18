@@ -1609,11 +1609,11 @@
                 <div class="section" id="auditScoringSection">
                     <div class="audit-scoring-content">
                         <div class="form-group">
-                            <label for="auditEditorOverallPassScore">Overall Pass Score</label>
-                            <input type="number" id="auditEditorOverallPassScore" class="adjustment-feedback" min="0" placeholder="optional" disabled>
+                            <label for="auditEditorOverallPassScore">Minimum Pass Score (%)</label>
+                            <input type="number" id="auditEditorOverallPassScore" class="adjustment-feedback" min="0" max="100" value="80" placeholder="e.g. 80" disabled>
                         </div>
                         <div id="auditScoringInputs">
-                            <!-- Per-scenario pass scores populated by JS -->
+                            <!-- Computed pass ratio rows populated by JS -->
                         </div>
                     </div>
                     <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px;">

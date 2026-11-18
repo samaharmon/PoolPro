@@ -77,6 +77,24 @@
   display: none !important;
 }
 
+/* Drop-down animation when an accordion section opens */
+@keyframes editorAccordionDropDown {
+  from {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0% 0);
+  }
+}
+
+.editor-accordion.is-open > .editor-accordion-content:not([hidden]),
+.editor-section-accordion.is-open > .editor-section-accordion-content:not([hidden]),
+.pool-rule-accordion.is-open > .editor-accordion-content:not([hidden]) {
+  animation: editorAccordionDropDown 0.28s ease-out;
+}
+
 .editor-accordion-toggle {
   width: 100%;
   min-height: 44px;
@@ -1636,6 +1654,75 @@ table thead td {
 /* ================================================================
    AUDIT EDITOR
    ================================================================ */
+
+/* Dark background for audit editor sections (matches pool metadata sections) */
+#auditGeneralInfoSection,
+#auditFormatSection,
+#auditScoringSection {
+  background: #464646;
+}
+
+#auditGeneralInfoSection h3,
+#auditFormatSection h3,
+#auditScoringSection h3 {
+  margin-top: 0;
+}
+
+/* Input/select styling for audit editor sections */
+#auditGeneralInfoSection input[type="text"],
+#auditGeneralInfoSection input[type="number"],
+#auditFormatSection input[type="text"],
+#auditFormatSection input[type="number"],
+#auditFormatSection select,
+#auditScoringSection input[type="text"],
+#auditScoringSection input[type="number"],
+#auditScoringSection select {
+  padding: 10px;
+  font-size: 14px;
+  background-color: #eee;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#auditGeneralInfoSection input[type="text"]:enabled,
+#auditGeneralInfoSection input[type="number"]:enabled,
+#auditFormatSection input[type="text"]:enabled,
+#auditFormatSection input[type="number"]:enabled,
+#auditFormatSection select:enabled,
+#auditScoringSection input[type="text"]:enabled,
+#auditScoringSection input[type="number"]:enabled,
+#auditScoringSection select:enabled {
+  background-color: #fff;
+}
+
+/* Scoring ratio display rows */
+.audit-scoring-ratio-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  color: #ddd;
+  font-size: 14px;
+  border-bottom: 1px solid #555;
+}
+
+.audit-scoring-ratio-row:last-child {
+  border-bottom: none;
+}
+
+.audit-scoring-ratio-label {
+  flex: 1;
+  font-size: 13px;
+  color: #bbb;
+}
+
+.audit-scoring-ratio-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  min-width: 60px;
+  text-align: right;
+}
 
 /* Constrain input/select widths in the audit editor */
 #auditEditorContent input[type="text"],

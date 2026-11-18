@@ -3672,7 +3672,7 @@ async function deleteAuditDoc(auditId) {
 
 function readAuditEditorToObject() {
   const title = document.getElementById('auditEditorTitle')?.value.trim() || '';
-  const overallPassScore = parseInt(document.getElementById('auditEditorOverallPassScore')?.value, 10) || null;
+  const passPercent = parseInt(document.getElementById('auditEditorOverallPassScore')?.value, 10) || 80;
 
   const sections = [];
   document.querySelectorAll('#auditSectionsContainer .audit-section-block').forEach((secBlock) => {
@@ -3702,18 +3702,7 @@ function readAuditEditorToObject() {
     sections.push(section);
   });
 
-  // Per-scenario pass scores from scoring section
-  document.querySelectorAll('#auditScoringInputs .audit-scenario-scoring-row').forEach((row) => {
-    const sIdx = parseInt(row.dataset.sectionIdx, 10);
-    const scIdx = parseInt(row.dataset.scenarioIdx, 10);
-    const val = parseInt(row.querySelector('input')?.value, 10) || 0;
-    if (!isNaN(sIdx) && !isNaN(scIdx) && sections[sIdx]?.scenarios?.[scIdx]) {
-      sections[sIdx].scenarios[scIdx].passScore = val;
-    }
-  });
-
-  const data = { title, sections };
-  if (overallPassScore !== null) data.passScore = overallPassScore;
+  const data = { title, sections, passScore: passPercent };
   return data;
 }
 
@@ -3970,7 +3959,7 @@ function buildAuditSectionBlock(sectionData = {}, sectionIdx = 0) {
 
 function loadAuditIntoEditor(auditData) {
   document.getElementById('auditEditorTitle').value = auditData.title || '';
-  document.getElementById('auditEditorOverallPassScore').value = auditData.passScore != null ? auditData.passScore : '';
+  document.getElementById('auditEditorOverallPassScore').value = auditData.passScore != null ? auditData.passScore : 80;
 
   const container = document.getElementById('auditSectionsContainer');
   container.innerHTML = '';
@@ -3984,49 +3973,63 @@ function loadAuditIntoEditor(auditData) {
 function refreshAuditScoringInputs() {
   const wrap = document.getElementById('auditScoringInputs');
   if (!wrap) return;
-
-  // Preserve existing values before clearing
-  const existingValues = {};
-  wrap.querySelectorAll('.audit-scenario-scoring-row').forEach(row => {
-    const key = `${row.dataset.sectionIdx}-${row.dataset.scenarioIdx}`;
-    existingValues[key] = row.querySelector('input')?.value || '';
-  });
-
   wrap.innerHTML = '';
 
-  document.querySelectorAll('#auditSectionsContainer .audit-section-block').forEach((secBlock, sIdx) => {
-    const scenarios = secBlock.querySelectorAll('.audit-scenario-block');
-    if (!scenarios.length) return;
+  const passPercent = parseInt(document.getElementById('auditEditorOverallPassScore')?.value, 10) || 80;
 
-    const secTitle = secBlock.querySelector('.audit-section-title')?.value.trim() || `Section ${sIdx + 1}`;
-    const scoringDisabled = document.getElementById('auditEditorOverallPassScore')?.disabled ?? true;
+  // Count base requirements (sections without scenarios)
+  let baseReqs = 0;
+  const scenarioSections = [];
 
-    scenarios.forEach((scenBlock, scIdx) => {
-      const scLabel = scenBlock.querySelector('.audit-scenario-label')?.value.trim() || `Scenario ${scIdx + 1}`;
-      const row = document.createElement('div');
-      row.className = 'audit-scenario-scoring-row form-group';
-      row.dataset.sectionIdx = sIdx;
-      row.dataset.scenarioIdx = scIdx;
+  document.querySelectorAll('#auditSectionsContainer .audit-section-block').forEach((secBlock) => {
+    const hasScenarios = secBlock.querySelector('.audit-section-has-scenarios')?.checked || false;
+    const secTitle = secBlock.querySelector('.audit-section-title')?.value.trim() || '';
 
-      const label = document.createElement('label');
-      label.className = 'audit-field-label';
-      label.textContent = `Pass score — ${secTitle} › ${scLabel}`;
-
-      const input = document.createElement('input');
-      input.type = 'number';
-      input.className = 'adjustment-feedback';
-      input.min = '0';
-      input.placeholder = 'optional';
-      input.disabled = scoringDisabled;
-
-      const key = `${sIdx}-${scIdx}`;
-      input.value = existingValues[key] ?? '';
-
-      row.appendChild(label);
-      row.appendChild(input);
-      wrap.appendChild(row);
-    });
+    if (!hasScenarios) {
+      baseReqs += secBlock.querySelectorAll('.audit-rows-container .audit-row-block').length;
+    } else {
+      const scenarios = [];
+      secBlock.querySelectorAll('.audit-scenario-block').forEach((scenBlock) => {
+        const label = scenBlock.querySelector('.audit-scenario-label')?.value.trim() || 'Scenario';
+        const rowCount = scenBlock.querySelectorAll('.audit-rows-container .audit-row-block').length;
+        scenarios.push({ label, rowCount });
+      });
+      if (scenarios.length) scenarioSections.push({ secTitle, scenarios });
+    }
   });
+
+  if (scenarioSections.length === 0) {
+    if (baseReqs === 0) return;
+    const minRequired = Math.ceil(baseReqs * passPercent / 100);
+    wrap.appendChild(buildScoringRatioRow('All requirements', minRequired, baseReqs));
+  } else {
+    const multiSec = scenarioSections.length > 1;
+    scenarioSections.forEach(({ secTitle, scenarios }) => {
+      scenarios.forEach(({ label, rowCount }) => {
+        const total = baseReqs + rowCount;
+        const minRequired = Math.ceil(total * passPercent / 100);
+        const displayLabel = multiSec ? `${secTitle} · ${label}` : label;
+        wrap.appendChild(buildScoringRatioRow(displayLabel, minRequired, total));
+      });
+    });
+  }
+}
+
+function buildScoringRatioRow(label, minRequired, total) {
+  const row = document.createElement('div');
+  row.className = 'audit-scoring-ratio-row';
+
+  const labelEl = document.createElement('span');
+  labelEl.className = 'audit-scoring-ratio-label';
+  labelEl.textContent = label;
+
+  const valueEl = document.createElement('span');
+  valueEl.className = 'audit-scoring-ratio-value';
+  valueEl.textContent = `${minRequired}/${total}`;
+
+  row.appendChild(labelEl);
+  row.appendChild(valueEl);
+  return row;
 }
 
 function setAuditEditorEnabled(enabled) {
@@ -4045,9 +4048,6 @@ function setAuditEditorEnabled(enabled) {
   });
   document.querySelectorAll('.audit-remove-section-btn, .audit-add-row-btn, .audit-remove-row-btn, .audit-add-scenario-btn, .audit-remove-scenario-btn').forEach((btn) => {
     btn.disabled = !enabled;
-  });
-  document.querySelectorAll('#auditScoringInputs input').forEach((el) => {
-    el.disabled = !enabled;
   });
 }
 
@@ -4108,6 +4108,7 @@ function wireAuditSectionButtons() {
           el.closest('.audit-row-block')?.querySelectorAll('.format-btn').forEach(btn => { btn.disabled = !en; });
         });
         document.querySelectorAll('.audit-remove-section-btn, .audit-add-row-btn, .audit-remove-row-btn, .audit-add-scenario-btn, .audit-remove-scenario-btn').forEach(btn => { btn.disabled = !en; });
+        if (!en) refreshAuditScoringInputs();
       }
     },
     {
@@ -4115,7 +4116,6 @@ function wireAuditSectionButtons() {
       sectionEnabled: (en) => {
         const el = document.getElementById('auditEditorOverallPassScore');
         if (el) el.disabled = !en;
-        document.querySelectorAll('#auditScoringInputs input').forEach(el => { el.disabled = !en; });
       }
     }
   ];
@@ -4130,10 +4130,12 @@ function wireAuditSectionButtons() {
     const saveBtn = ruleButtons.querySelector('.pool-save-btn');
     if (saveBtn) saveBtn.style.display = 'none';
 
-    const { label } = buildEditSaveToggle(
+    const { label, cb } = buildEditSaveToggle(
       () => sectionEnabled(true),
       async () => {
+        cb.disabled = true;
         const ok = await saveAuditEditor();
+        cb.disabled = false;
         if (ok) { sectionEnabled(false); return false; }
         sectionEnabled(true);
         return true;
@@ -4141,6 +4143,13 @@ function wireAuditSectionButtons() {
     );
     ruleButtons.appendChild(label);
   });
+
+  // Update ratio display when percentage changes
+  const passScoreInput = document.getElementById('auditEditorOverallPassScore');
+  if (passScoreInput && !passScoreInput.dataset.ratioUpdateBound) {
+    passScoreInput.dataset.ratioUpdateBound = 'true';
+    passScoreInput.addEventListener('input', refreshAuditScoringInputs);
+  }
 
   const addSecBtn = document.getElementById('auditAddSectionBtn');
   if (addSecBtn && !addSecBtn.dataset.addSectionBound) {

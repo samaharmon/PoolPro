@@ -3727,6 +3727,16 @@ textarea,
   display: none;
 }
 
+@keyframes rolesTableDropDown {
+  from { opacity: 0; clip-path: inset(0 0 100% 0); }
+  to   { opacity: 1; clip-path: inset(0 0 0% 0); }
+}
+
+.roles-table-wrapper:not(.roles-table-collapsed) .table-scroll-wrap,
+.roles-table-wrapper:not(.roles-table-collapsed) .roles-pagination-row[data-role-pagination] {
+  animation: rolesTableDropDown 0.28s ease-out;
+}
+
 .roles-pagination-row {
   display: flex;
   align-items: center;
@@ -6108,6 +6118,15 @@ body > canvas {
 
 .supply-facility-detail.hidden {
   display: none;
+}
+
+@keyframes supplyDetailDropDown {
+  from { opacity: 0; clip-path: inset(0 0 100% 0); }
+  to   { opacity: 1; clip-path: inset(0 0 0% 0); }
+}
+
+.supply-facility-detail:not(.hidden) {
+  animation: supplyDetailDropDown 0.25s ease-out;
 }
 
 .supply-detail-grid {
