@@ -41,10 +41,10 @@
             <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
             <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
-            <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Supervisor Dashboard</a>
+            <a href="../chem/chem.html" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Operations Dashboard</a>
             <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
-            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Tracking</a>
-            <a href="testing.html" class="dropdown-item supervisor-only active-page" data-nav="testing">Auditing Forms</a>
+            <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Dashboard</a>
+            <a href="testing.html" class="dropdown-item supervisor-only active-page" data-nav="testing">Audits</a>
             <a href="../Editor/newRules.html" class="dropdown-item supervisor-only" data-nav="site-editor" onclick="goToEditor(); return false;">Site Editor</a>
             <a href="#" class="dropdown-item supervisor-only" data-nav="settings" onclick="openSettings(); return false;">Settings</a>
             <a href="#" class="dropdown-item logout" data-nav="logout" id="testLogoutBtn">Logout</a>
@@ -56,19 +56,19 @@
 
   <div id="testPageContent">
     <div class="container">
-      <h2 class="page-content-title">Auditing Forms</h2>
+      <h2 class="page-content-title">Audits</h2>
 
       <div class="form-container">
         <div class="section">
           <div class="form-group full-width">
-            <label for="rubricSelect">Choose a Simulated Emergency Test to perform.</label>
+            <label for="rubricSelect">Select a skill to audit.</label>
             <select id="rubricSelect" style="width:70.5%;">
               <option value="">Select</option>
-              <option value="dropTest">Drop Test</option>
+              <option value="dropTest">Drowning Recognition (Drop Test)</option>
               <option value="rapidAssessment">Rapid Assessment</option>
-              <option value="cprTest">CPR</option>
               <option value="rescueBreathing">Rescue Breathing</option>
-              <option value="performanceAudit">Lifeguard Performance Audit</option>
+              <option value="cprTest">CPR</option>
+              <option value="performanceAudit">Job Performance</option>
             </select>
           </div>
         </div>

@@ -1235,7 +1235,7 @@ function applyDashboardAccessMode() {
   const metricsPanel = document.getElementById('dashboardMetricsContent');
   if (!canViewChemDashboard) return;
   if (tabs) tabs.style.display = fullAccess ? '' : 'none';
-  if (title) title.textContent = fullAccess ? 'Supervisor Dashboard' : 'Pool Chemistry Dashboard';
+  if (title) title.textContent = fullAccess ? 'Operations Dashboard' : 'Pool Chemistry Dashboard';
   if (!fullAccess) {
     document.querySelectorAll('[data-dash-tab]').forEach((tab) => tab.classList.toggle('active', tab.dataset.dashTab === 'chemistry'));
     if (chemPanel) chemPanel.style.display = '';
@@ -2240,8 +2240,8 @@ const PERMISSION_DEFINITIONS = [
   { key: 'desPreInspection', label: 'DES Pre-Inspection' },
   { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
   { key: 'trainingSetup', label: 'Training Setup' },
-  { key: 'performanceTracking', label: 'Performance Tracking' },
-  { key: 'auditingForms', label: 'Auditing Forms' },
+  { key: 'performanceTracking', label: 'Performance Dashboard' },
+  { key: 'auditingForms', label: 'Audits' },
   { key: 'rulesEditor', label: 'Rules Editor' },
   { key: 'settings', label: 'Settings' },
 ];
@@ -2816,7 +2816,7 @@ window.setupDropdownVisibility = function () {
   });
   document.querySelectorAll('[data-nav="dashboard"]').forEach((el) => {
     el.style.display = hasPermission('poolChemistryDashboard') ? '' : 'none';
-    el.textContent = sup ? 'Supervisor Dashboard' : 'Pool Chemistry Dashboard';
+    el.textContent = sup ? 'Operations Dashboard' : 'Pool Chemistry Dashboard';
   });
   document.querySelectorAll('[data-nav="lifeguard-settings"]').forEach((el) => {
     el.style.display = limitedSettings ? '' : 'none';
@@ -11277,7 +11277,7 @@ const DATA_STORAGE_CATEGORIES = [
   { key: 'cleanlinessReports', label: 'Cleanliness Reports' },
   { key: 'inspectionReports', label: 'Inspection Reports' },
   { key: 'setPerformance', label: 'SET Performance' },
-  { key: 'auditingForms', label: 'Auditing Forms' },
+  { key: 'auditingForms', label: 'Audits' },
   { key: 'trainingSchedule', label: 'Training Schedule' },
   { key: 'trainingCompletion', label: 'Training Completion' },
   { key: 'employees', label: 'Employees' },
@@ -11392,7 +11392,7 @@ async function getDataStorageExportSheets(categoryKey) {
     } else if (key === 'setPerformance') {
       sheets.push({ name: 'SET Performance', rows: await getSettingsDocExportRows('employeePerformance') });
     } else if (key === 'auditingForms') {
-      sheets.push({ name: 'Auditing Forms', rows: await getCollectionExportRows('testingResults') });
+      sheets.push({ name: 'Audits', rows: await getCollectionExportRows('testingResults') });
     } else if (key === 'trainingSchedule') {
       sheets.push({ name: 'Training Schedule', rows: await getSettingsArrayExportRows('trainingSchedule', 'sessions') });
     } else if (key === 'trainingCompletion') {
@@ -12000,7 +12000,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadDashboardData();
   }
 
-  // Supervisor Dashboard tab switching
+  // Operations Dashboard tab switching
   const dashTabs = document.querySelectorAll('[data-dash-tab]');
   dashTabs.forEach(tab => {
     tab.addEventListener('click', () => {

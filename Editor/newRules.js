@@ -4207,6 +4207,7 @@ function setupAuditModeButtons() {
     currentAuditMode = 'edit';
     editBtn.classList.add('active');
     addBtn?.classList.remove('active');
+    editorContent?.removeAttribute('hidden');
     selectWrapper?.classList.remove('hidden');
     await populateAuditSelect();
     if (deleteBtn) deleteBtn.hidden = false;
@@ -4294,11 +4295,230 @@ function setupScoringObserver() {
   });
 }
 
+// ================================================================
+// BUILT-IN AUDIT SEED DATA
+// Creates the 5 standard rubrics in Firestore if they don't exist.
+// ================================================================
+
+const CPR_RAPID_ROWS = [
+  { text: 'Rescuer ensured the scene was safe and put on gloves.', points: 2 },
+  { text: 'Rescuer checked for verbal and physical responsiveness.', points: 1 },
+  { text: 'Rescuer simultaneously checked for pulse and breathing for 5–10 s.', points: 3, autoFail: true },
+  { text: 'Rescuer pointed and shouted for bystanders to call 911 as well as retrieve an AED and BVM.', points: 5, autoFail: true },
+  { text: 'If the victim drowned, rescuer begins CPR by correctly sealing the mask and opening the airway to the appropriate position, providing 2 ventilations.', points: 3, autoFail: true },
+];
+
+const BUILT_IN_AUDITS = [
+  {
+    id: 'builtin-drowning-recognition',
+    title: 'Drowning Recognition Audit (Drop Test) Rubric',
+    passScore: 80,
+    sections: [
+      {
+        title: 'EAP and Rapid/Primary Assessment',
+        subheading: 'Requirements and Questions',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
+        rows: [
+          { text: 'Rescuing lifeguard recognized the submerged silhouette within 30 seconds of the silhouette hitting the pool bottom.', points: 1 },
+          { text: 'Rescuing lifeguard blew whistle 3 times (loudly) to activate the EAP.', points: 1 },
+          { text: 'Emergency backup lifeguards cleared the pool.', points: 1 },
+          { text: 'Rescuing lifeguard retrieved the silhouette and placed it on the pool deck within 1 minute and 30 seconds of the silhouette hitting the pool bottom.', points: 1 },
+          { text: 'What is the first step of the rapid/primary assessment?<br><em>Answer: Verbally check for responsiveness as you put on gloves.</em>', points: 2, autoFail: true },
+          { text: 'What is the next step if the victim is not verbally responsive?<br><em>Answer: Physically check for responsiveness by hitting the victim’s shoulders.</em>', points: 1 },
+          { text: 'What is the next step if the victim is not physically responsive?<br><em>Answer: Simultaneously check for breathing and a pulse.</em>', points: 2, autoFail: true },
+        ],
+      },
+      {
+        title: 'Basic Life Support Techniques',
+        subheading: 'Questions for the Rescuing Lifeguard (Choose 1 Scenario)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
+        scenarios: [
+          {
+            label: 'Scenario 1',
+            passScore: 12, maxScore: 15,
+            rows: [
+              { text: 'If you determine that the victim has a pulse but is not breathing consistently, what do you need to call for, and what process do you begin?<br><em>Answer: Call for EMS, an AED, and a BVM, then begin rescue breathing.</em>', points: 4, autoFail: true },
+              { text: 'What is rescue breathing?<br><em>Answer: A resuscitative technique that requires 1 ventilation every 5–6 seconds for an adult and 1 ventilation every 2–3 seconds for a baby.</em>', points: 2, autoFail: true },
+            ],
+          },
+          {
+            label: 'Scenario 2',
+            passScore: 15, maxScore: 18,
+            rows: [
+              { text: 'If you determine that the victim has no pulse and is not breathing, what do you need to call for (3), and what process do you begin?<br><em>Answer: Call for EMS, an AED, and a BVM, then begin CPR.</em>', points: 4, autoFail: true },
+              { text: 'Explain the difference in compressions between adult, child and baby CPR.<br><em>Answer: For adult/child CPR, use the two-hand technique, with the heel of the bottom hand overtop the sternum and compressing 2–2.4 inches for an adult or about 2 inches for a child. For baby CPR, use the encircling thumbs technique, with both fingers compressing the chest 1.5 inches per compression.</em>', points: 5, autoFail: true },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'builtin-rapid-assessment',
+    title: 'Rapid Assessment Audit Rubric',
+    passScore: 80,
+    sections: [
+      {
+        title: 'Rapid Assessment',
+        subheading: 'Requirements and Questions',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
+        rows: CPR_RAPID_ROWS.map(r => ({ ...r })),
+      },
+    ],
+  },
+  {
+    id: 'builtin-rescue-breathing',
+    title: 'Rescue Breathing Audit Rubric',
+    passScore: 80,
+    sections: [
+      {
+        title: 'Rapid Assessment',
+        subheading: 'Requirements and Questions',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
+        rows: [
+          { text: 'Rescuer ensured the scene was safe and put on gloves.', points: 2 },
+          { text: 'Rescuer checked for verbal and physical responsiveness.', points: 1 },
+          { text: 'Rescuer simultaneously checked for pulse and breathing for 5–10 s.', points: 3, autoFail: true },
+          { text: 'Rescuer pointed and shouted for bystanders to call 911 as well as retrieve an AED and BVM.', points: 4, autoFail: true },
+        ],
+      },
+      {
+        title: 'Basic Life Support Techniques',
+        subheading: 'Requirements and Questions (Choose 1 Scenario)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
+        scenarios: [
+          {
+            label: 'Scenario 1: Rescue Breathing on an Adult',
+            passScore: 13, maxScore: 14,
+            rows: [
+              { text: 'Rescuer correctly seals the mask and opens the airway to the past neutral position.', points: 2, autoFail: true },
+              { text: 'Rescuer provides rescue breaths at a rate of 1 breath per 5–6 s.', points: 1 },
+              { text: 'After about 2 minutes of rescue breathing, what do you need to check on?<br><em>Answer: Check signs of life (pulse, breathing, responsiveness).</em>', points: 1 },
+            ],
+          },
+          {
+            label: 'Scenario 2: Rescue Breathing on a Child',
+            passScore: 13, maxScore: 14,
+            rows: [
+              { text: 'Rescuer correctly seals the mask and opens the airway to the past neutral position.', points: 2, autoFail: true },
+              { text: 'Rescuer provides rescue breaths at a rate of 1 breath per 5–6 s.', points: 1 },
+              { text: 'After about 2 minutes of rescue breathing, what do you need to check on?<br><em>Answer: Check signs of life (pulse, breathing, responsiveness).</em>', points: 1 },
+            ],
+          },
+          {
+            label: 'Scenario 3: Rescue Breathing on an Infant',
+            passScore: 13, maxScore: 14,
+            rows: [
+              { text: 'Rescuer correctly seals the mask and opens the airway to the past neutral position.', points: 2, autoFail: true },
+              { text: 'Rescuer provides rescue breaths at a rate of 1 breath per 5–6 s.', points: 1 },
+              { text: 'After about 2 minutes of rescue breathing, what do you need to check on?<br><em>Answer: Check signs of life (pulse, breathing, responsiveness).</em>', points: 1 },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'builtin-cpr',
+    title: 'CPR Audit Rubric',
+    passScore: 80,
+    sections: [
+      {
+        title: 'Rapid Assessment',
+        subheading: 'Requirements and Questions',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
+        rows: CPR_RAPID_ROWS.map(r => ({ ...r })),
+      },
+      {
+        title: 'Basic Life Support Techniques',
+        subheading: 'Requirements and Questions (Choose 1 Scenario)',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
+        scenarios: [
+          {
+            label: 'Scenario 1: CPR on an Adult',
+            passScore: 17, maxScore: 19,
+            rows: [
+              { text: 'Rescuer compresses the chest 2–2.4 inches at a rate of 100–120 compressions per minute.', points: 2, autoFail: true },
+              { text: 'Rescuer correctly seals the mask and opens the airway to the past neutral position, providing 2 ventilations after each set of compressions.', points: 2, autoFail: true },
+              { text: 'After about 2 minutes of CPR (5–6 rounds), what do you need to check on?<br><em>Answer: Check signs of life (pulse, breathing, responsiveness).</em>', points: 1 },
+            ],
+          },
+          {
+            label: 'Scenario 2: CPR on a Child',
+            passScore: 17, maxScore: 19,
+            rows: [
+              { text: 'Rescuer compresses the chest about 2 inches at a rate of 100–120 compressions per minute.', points: 2, autoFail: true },
+              { text: 'Rescuer correctly seals the mask and opens the airway to the slightly past neutral position, providing 2 ventilations after each set of compressions.', points: 2, autoFail: true },
+              { text: 'After about 2 minutes of CPR (5–6 rounds), what do you need to check on?<br><em>Answer: Check signs of life (pulse, breathing, responsiveness).</em>', points: 1 },
+            ],
+          },
+          {
+            label: 'Scenario 3: CPR on an Infant',
+            passScore: 17, maxScore: 19,
+            rows: [
+              { text: 'Rescuer compresses the chest 1.5 inches at a rate of 100–120 compressions per minute.', points: 2, autoFail: true },
+              { text: 'Rescuer correctly seals the mask and leaves the airway in neutral position while providing 2 small ventilations (puffs).', points: 2, autoFail: true },
+              { text: 'After about 2 minutes of CPR (5–6 rounds), what do you need to check on?<br><em>Answer: Check signs of life (pulse, breathing, responsiveness).</em>', points: 1 },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'builtin-job-performance',
+    title: 'Job Performance Audit Rubric',
+    passScore: 80,
+    sections: [
+      {
+        title: 'Guard Stand Behavior',
+        subheading: 'Requirements',
+        checkboxHeader: 'I Agree (X)',
+        rows: [
+          { text: 'Lifeguard is sitting with good posture.', points: 2 },
+          { text: 'Lifeguard is moving their head to scan their entire zone.', points: 1 },
+          { text: 'Lifeguard is enforcing rules frequently and loudly.', points: 2, autoFail: true },
+          { text: 'Lifeguard is not engaging in extended (more than 30 seconds) conversation with someone off-stand.', points: 1 },
+          { text: 'The lifeguard is wearing a whistle around their neck, a hip pack on their waist, and a rescue tube with the strap over their shoulder.', points: 3, autoFail: true },
+          { text: 'Lifeguard is not distracted by an object (e.g., phone, fingernails, snack, etc.).', points: 1 },
+        ],
+      },
+      {
+        title: 'Off-Stand Behavior',
+        subheading: 'Requirements',
+        checkboxHeader: 'Correctly Demonstrated (✓)',
+        rows: [
+          { text: 'Lifeguard does not remain in the guard room for more than 30 seconds at a time.', points: 1 },
+          { text: 'Lifeguard is actively participating in cleaning or maintenance tasks or is watching the pool (as an extra guard).', points: 1 },
+          { text: 'Lifeguard does not distract another on-stand lifeguard.', points: 1 },
+          { text: 'Lifeguard is not distracted by objects/tasks not related to the pool.', points: 1 },
+        ],
+      },
+    ],
+  },
+];
+
+async function seedBuiltInAudits() {
+  try {
+    const checks = await Promise.all(
+      BUILT_IN_AUDITS.map(a => getDoc(doc(db, 'audits', a.id)))
+    );
+    const toCreate = BUILT_IN_AUDITS.filter((_, i) => !checks[i].exists());
+    if (!toCreate.length) return;
+    await Promise.all(
+      toCreate.map(({ id, ...data }) => setDoc(doc(db, 'audits', id), data))
+    );
+  } catch (err) {
+    console.warn('[AuditSeed] Could not seed built-in audits:', err?.message || err);
+  }
+}
+
 function initAuditEditor() {
   setupSiteEditorTabs();
   setupAuditModeButtons();
   setupScoringObserver();
   setupAuditAutoSave();
+  seedBuiltInAudits();
 }
 window.loadPoolIntoEditor = loadPoolIntoEditor;
 window.readEditorToObject = readEditorToObject;

@@ -70,8 +70,8 @@ const PERMISSION_DEFINITIONS = [
   { key: 'desPreInspection', label: 'DES Pre-Inspection' },
   { key: 'poolChemistryDashboard', label: 'Pool Chemistry Dashboard' },
   { key: 'trainingSetup', label: 'Training Setup' },
-  { key: 'performanceTracking', label: 'Performance Tracking' },
-  { key: 'auditingForms', label: 'Auditing Forms' },
+  { key: 'performanceTracking', label: 'Performance Dashboard' },
+  { key: 'auditingForms', label: 'Audits' },
   { key: 'rulesEditor', label: 'Rules Editor' },
   { key: 'settings', label: 'Settings' },
 ];

@@ -101,7 +101,7 @@ onAuthStateChanged(auth, async (user) => {
     showAuthGate();
     const errEl = document.getElementById('empAuthError');
     if (errEl) {
-      errEl.textContent = 'Verify your email before opening Performance Tracking.';
+      errEl.textContent = 'Verify your email before opening Performance Dashboard.';
       errEl.classList.remove('hidden');
     }
     return;
@@ -142,7 +142,7 @@ document.getElementById('empAuthLoginBtn')?.addEventListener('click', async () =
         console.warn('[Employees] Could not send verification email:', verifyErr);
       });
       await signOut(auth).catch(() => {});
-      errEl.textContent = 'Verify your email before opening Performance Tracking. A verification email has been sent if Firebase allowed it.';
+      errEl.textContent = 'Verify your email before opening Performance Dashboard. A verification email has been sent if Firebase allowed it.';
       errEl.classList.remove('hidden');
     }
   } catch (err) {

@@ -998,6 +998,14 @@
 #mainForm {
   max-width: 100%;
   margin: 0 auto;
+  width: 100%;
+}
+
+/* Ensure the footer is always full-width even inside the flex column */
+#mainForm > .footer {
+  align-self: stretch;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Make the Add/Edit buttons behave like toggles */
