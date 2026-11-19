@@ -4127,7 +4127,6 @@ function setupAuditModeButtons() {
     } else {
       lockAllAuditSections();
     }
-    expandAllAuditSections();
   }
 
   addBtn?.addEventListener('click', () => {
