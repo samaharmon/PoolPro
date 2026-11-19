@@ -941,11 +941,6 @@
     align-self: center;
 }
 
-/* Remove the form-container's top padding in the audit editor — the section
-   accordion headers provide their own spacing so the gap is redundant. */
-#auditEditorContent {
-  padding-top: 0;
-}
 
 /* Mode toggle buttons ("Add new pool" / "Edit existing pool") */
 .mode-toggle {
@@ -1630,7 +1625,12 @@ table thead td {
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  padding: 24px 16px 20px;
+  padding: 24px 16px 24px;
+}
+
+/* Gap between the controls bar and the first section accordion */
+#auditEditorContent {
+  margin-top: 16px;
 }
 
 #auditModeRow {
@@ -1669,11 +1669,20 @@ table thead td {
    AUDIT EDITOR
    ================================================================ */
 
+/* Strip the form-container's charcoal background and all padding from the
+   audit editor wrapper — the section accordions provide their own backgrounds
+   and spacing, so the wrapper should be invisible. */
+#auditEditorContent {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
 /* Dark background for audit editor sections (matches pool metadata sections) */
 #auditGeneralInfoSection,
 #auditFormatSection,
 #auditScoringSection {
   background: #464646;
+  margin-bottom: 16px;
 }
 
 #auditGeneralInfoSection h3,
@@ -1682,7 +1691,14 @@ table thead td {
   margin-top: 0;
 }
 
-/* Input/select styling for audit editor sections */
+/* Padding inside the accordion content areas so nothing butts up against an edge */
+#auditGeneralInfoSection .editor-section-accordion-content,
+#auditFormatSection .editor-section-accordion-content,
+#auditScoringSection .editor-section-accordion-content {
+  padding: 16px 20px 20px;
+}
+
+/* Light-mode: standard input/select styling */
 #auditGeneralInfoSection input[type="text"],
 #auditGeneralInfoSection input[type="number"],
 #auditFormatSection input[type="text"],
@@ -1694,6 +1710,7 @@ table thead td {
   padding: 10px;
   font-size: 14px;
   background-color: #eee;
+  border: 1px solid #ccc;
   width: 100%;
   box-sizing: border-box;
 }
@@ -1707,12 +1724,12 @@ table thead td {
 #auditScoringSection input[type="number"]:enabled,
 #auditScoringSection select:enabled {
   background-color: #fff;
+  border-color: #aaa;
 }
 
-/* Ensure audit editor section inputs are visible in dark mode.
-   The global dark-mode rule applies #555 !important which renders inputs
-   invisible against the #464646 section background — override with higher
-   specificity to keep them legible. */
+/* Dark-mode: the global rule applies background:#555 !important which is nearly
+   identical to the #464646 section background, making inputs invisible.
+   Override with a noticeably lighter background and a visible border. */
 body.dark-mode #auditGeneralInfoSection input[type="text"],
 body.dark-mode #auditGeneralInfoSection input[type="number"],
 body.dark-mode #auditFormatSection input[type="text"],
@@ -1721,9 +1738,9 @@ body.dark-mode #auditFormatSection select,
 body.dark-mode #auditScoringSection input[type="text"],
 body.dark-mode #auditScoringSection input[type="number"],
 body.dark-mode #auditScoringSection select {
-  background-color: #3a3a3a !important;
-  color: #eee !important;
-  border-bottom: 2px solid #aaa !important;
+  background-color: #2b2b2b !important;
+  color: #ddd !important;
+  border: 1px solid #666 !important;
 }
 
 body.dark-mode #auditGeneralInfoSection input[type="text"]:enabled,
@@ -1734,9 +1751,16 @@ body.dark-mode #auditFormatSection select:enabled,
 body.dark-mode #auditScoringSection input[type="text"]:enabled,
 body.dark-mode #auditScoringSection input[type="number"]:enabled,
 body.dark-mode #auditScoringSection select:enabled {
-  background-color: #505050 !important;
+  background-color: #3c3c3c !important;
   color: #fff !important;
-  border-bottom: 2px solid #ccc !important;
+  border-color: #999 !important;
+}
+
+/* Labels inside audit editor sections */
+body.dark-mode #auditGeneralInfoSection label,
+body.dark-mode #auditFormatSection label,
+body.dark-mode #auditScoringSection label {
+  color: #ccc;
 }
 
 /* Scoring ratio display rows */
