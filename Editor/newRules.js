@@ -3998,6 +3998,16 @@ function unlockAllAuditSections() {
     .forEach(cb => { cb.checked = false; });
 }
 
+function expandAllAuditSections() {
+  AUDIT_SECTION_IDS.forEach(id => {
+    const section = document.getElementById(id);
+    if (!section) return;
+    const toggle = section.querySelector('.editor-section-accordion-toggle');
+    const content = section.querySelector('.editor-section-accordion-content');
+    if (toggle && content) setEditorAccordionState(toggle, content, false);
+  });
+}
+
 function setAuditEditorEnabled(enabled) {
   ['auditEditorTitle', 'auditEditorOverallPassScore'].forEach((id) => {
     const el = document.getElementById(id);
@@ -4114,6 +4124,7 @@ function setupAuditModeButtons() {
     } else {
       lockAllAuditSections();
     }
+    expandAllAuditSections();
   }
 
   addBtn?.addEventListener('click', () => {
