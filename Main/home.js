@@ -50,7 +50,7 @@ const CLEANLINESS_REMINDER_START_HOUR = 18;
 const CLEANLINESS_REMINDER_END_HOUR = 21;
 const CLEANLINESS_REMINDER_RECENT_MS = 3 * 60 * 60 * 1000;
 const CLEANLINESS_REMINDER_QUERY_LIMIT = 200;
-const CLEANLINESS_REMINDER_MESSAGE = 'DO NOT FORGET to fill out the Cleanliness Report at the end of your shift.';
+const CLEANLINESS_REMINDER_MESSAGE = 'DO NOT FORGET to fill out the Opening and Closing Reports at the end of your shift.';
 const ROLE_DEFINITIONS = [
   { key: 'lifeguard', label: 'Lifeguard' },
   { key: 'attendant', label: 'Attendant' },
@@ -60,10 +60,10 @@ const ROLE_DEFINITIONS = [
 const PERMISSION_DEFINITIONS = [
   { key: 'poolChemistryLog', label: 'Pool Chemistry Log' },
   { key: 'trainingSignup', label: 'Training Signup' },
-  { key: 'cleanlinessReport', label: 'Cleanliness Report' },
+  { key: 'cleanlinessReport', label: 'Opening and Closing Reports' },
   { key: 'desLogbooks', label: 'DES Logbook Report' },
   { key: 'managerialReport', label: 'Chemical Inventory Log' },
-  { key: 'operationalStatusLog', label: 'Operational Status Log' },
+  { key: 'operationalStatusLog', label: 'System Maintenance Log' },
   { key: 'inventory', label: 'Inventory' },
   { key: 'todoList', label: 'To Do List' },
   { key: 'resources', label: 'Resources' },

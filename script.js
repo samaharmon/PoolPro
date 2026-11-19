@@ -454,7 +454,7 @@ function injectOperationalStatusMenuLinks() {
     link.href = isOperationalPage ? 'operational.html' : `${prefix}operational/operational.html`;
     link.className = `dropdown-item${isOperationalPage ? ' active-page' : ''}`;
     link.dataset.nav = 'operational-status';
-    link.textContent = 'Operational Status Log';
+    link.textContent = 'System Maintenance Log';
     anchorLink.insertAdjacentElement('afterend', link);
   });
 }
@@ -1435,6 +1435,7 @@ function getStoredLifeguardSession() {
       sessionStorage.removeItem('chemlogEmployeeLastName');
       sessionStorage.removeItem('chemlogEmployeeHomePool');
       sessionStorage.removeItem('chemlogEmployeePhone');
+      sessionStorage.removeItem('chemlogSelectedFacilityName');
       if (!hasFreshSupervisorToken()) clearRequestedAccessMode();
       return null;
     }
@@ -1468,6 +1469,7 @@ function clearStoredLifeguardSession() {
     sessionStorage.removeItem('chemlogEmployeeLastName');
     sessionStorage.removeItem('chemlogEmployeeHomePool');
     sessionStorage.removeItem('chemlogEmployeePhone');
+    sessionStorage.removeItem('chemlogSelectedFacilityName');
     localStorage.removeItem(LIFEGUARD_SESSION_KEY);
     localStorage.removeItem(LIFEGUARD_SESSION_EXPIRED_KEY);
     if (localStorage.getItem('chemlogRole') === 'lifeguard') localStorage.removeItem('chemlogRole');
@@ -1974,6 +1976,27 @@ function groupPoolsByMarket(pools) {
   return Object.keys(map).sort().map(m => ({ market: m, pools: map[m] }));
 }
 
+function getPreferredFacilityName() {
+  return sessionStorage.getItem('chemlogSelectedFacilityName') || sessionStorage.getItem('chemlogEmployeeHomePool') || '';
+}
+
+function autoSelectFacility(select) {
+  if (select.value) return;
+  const preferred = getPreferredFacilityName();
+  if (!preferred) return;
+  const match = Array.from(select.options).find(o => o.textContent.trim() === preferred);
+  if (match) select.value = match.value;
+}
+
+function wireFacilityPersist(select) {
+  if (select.dataset.facilityPersistWired) return;
+  select.dataset.facilityPersistWired = 'true';
+  select.addEventListener('change', () => {
+    const opt = select.options[select.selectedIndex];
+    if (opt?.value) sessionStorage.setItem('chemlogSelectedFacilityName', opt.textContent.trim());
+  });
+}
+
 function populatePoolSelects(pools) {
   poolsCache = pools || [];
   window._poolsForDuties = pools || []; // expose for duties.js
@@ -2004,6 +2027,8 @@ function populatePoolSelects(pools) {
       locationSelect.appendChild(group);
     });
     if (current) locationSelect.value = current;
+    autoSelectFacility(locationSelect);
+    wireFacilityPersist(locationSelect);
   }
 
   // Dashboard pool filter — flat list, value = pool.name
@@ -2139,6 +2164,8 @@ function populatePoolSelects(pools) {
       dutiesPool.appendChild(group);
     });
     if (current) dutiesPool.value = current;
+    autoSelectFacility(dutiesPool);
+    wireFacilityPersist(dutiesPool);
   }
 
   // DES Pre-Inspection facility select — grouped by market, value = pool.name
@@ -2159,6 +2186,8 @@ function populatePoolSelects(pools) {
       desPoolSelect.appendChild(group);
     });
     if (current) desPoolSelect.value = current;
+    autoSelectFacility(desPoolSelect);
+    wireFacilityPersist(desPoolSelect);
   }
 
   // Operational Status page facility select — grouped by market, value = pool.id
@@ -2179,6 +2208,8 @@ function populatePoolSelects(pools) {
       operationalPool.appendChild(group);
     });
     if (current) operationalPool.value = current;
+    autoSelectFacility(operationalPool);
+    wireFacilityPersist(operationalPool);
     renderOperationalStatusLog();
   }
 
@@ -2230,10 +2261,10 @@ const ROLE_KEY_ALIASES = {
 const PERMISSION_DEFINITIONS = [
   { key: 'poolChemistryLog', label: 'Pool Chemistry Log' },
   { key: 'trainingSignup', label: 'Training Signup' },
-  { key: 'cleanlinessReport', label: 'Cleanliness Report' },
+  { key: 'cleanlinessReport', label: 'Opening and Closing Reports' },
   { key: 'desLogbooks', label: 'DES Logbook Report' },
   { key: 'managerialReport', label: 'Chemical Inventory Log' },
-  { key: 'operationalStatusLog', label: 'Operational Status Log' },
+  { key: 'operationalStatusLog', label: 'System Maintenance Log' },
   { key: 'inventory', label: 'Inventory' },
   { key: 'todoList', label: 'To Do List' },
   { key: 'resources', label: 'Resources' },
@@ -3144,7 +3175,7 @@ const ALERT_REMINDER_CANCEL_FORM_OPTIONS = [
   },
   {
     key: 'cleanlinessReport',
-    label: 'Cleanliness Report',
+    label: 'Opening and Closing Reports',
     collection: 'dutySubmissions',
     facilityFields: ['pool', 'facilityName', 'poolName', 'homePool'],
     timeFields: ['timestamp', 'submittedAt', 'createdAt'],
@@ -11274,7 +11305,7 @@ const DATA_STORAGE_CATEGORIES = [
   { key: 'poolChemistry', label: 'Pool Chemistry Dashboard' },
   { key: 'operationalStatus', label: 'Operational Status' },
   { key: 'inventory', label: 'Inventory' },
-  { key: 'cleanlinessReports', label: 'Cleanliness Reports' },
+  { key: 'cleanlinessReports', label: 'Opening and Closing Reports' },
   { key: 'inspectionReports', label: 'Inspection Reports' },
   { key: 'setPerformance', label: 'Audit Performance' },
   { key: 'auditingForms', label: 'Audits' },
@@ -11385,7 +11416,7 @@ async function getDataStorageExportSheets(categoryKey) {
     } else if (key === 'inventory') {
       sheets.push({ name: 'Inventory', rows: await getCollectionExportRows('inventorySubmissions') });
     } else if (key === 'cleanlinessReports') {
-      sheets.push({ name: 'Cleanliness Reports', rows: await getCollectionExportRows('dutySubmissions', summarizeReportRecord) });
+      sheets.push({ name: 'Opening and Closing Reports', rows: await getCollectionExportRows('dutySubmissions', summarizeReportRecord) });
     } else if (key === 'inspectionReports') {
       sheets.push({ name: 'Chemical Inventory Logs', rows: await getCollectionExportRows('managerialReports', summarizeReportRecord) });
       sheets.push({ name: 'DES Pre-Inspections', rows: await getCollectionExportRows('desPreInspections', summarizeReportRecord) });
@@ -12034,7 +12065,7 @@ function setDashboardReportPage(kind, value) {
 }
 
 function getDutyReportTitle(sub) {
-  return sub?.reportType === 'managerial' ? 'Chemical Inventory Log' : 'Cleanliness Report';
+  return sub?.reportType === 'managerial' ? 'Chemical Inventory Log' : 'Opening and Closing Reports';
 }
 
 function getDashboardCleanlinessShift(sub) {
@@ -12099,7 +12130,7 @@ function renderReportSubmissions(submissions, container, {
     );
   }
 
-  const reportLabel = kind === 'managerial' ? 'Chemical Inventory Log' : 'Cleanliness Report';
+  const reportLabel = kind === 'managerial' ? 'Chemical Inventory Log' : 'Opening and Closing Reports';
   const marketMap = getDashboardMarketMap({ docs: false });
   const marketsToShow = getVisibleDashboardMarkets(marketMap);
   let submissionsForDate = submissions.filter((sub) => isDashboardDate(sub.timestamp, dashboardDateFilter));
@@ -12216,7 +12247,7 @@ function loadJobFormSubmissions() {
   const container = document.getElementById('jobFormsContent');
   if (!container) return;
   if (!isSupervisor()) {
-    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view cleanliness report submissions.</p>';
+    container.innerHTML = '<p style="padding:16px;color:#c0392b;">You do not have permission to view opening and closing report submissions.</p>';
     return;
   }
   renderReportSubmissions(allDutyReports, container, {

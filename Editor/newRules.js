@@ -1664,7 +1664,7 @@ function setupEditorAccordions() {
   }
 
   wrapSectionAccordion(document.getElementById('poolMetadataSection'), 'General Information');
-  wrapSectionAccordion(document.getElementById('cleanlinessReportSection'), 'Cleanliness Reports');
+  wrapSectionAccordion(document.getElementById('cleanlinessReportSection'), 'Opening and Closing Reports');
   wrapSectionAccordion(document.getElementById('supplyInfoSection'), 'Supplies Information');
   wrapSectionAccordion(document.getElementById('ruleEditorSection'), 'Pool Chemistry Log Feedback Editor');
 
@@ -2035,7 +2035,7 @@ async function handleSavePoolClick() {
       await savePendingCleanlinessPoolUpdates();
     } catch (err) {
       console.error('[Pool Editor] Error saving cleanliness report settings:', err);
-      showMessage('Pool saved, but some Cleanliness Report settings could not be saved.', 'warning');
+      showMessage('Pool saved, but some Opening and Closing Reports settings could not be saved.', 'warning');
       return;
     }
     showMessage('Pool rules saved.', 'success');
@@ -2348,13 +2348,13 @@ function wireCleanlinessReportButtons() {
 
   const label = document.createElement('label');
   label.className = 'theme-toggle rule-edit-save-toggle';
-  label.setAttribute('aria-label', 'Cleanliness Report edit and save mode');
+  label.setAttribute('aria-label', 'Opening and Closing Reports edit and save mode');
   const switchDiv = document.createElement('div');
   switchDiv.className = 'theme-switch';
   const cb = document.createElement('input');
   cb.type = 'checkbox';
   cb.className = 'edit-save-toggle-input';
-  cb.setAttribute('aria-label', 'Toggle Cleanliness Report edit and save mode');
+  cb.setAttribute('aria-label', 'Toggle Opening and Closing Reports edit and save mode');
   cb.checked = !!saveBtn.disabled;
   const track = document.createElement('div');
   track.className = 'theme-switch-track';
@@ -3967,76 +3967,35 @@ function loadAuditIntoEditor(auditData) {
     container.appendChild(buildAuditSectionBlock(sec, i))
   );
 
-  refreshAuditScoringInputs();
 }
 
-function refreshAuditScoringInputs() {
-  const wrap = document.getElementById('auditScoringInputs');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-
-  const passPercent = parseInt(document.getElementById('auditEditorOverallPassScore')?.value, 10) || 80;
-
-  function blockPoints(container) {
-    let total = 0;
-    container.querySelectorAll('.audit-row-block .audit-row-points').forEach(input => {
-      total += parseInt(input.value, 10) || 1;
-    });
-    return total;
-  }
-
-  let basePoints = 0;
-  const scenarioSections = [];
-
-  document.querySelectorAll('#auditSectionsContainer .audit-section-block').forEach((secBlock) => {
-    const hasScenarios = secBlock.querySelector('.audit-section-has-scenarios')?.checked || false;
-    const secTitle = secBlock.querySelector('.audit-section-title')?.value.trim() || '';
-
-    if (!hasScenarios) {
-      basePoints += blockPoints(secBlock);
-    } else {
-      const scenarios = [];
-      secBlock.querySelectorAll('.audit-scenario-block').forEach((scenBlock) => {
-        const label = scenBlock.querySelector('.audit-scenario-label')?.value.trim() || 'Scenario';
-        const pts = blockPoints(scenBlock);
-        scenarios.push({ label, pts });
-      });
-      if (scenarios.length) scenarioSections.push({ secTitle, scenarios });
-    }
+function setAuditSectionLocked(sectionId, locked) {
+  const section = document.getElementById(sectionId);
+  if (!section) return;
+  section.classList.toggle('overlay-disabled', locked);
+  const content = section.querySelector('.editor-section-accordion-content');
+  if (!content) return;
+  content.querySelectorAll('input, textarea, select, button').forEach(el => {
+    if (el.closest('.editor-section-sticky-actions')) return;
+    el.disabled = locked;
   });
-
-  if (scenarioSections.length === 0) {
-    if (basePoints === 0) return;
-    const minPts = Math.ceil(basePoints * passPercent / 100);
-    wrap.appendChild(buildScoringRatioRow('All requirements', minPts, basePoints));
-  } else {
-    const multiSec = scenarioSections.length > 1;
-    scenarioSections.forEach(({ secTitle, scenarios }) => {
-      scenarios.forEach(({ label, pts }) => {
-        const total = basePoints + pts;
-        const minPts = Math.ceil(total * passPercent / 100);
-        const displayLabel = multiSec ? `${secTitle} · ${label}` : label;
-        wrap.appendChild(buildScoringRatioRow(displayLabel, minPts, total));
-      });
-    });
-  }
+  content.querySelectorAll('[contenteditable]').forEach(el => {
+    el.setAttribute('contenteditable', locked ? 'false' : 'true');
+  });
 }
 
-function buildScoringRatioRow(label, minRequired, total) {
-  const row = document.createElement('div');
-  row.className = 'audit-scoring-ratio-row';
+const AUDIT_SECTION_IDS = ['auditGeneralInfoSection', 'auditFormatSection', 'auditScoringSection'];
 
-  const labelEl = document.createElement('span');
-  labelEl.className = 'audit-scoring-ratio-label';
-  labelEl.textContent = label;
+function lockAllAuditSections() {
+  AUDIT_SECTION_IDS.forEach(id => setAuditSectionLocked(id, true));
+  document.querySelectorAll('#auditEditorContent .audit-rule-buttons .edit-save-toggle-input')
+    .forEach(cb => { cb.checked = true; });
+}
 
-  const valueEl = document.createElement('span');
-  valueEl.className = 'audit-scoring-ratio-value';
-  valueEl.textContent = `${minRequired}/${total}`;
-
-  row.appendChild(labelEl);
-  row.appendChild(valueEl);
-  return row;
+function unlockAllAuditSections() {
+  AUDIT_SECTION_IDS.forEach(id => setAuditSectionLocked(id, false));
+  document.querySelectorAll('#auditEditorContent .audit-rule-buttons .edit-save-toggle-input')
+    .forEach(cb => { cb.checked = false; });
 }
 
 function setAuditEditorEnabled(enabled) {
@@ -4097,37 +4056,12 @@ async function populateAuditSelect() {
 
 function wireAuditSectionButtons() {
   const sectionDefs = [
-    {
-      editId: 'editAuditInfoBtn',
-      sectionEnabled: (en) => {
-        const el = document.getElementById('auditEditorTitle');
-        if (el) el.disabled = !en;
-      }
-    },
-    {
-      editId: 'editAuditFormatBtn',
-      sectionEnabled: (en) => {
-        const addSecBtn = document.getElementById('auditAddSectionBtn');
-        if (addSecBtn) addSecBtn.disabled = !en;
-        document.querySelectorAll('.audit-section-block input, .audit-section-block textarea, .audit-section-block select').forEach(el => { el.disabled = !en; });
-        document.querySelectorAll('.audit-section-block [contenteditable]').forEach(el => {
-          el.setAttribute('contenteditable', en ? 'true' : 'false');
-          el.closest('.audit-row-block')?.querySelectorAll('.format-btn').forEach(btn => { btn.disabled = !en; });
-        });
-        document.querySelectorAll('.audit-remove-section-btn, .audit-add-row-btn, .audit-remove-row-btn, .audit-add-scenario-btn, .audit-remove-scenario-btn').forEach(btn => { btn.disabled = !en; });
-        if (!en) refreshAuditScoringInputs();
-      }
-    },
-    {
-      editId: 'editAuditScoringBtn',
-      sectionEnabled: (en) => {
-        const el = document.getElementById('auditEditorOverallPassScore');
-        if (el) el.disabled = !en;
-      }
-    }
+    { editId: 'editAuditInfoBtn',    sectionId: 'auditGeneralInfoSection' },
+    { editId: 'editAuditFormatBtn',  sectionId: 'auditFormatSection' },
+    { editId: 'editAuditScoringBtn', sectionId: 'auditScoringSection' },
   ];
 
-  sectionDefs.forEach(({ editId, sectionEnabled }) => {
+  sectionDefs.forEach(({ editId, sectionId }) => {
     const editBtn = document.getElementById(editId);
     if (!editBtn) return;
     const ruleButtons = editBtn.closest('.audit-rule-buttons');
@@ -4137,27 +4071,18 @@ function wireAuditSectionButtons() {
     const saveBtn = ruleButtons.querySelector('.pool-save-btn');
     if (saveBtn) saveBtn.style.display = 'none';
 
-    const { label, cb } = buildEditSaveToggle(
-      () => sectionEnabled(true),
+    const { label } = buildEditSaveToggle(
+      () => setAuditSectionLocked(sectionId, false),
       async () => {
-        cb.disabled = true;
-        const ok = await saveAuditEditor();
-        cb.disabled = false;
-        if (ok) { sectionEnabled(false); return false; }
-        sectionEnabled(true);
-        return true;
+        setAuditSectionLocked(sectionId, true);
+        await saveAuditEditor();
+        return false; // never revert; overlay stays locked
       }
     );
     ruleButtons.appendChild(label);
   });
 
   // Update ratio display when percentage changes
-  const passScoreInput = document.getElementById('auditEditorOverallPassScore');
-  if (passScoreInput && !passScoreInput.dataset.ratioUpdateBound) {
-    passScoreInput.dataset.ratioUpdateBound = 'true';
-    passScoreInput.addEventListener('input', refreshAuditScoringInputs);
-  }
-
   const addSecBtn = document.getElementById('auditAddSectionBtn');
   if (addSecBtn && !addSecBtn.dataset.addSectionBound) {
     addSecBtn.dataset.addSectionBound = 'true';
@@ -4180,20 +4105,15 @@ function setupAuditModeButtons() {
   const auditSelect = document.getElementById('auditSelect');
   const titleDisplay = document.getElementById('auditCurrentTitle');
 
-  function resetTogglesToSaved() {
-    editorContent?.querySelectorAll('.audit-rule-buttons .edit-save-toggle-input').forEach(cb => { cb.checked = true; });
-  }
-
-  function resetTogglesToEdit() {
-    editorContent?.querySelectorAll('.audit-rule-buttons .edit-save-toggle-input').forEach(cb => { cb.checked = false; });
-  }
-
-  function showAuditEditor() {
+  function showAuditEditor(startUnlocked = false) {
     editorContent?.removeAttribute('hidden');
     if (saveAllBtn) saveAllBtn.hidden = false;
-    setAuditEditorEnabled(false);
-    resetTogglesToSaved();
     wireAuditSectionButtons();
+    if (startUnlocked) {
+      unlockAllAuditSections();
+    } else {
+      lockAllAuditSections();
+    }
   }
 
   addBtn?.addEventListener('click', () => {
@@ -4204,9 +4124,7 @@ function setupAuditModeButtons() {
     selectWrapper?.classList.add('hidden');
     if (titleDisplay) titleDisplay.textContent = 'New Audit';
     loadAuditIntoEditor({ title: '', sections: [] });
-    showAuditEditor();
-    setAuditEditorEnabled(true);
-    resetTogglesToSaved(); // start in editing mode (showing "Save")
+    showAuditEditor(true); // start unlocked so user can fill in fields
     if (deleteBtn) deleteBtn.hidden = true;
   });
 
@@ -4288,19 +4206,6 @@ function setupAuditAutoSave() {
   editorContent.dataset.autoSaveBound = 'true';
   editorContent.addEventListener('input', scheduleAuditAutoSave);
   editorContent.addEventListener('change', scheduleAuditAutoSave);
-}
-
-function setupScoringObserver() {
-  const container = document.getElementById('auditSectionsContainer');
-  if (!container || container.dataset.scoringObserverActive) return;
-  container.dataset.scoringObserverActive = 'true';
-
-  const obs = new MutationObserver(() => refreshAuditScoringInputs());
-  obs.observe(container, { childList: true, subtree: true });
-
-  container.addEventListener('input', (e) => {
-    if (e.target.matches('.audit-scenario-label')) refreshAuditScoringInputs();
-  });
 }
 
 // ================================================================
@@ -4524,7 +4429,6 @@ async function seedBuiltInAudits() {
 function initAuditEditor() {
   setupSiteEditorTabs();
   setupAuditModeButtons();
-  setupScoringObserver();
   setupAuditAutoSave();
   seedBuiltInAudits();
 }

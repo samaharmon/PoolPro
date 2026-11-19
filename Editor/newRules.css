@@ -1410,6 +1410,39 @@ body.dark-mode .pool-rule-block {
     cursor: not-allowed;
 }
 
+/* Audit section overlays — locks content area while sticky actions remain clickable */
+#auditGeneralInfoSection,
+#auditFormatSection,
+#auditScoringSection {
+  position: relative;
+}
+
+#auditGeneralInfoSection.overlay-disabled .editor-section-accordion-content,
+#auditFormatSection.overlay-disabled .editor-section-accordion-content,
+#auditScoringSection.overlay-disabled .editor-section-accordion-content {
+  position: relative;
+  opacity: 0.85;
+}
+
+#auditGeneralInfoSection.overlay-disabled .editor-section-accordion-content::after,
+#auditFormatSection.overlay-disabled .editor-section-accordion-content::after,
+#auditScoringSection.overlay-disabled .editor-section-accordion-content::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  pointer-events: auto;
+  z-index: 5;
+  cursor: not-allowed;
+}
+
+#auditGeneralInfoSection.overlay-disabled .editor-section-accordion-content > *,
+#auditFormatSection.overlay-disabled .editor-section-accordion-content > *,
+#auditScoringSection.overlay-disabled .editor-section-accordion-content > * {
+  position: relative;
+  z-index: 1;
+}
+
 /* Market filter section inside Settings modal */
 .market-options {
     display: flex;
@@ -1763,34 +1796,6 @@ body.dark-mode #auditScoringSection label {
   color: #ccc;
 }
 
-/* Scoring ratio display rows */
-.audit-scoring-ratio-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 6px 0;
-  color: #ddd;
-  font-size: 14px;
-  border-bottom: 1px solid #555;
-}
-
-.audit-scoring-ratio-row:last-child {
-  border-bottom: none;
-}
-
-.audit-scoring-ratio-label {
-  flex: 1;
-  font-size: 13px;
-  color: #bbb;
-}
-
-.audit-scoring-ratio-value {
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  min-width: 60px;
-  text-align: right;
-}
 
 /* Constrain input/select widths in the audit editor */
 #auditEditorContent input[type="text"],

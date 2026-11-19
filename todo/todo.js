@@ -60,14 +60,14 @@ const FORM_PROOF_CONFIG = {
     },
   },
   cleanlinessOpening: {
-    label: 'Opening Cleanliness Report',
+    label: 'Opening Report',
     collection: 'dutySubmissions',
     facilityFields: ['pool', 'facilityName', 'poolLocation', 'poolName'],
     timeFields: ['timestamp', 'submittedAtIso', 'createdAt'],
     predicate: (data) => String(data.shift || data.reportShift || '').toLowerCase().includes('opening'),
   },
   cleanlinessClosing: {
-    label: 'Closing Cleanliness Report',
+    label: 'Closing Report',
     collection: 'dutySubmissions',
     facilityFields: ['pool', 'facilityName', 'poolLocation', 'poolName'],
     timeFields: ['timestamp', 'submittedAtIso', 'createdAt'],
@@ -86,7 +86,7 @@ const FORM_PROOF_CONFIG = {
     timeFields: ['timestamp', 'submittedAtIso', 'createdAt'],
   },
   operationalStatus: {
-    label: 'Operational Status Log',
+    label: 'System Maintenance Log',
     collection: 'operationalStatusLogs',
     facilityFields: ['facilityName', 'poolLocation', 'pool', 'poolName'],
     timeFields: ['timestamp', 'updatedAt', 'createdAt'],

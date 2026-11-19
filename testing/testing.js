@@ -559,7 +559,7 @@ function showScenario(scenarioIdx, rubric) {
   // Update max score display from selected scenario
   const scenario = getScenarioData(rubric, scenarioIdx);
   if (scenario) {
-    document.getElementById('testMaxScore').textContent = scenario.maxScore;
+    document.getElementById('testMaxScore').textContent = scenario.maxScore + computeBaseMax(rubric);
   }
 }
 
@@ -585,6 +585,14 @@ function computeStaticMax(rubric) {
   let total = 0;
   rubric.sections.forEach(s => {
     if (s.rows) s.rows.forEach(r => { total += r.points; });
+  });
+  return total;
+}
+
+function computeBaseMax(rubric) {
+  let total = 0;
+  rubric.sections.forEach(s => {
+    if (!s.scenarios && s.rows) s.rows.forEach(r => { total += r.points; });
   });
   return total;
 }
@@ -616,12 +624,13 @@ function updateScore(rubric) {
     if (tr.querySelectorAll('.test-cb:not(:checked)').length > 0) autoFailed = true;
   });
 
-  // Determine pass threshold
+  // Determine pass threshold and total max (scenario points + non-scenario section points)
   let passScore, maxScore;
   if (hasScenarios) {
     const scenario = getScenarioData(rubric, scenarioIdx);
+    const baseMax = computeBaseMax(rubric);
     passScore = scenario?.passScore ?? 0;
-    maxScore = scenario?.maxScore;
+    maxScore = (scenario?.maxScore ?? 0) + baseMax;
   } else {
     maxScore = computeStaticMax(rubric);
     passScore = rubric.passScore ?? Math.ceil((16 / 17) * maxScore);
@@ -872,7 +881,7 @@ async function handleSubmit(rubric) {
   const scenario = hasScenarios ? getScenarioData(rubric, scenarioIdx) : null;
   if (scenario) {
     passScore = scenario.passScore;
-    maxScore = scenario.maxScore;
+    maxScore = scenario.maxScore + computeBaseMax(rubric);
   } else {
     maxScore = computeStaticMax(rubric);
     passScore = rubric.passScore ?? Math.ceil((16 / 17) * maxScore);

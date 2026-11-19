@@ -46,7 +46,7 @@
                         <div class="dropdown-menu" id="dropdownMenu">
                             <a href="../chem/chem.html" class="dropdown-item" data-nav="chem">Pool Chemistry Log</a>
                             <a href="../Training/training.html" class="dropdown-item" data-nav="training-signup">Training Signup</a>
-                            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Cleanliness Report</a>
+                            <a href="../duties/duties.html" class="dropdown-item" data-nav="duties">Opening and Closing Reports</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="dashboard" onclick="goToDashboard(); return false;">Operations Dashboard</a>
                             <a href="#" class="dropdown-item supervisor-only" data-nav="training-setup" onclick="goToTrainingSetup(); return false;">Training Setup</a>
                             <a href="../employees/employees.html" class="dropdown-item supervisor-only" data-nav="employees">Performance Dashboard</a>
@@ -210,8 +210,8 @@
                 </div>
                 <div class="section hidden" id="cleanlinessReportSection">
                     <div class="cleanliness-report-content">
-                        <h3>Cleanliness Report</h3>
-                        <p class="section-subtitle">Select the requirements for each Cleanliness Report.</p>
+                        <h3>Opening and Closing Reports</h3>
+                        <p class="section-subtitle">Select the requirements for each Opening and Closing Report.</p>
                         <div id="cleanlinessQuestionRows" class="cleanliness-question-rows"></div>
                     </div>
                     <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px; justify-content: flex-start; align-items: center;">
@@ -1611,9 +1611,6 @@
                         <div class="form-group">
                             <label for="auditEditorOverallPassScore">Minimum Pass Score (%)</label>
                             <input type="number" id="auditEditorOverallPassScore" class="adjustment-feedback" min="0" max="100" value="80" placeholder="e.g. 80" disabled>
-                        </div>
-                        <div id="auditScoringInputs">
-                            <!-- Computed pass ratio rows populated by JS -->
                         </div>
                     </div>
                     <div class="form-row metadata-actions-row" style="gap: 10px; margin-top: 10px;">

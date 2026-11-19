@@ -1086,7 +1086,7 @@ function ensureDutiesUploadModal() {
   modal.className = 'duties-upload-progress-modal';
   modal.innerHTML = `
     <div class="duties-upload-progress-card">
-      <h2>Uploading Cleanliness Report</h2>
+      <h2>Uploading Opening and Closing Reports</h2>
       <p class="duties-upload-do-not-close"><strong>DO NOT CLOSE OR LEAVE THIS SITE!</strong> You may turn your screen off, but closing or navigating away will cancel the upload.</p>
       <div class="duties-upload-progress-track" aria-hidden="true">
         <div class="duties-upload-progress-bar" id="dutiesUploadProgressBar"></div>

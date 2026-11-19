@@ -557,6 +557,20 @@ function populateFacilitySelect(pools) {
     els.facility.appendChild(group);
   });
   if (current) els.facility.value = current;
+  if (!els.facility.value) {
+    const preferred = sessionStorage.getItem('chemlogSelectedFacilityName') || sessionStorage.getItem('chemlogEmployeeHomePool') || '';
+    if (preferred) {
+      const match = Array.from(els.facility.options).find(o => o.textContent.trim() === preferred);
+      if (match) els.facility.value = match.value;
+    }
+  }
+  if (!els.facility.dataset.facilityPersistWired) {
+    els.facility.dataset.facilityPersistWired = 'true';
+    els.facility.addEventListener('change', () => {
+      const opt = els.facility.options[els.facility.selectedIndex];
+      if (opt?.value) sessionStorage.setItem('chemlogSelectedFacilityName', opt.textContent.trim());
+    });
+  }
 }
 
 function getAllSupplyItems() {
