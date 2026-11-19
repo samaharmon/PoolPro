@@ -1454,6 +1454,13 @@ html.dashboard-hash-pending #supervisorDashboard {
     width: 25%; /* Cl column */
 }
 
+/* Reset fixed column widths for dashboard tables — the global nth-child 25% rules
+   are designed for the 4-column chem-log table and cause overflow on wider tables */
+.dashboard-pool-table th,
+.dashboard-pool-table td {
+    width: auto;
+}
+
 .data-table tr:nth-child(even) {
     background-color: #f9f9f9;
 }

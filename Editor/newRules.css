@@ -1724,6 +1724,18 @@ table thead td {
   margin-top: 0;
 }
 
+/* General Information and Scoring are single-input sections — sticky positioning
+   causes the toggle to snap to the viewport top (74px) and leave a gap above it.
+   Override to static so both Add New and Edit Existing lay out identically. */
+#auditGeneralInfoSection .editor-section-accordion-toggle,
+#auditScoringSection .editor-section-accordion-toggle {
+  position: static;
+}
+#auditGeneralInfoSection .editor-section-sticky-actions,
+#auditScoringSection .editor-section-sticky-actions {
+  position: static;
+}
+
 /* Padding inside the accordion content areas so nothing butts up against an edge */
 #auditGeneralInfoSection .editor-section-accordion-content,
 #auditFormatSection .editor-section-accordion-content,
