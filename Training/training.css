@@ -3455,7 +3455,7 @@ body {
 .training-table-body-overlay {
   position: absolute;
   left: 0;
-  right: 0;
+  right: var(--training-actions-col-width, 0px);
   bottom: 0;
   top: var(--training-header-height, 44px);
   z-index: 8;

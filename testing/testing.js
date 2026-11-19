@@ -35,7 +35,7 @@ function cloneRows(rows) {
 const RUBRICS = [
   {
     key: 'dropTest',
-    title: 'Drowning Recognition Audit (Drop Test) Rubric',
+    title: 'Drowning Recognition Audit (Drop Test)',
     rescuerLabel: 'Rescuer',
     sections: [
       {
@@ -82,7 +82,7 @@ const RUBRICS = [
 
   {
     key: 'rapidAssessment',
-    title: 'Rapid Assessment Audit Rubric',
+    title: 'Rapid Assessment Audit',
     rescuerLabel: 'Rescuer',
     passScore: 14,
     sections: [
@@ -97,7 +97,7 @@ const RUBRICS = [
 
   {
     key: 'cprTest',
-    title: 'CPR Audit Rubric',
+    title: 'CPR Audit',
     rescuerLabel: 'Rescuer',
     sections: [
       {
@@ -145,7 +145,7 @@ const RUBRICS = [
 
   {
     key: 'rescueBreathing',
-    title: 'Rescue Breathing Audit Rubric',
+    title: 'Rescue Breathing Audit',
     rescuerLabel: 'Rescuer',
     sections: [
       {
@@ -198,7 +198,7 @@ const RUBRICS = [
 
   {
     key: 'performanceAudit',
-    title: 'Job Performance Audit Rubric',
+    title: 'Job Performance Audit',
     rescuerLabel: 'Rescuer',
     // Original rubric: 16/17 pts to pass. Visible items sum to 14 pts.
     // Using proportional threshold: 13/14 (93%) ≈ 94.1% of original.

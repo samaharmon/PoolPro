@@ -11276,7 +11276,7 @@ const DATA_STORAGE_CATEGORIES = [
   { key: 'inventory', label: 'Inventory' },
   { key: 'cleanlinessReports', label: 'Cleanliness Reports' },
   { key: 'inspectionReports', label: 'Inspection Reports' },
-  { key: 'setPerformance', label: 'SET Performance' },
+  { key: 'setPerformance', label: 'Audit Performance' },
   { key: 'auditingForms', label: 'Audits' },
   { key: 'trainingSchedule', label: 'Training Schedule' },
   { key: 'trainingCompletion', label: 'Training Completion' },
@@ -11390,7 +11390,7 @@ async function getDataStorageExportSheets(categoryKey) {
       sheets.push({ name: 'Chemical Inventory Logs', rows: await getCollectionExportRows('managerialReports', summarizeReportRecord) });
       sheets.push({ name: 'DES Pre-Inspections', rows: await getCollectionExportRows('desPreInspections', summarizeReportRecord) });
     } else if (key === 'setPerformance') {
-      sheets.push({ name: 'SET Performance', rows: await getSettingsDocExportRows('employeePerformance') });
+      sheets.push({ name: 'Audit Performance', rows: await getSettingsDocExportRows('employeePerformance') });
     } else if (key === 'auditingForms') {
       sheets.push({ name: 'Audits', rows: await getCollectionExportRows('testingResults') });
     } else if (key === 'trainingSchedule') {

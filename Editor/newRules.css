@@ -941,6 +941,12 @@
     align-self: center;
 }
 
+/* Remove the form-container's top padding in the audit editor — the section
+   accordion headers provide their own spacing so the gap is redundant. */
+#auditEditorContent {
+  padding-top: 0;
+}
+
 /* Mode toggle buttons ("Add new pool" / "Edit existing pool") */
 .mode-toggle {
     min-width: 160px;
@@ -1703,6 +1709,36 @@ table thead td {
   background-color: #fff;
 }
 
+/* Ensure audit editor section inputs are visible in dark mode.
+   The global dark-mode rule applies #555 !important which renders inputs
+   invisible against the #464646 section background — override with higher
+   specificity to keep them legible. */
+body.dark-mode #auditGeneralInfoSection input[type="text"],
+body.dark-mode #auditGeneralInfoSection input[type="number"],
+body.dark-mode #auditFormatSection input[type="text"],
+body.dark-mode #auditFormatSection input[type="number"],
+body.dark-mode #auditFormatSection select,
+body.dark-mode #auditScoringSection input[type="text"],
+body.dark-mode #auditScoringSection input[type="number"],
+body.dark-mode #auditScoringSection select {
+  background-color: #3a3a3a !important;
+  color: #eee !important;
+  border-bottom: 2px solid #aaa !important;
+}
+
+body.dark-mode #auditGeneralInfoSection input[type="text"]:enabled,
+body.dark-mode #auditGeneralInfoSection input[type="number"]:enabled,
+body.dark-mode #auditFormatSection input[type="text"]:enabled,
+body.dark-mode #auditFormatSection input[type="number"]:enabled,
+body.dark-mode #auditFormatSection select:enabled,
+body.dark-mode #auditScoringSection input[type="text"]:enabled,
+body.dark-mode #auditScoringSection input[type="number"]:enabled,
+body.dark-mode #auditScoringSection select:enabled {
+  background-color: #505050 !important;
+  color: #fff !important;
+  border-bottom: 2px solid #ccc !important;
+}
+
 /* Scoring ratio display rows */
 .audit-scoring-ratio-row {
   display: flex;
@@ -1833,16 +1869,14 @@ body.dark-mode .audit-req-num-label {
   top: 0;
   right: 0;
   background: transparent;
-  border: none;
-  border-left: 1px solid #e0e0e0;
-  border-bottom: 1px solid #e0e0e0;
+  border: none !important;
   border-radius: 0;
   color: #c00;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: bold;
-  padding: 2px 8px;
+  padding: 2px 10px;
   cursor: pointer;
-  line-height: 20px;
+  line-height: 24px;
 }
 
 .audit-remove-row-btn:hover {
@@ -1980,16 +2014,14 @@ body.dark-mode .audit-scenario-block {
   top: 0;
   right: 0;
   background: transparent;
-  border: none;
-  border-left: 1px solid #ccc;
-  border-bottom: 1px solid #ccc;
+  border: none !important;
   border-radius: 0;
   color: #c00;
-  font-size: 14px;
+  font-size: 20px;
   font-weight: bold;
-  padding: 2px 8px;
+  padding: 2px 10px;
   cursor: pointer;
-  line-height: 20px;
+  line-height: 24px;
 }
 
 .audit-remove-scenario-btn:hover {

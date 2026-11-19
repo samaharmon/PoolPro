@@ -3977,8 +3977,15 @@ function refreshAuditScoringInputs() {
 
   const passPercent = parseInt(document.getElementById('auditEditorOverallPassScore')?.value, 10) || 80;
 
-  // Count base requirements (sections without scenarios)
-  let baseReqs = 0;
+  function blockPoints(container) {
+    let total = 0;
+    container.querySelectorAll('.audit-row-block .audit-row-points').forEach(input => {
+      total += parseInt(input.value, 10) || 1;
+    });
+    return total;
+  }
+
+  let basePoints = 0;
   const scenarioSections = [];
 
   document.querySelectorAll('#auditSectionsContainer .audit-section-block').forEach((secBlock) => {
@@ -3986,30 +3993,30 @@ function refreshAuditScoringInputs() {
     const secTitle = secBlock.querySelector('.audit-section-title')?.value.trim() || '';
 
     if (!hasScenarios) {
-      baseReqs += secBlock.querySelectorAll('.audit-rows-container .audit-row-block').length;
+      basePoints += blockPoints(secBlock);
     } else {
       const scenarios = [];
       secBlock.querySelectorAll('.audit-scenario-block').forEach((scenBlock) => {
         const label = scenBlock.querySelector('.audit-scenario-label')?.value.trim() || 'Scenario';
-        const rowCount = scenBlock.querySelectorAll('.audit-rows-container .audit-row-block').length;
-        scenarios.push({ label, rowCount });
+        const pts = blockPoints(scenBlock);
+        scenarios.push({ label, pts });
       });
       if (scenarios.length) scenarioSections.push({ secTitle, scenarios });
     }
   });
 
   if (scenarioSections.length === 0) {
-    if (baseReqs === 0) return;
-    const minRequired = Math.ceil(baseReqs * passPercent / 100);
-    wrap.appendChild(buildScoringRatioRow('All requirements', minRequired, baseReqs));
+    if (basePoints === 0) return;
+    const minPts = Math.ceil(basePoints * passPercent / 100);
+    wrap.appendChild(buildScoringRatioRow('All requirements', minPts, basePoints));
   } else {
     const multiSec = scenarioSections.length > 1;
     scenarioSections.forEach(({ secTitle, scenarios }) => {
-      scenarios.forEach(({ label, rowCount }) => {
-        const total = baseReqs + rowCount;
-        const minRequired = Math.ceil(total * passPercent / 100);
+      scenarios.forEach(({ label, pts }) => {
+        const total = basePoints + pts;
+        const minPts = Math.ceil(total * passPercent / 100);
         const displayLabel = multiSec ? `${secTitle} · ${label}` : label;
-        wrap.appendChild(buildScoringRatioRow(displayLabel, minRequired, total));
+        wrap.appendChild(buildScoringRatioRow(displayLabel, minPts, total));
       });
     });
   }
@@ -4199,7 +4206,7 @@ function setupAuditModeButtons() {
     loadAuditIntoEditor({ title: '', sections: [] });
     showAuditEditor();
     setAuditEditorEnabled(true);
-    resetTogglesToEdit();
+    resetTogglesToSaved(); // start in editing mode (showing "Save")
     if (deleteBtn) deleteBtn.hidden = true;
   });
 
@@ -4208,6 +4215,7 @@ function setupAuditModeButtons() {
     editBtn.classList.add('active');
     addBtn?.classList.remove('active');
     editorContent?.removeAttribute('hidden');
+    wireAuditSectionButtons();
     selectWrapper?.classList.remove('hidden');
     await populateAuditSelect();
     if (deleteBtn) deleteBtn.hidden = false;
@@ -4311,7 +4319,7 @@ const CPR_RAPID_ROWS = [
 const BUILT_IN_AUDITS = [
   {
     id: 'builtin-drowning-recognition',
-    title: 'Drowning Recognition Audit (Drop Test) Rubric',
+    title: 'Drowning Recognition Audit (Drop Test)',
     passScore: 80,
     sections: [
       {
@@ -4355,7 +4363,7 @@ const BUILT_IN_AUDITS = [
   },
   {
     id: 'builtin-rapid-assessment',
-    title: 'Rapid Assessment Audit Rubric',
+    title: 'Rapid Assessment Audit',
     passScore: 80,
     sections: [
       {
@@ -4368,7 +4376,7 @@ const BUILT_IN_AUDITS = [
   },
   {
     id: 'builtin-rescue-breathing',
-    title: 'Rescue Breathing Audit Rubric',
+    title: 'Rescue Breathing Audit',
     passScore: 80,
     sections: [
       {
@@ -4420,7 +4428,7 @@ const BUILT_IN_AUDITS = [
   },
   {
     id: 'builtin-cpr',
-    title: 'CPR Audit Rubric',
+    title: 'CPR Audit',
     passScore: 80,
     sections: [
       {
@@ -4467,7 +4475,7 @@ const BUILT_IN_AUDITS = [
   },
   {
     id: 'builtin-job-performance',
-    title: 'Job Performance Audit Rubric',
+    title: 'Job Performance Audit',
     passScore: 80,
     sections: [
       {

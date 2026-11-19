@@ -1203,6 +1203,8 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
       tableShell.appendChild(overlay);
       requestAnimationFrame(() => {
         tableShell.style.setProperty('--training-header-height', `${thead.offsetHeight || 44}px`);
+        const actionsHeader = thead.querySelector('th:last-child');
+        if (actionsHeader) tableShell.style.setProperty('--training-actions-col-width', `${actionsHeader.offsetWidth}px`);
       });
     }
     contentWrap.appendChild(tableShell);
