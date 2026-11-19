@@ -1230,7 +1230,6 @@ function applyDashboardAccessMode() {
   const chemPanel = document.getElementById('dashboardContent');
   const jobPanel = document.getElementById('jobFormsContent');
   const managerialPanel = document.getElementById('managerialFormsContent');
-  const operationalPanel = document.getElementById('operationalDashboardContent');
   const suppliesPanel = document.getElementById('dashboardSuppliesContent');
   const metricsPanel = document.getElementById('dashboardMetricsContent');
   if (!canViewChemDashboard) return;
@@ -1241,7 +1240,6 @@ function applyDashboardAccessMode() {
     if (chemPanel) chemPanel.style.display = '';
     if (jobPanel) jobPanel.style.display = 'none';
     if (managerialPanel) managerialPanel.style.display = 'none';
-    if (operationalPanel) operationalPanel.style.display = 'none';
     if (suppliesPanel) suppliesPanel.style.display = 'none';
     if (metricsPanel) metricsPanel.style.display = 'none';
   }
@@ -1282,11 +1280,6 @@ async function renderActiveDashboardTab() {
 
   if (activeTab === 'managerial') {
     loadManagerialFormSubmissions();
-    return;
-  }
-
-  if (activeTab === 'operational') {
-    renderOperationalDashboard();
     return;
   }
 
@@ -5429,7 +5422,6 @@ const DASHBOARD_PANEL_IDS = {
   chemistry: 'dashboardContent',
   jobforms: 'jobFormsContent',
   managerial: 'managerialFormsContent',
-  operational: 'operationalDashboardContent',
   supplies: 'dashboardSuppliesContent',
   metrics: 'dashboardMetricsContent',
 };
@@ -6784,6 +6776,7 @@ function renderDashboard(logs) {
           <th>Fill Line/Hose</th>
           <th>Bleach Feeder Rate</th>
           <th>Facility Open/Closed</th>
+          <th style="white-space:nowrap;width:1%;text-align:center;">Weekly Backwash</th>
         </tr></thead>
       `;
       const tbody = document.createElement('tbody');
@@ -6836,6 +6829,9 @@ function renderDashboard(logs) {
           });
         });
 
+        const backwashLog = getLatestOperationalStatus(facilityName, i, 'backwash');
+        const backwashDone = backwashLog?.weeklyBackwashStatus === 'Yes';
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td>${escapeHtml(facilityName)}</td>
@@ -6844,6 +6840,7 @@ function renderDashboard(logs) {
           <td></td>
           <td></td>
           <td></td>
+          <td style="text-align:center;font-size:1.2em;width:1%;white-space:nowrap;"></td>
         `;
 
         if (hasConsecutiveMajor) {
@@ -6873,13 +6870,15 @@ function renderDashboard(logs) {
           concern: closureLog?.closureStatus === 'Closed' ? 'major' : 'none',
           extraRows: [['Type', closureLog?.closureReason || '—']],
         });
+        cells[6].textContent = backwashDone ? '✓' : '✗';
+        cells[6].style.color = backwashDone ? '#2e7d32' : '#c62828';
 
         tbody.appendChild(tr);
         renderedRows += 1;
       });
 
       if (!renderedRows) {
-        tbody.innerHTML = '<tr><td colspan="6">No previous same-day submissions for this page.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7">No previous same-day submissions for this page.</td></tr>';
       }
 
       table.appendChild(tbody);

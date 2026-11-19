@@ -4039,6 +4039,9 @@ async function saveAuditEditor() {
     currentAuditId = id;
     document.getElementById('auditCurrentTitle').textContent = data.title;
     showMessage('Audit saved.', 'success');
+    await populateAuditSelect();
+    const auditSelect = document.getElementById('auditSelect');
+    if (auditSelect && id) auditSelect.value = id;
     return true;
   } catch (err) {
     console.error('Error saving audit:', err);
@@ -4189,6 +4192,7 @@ function setupAuditModeButtons() {
     const prevText = saveAllBtn.textContent;
     saveAllBtn.disabled = true;
     saveAllBtn.textContent = 'Saving…';
+    lockAllAuditSections();
     await saveAuditEditor();
     saveAllBtn.disabled = false;
     saveAllBtn.textContent = prevText;
