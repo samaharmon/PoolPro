@@ -1454,14 +1454,6 @@ html.dashboard-hash-pending #supervisorDashboard {
     width: 25%; /* Cl column */
 }
 
-/* Reset fixed column widths for dashboard tables — the global nth-child 25% rules
-   are designed for the 4-column chem-log table and cause overflow on wider tables.
-   !important required because nth-child has higher specificity than a plain class selector. */
-.dashboard-pool-table th,
-.dashboard-pool-table td {
-    width: auto !important;
-}
-
 .data-table tr:nth-child(even) {
     background-color: #f9f9f9;
 }
@@ -6346,9 +6338,9 @@ body > canvas {
   margin-right: 0;
 }
 
-/* Dashboard widths: Facility Name, pH, Cl, Fill Line/Hose, Bleach Feeder Rate, Facility Open/Closed */
+/* Dashboard widths: Facility Name, pH, Cl, Fill Line/Hose, Bleach Feeder Rate, Facility Open/Closed, Weekly Backwash */
 .dashboard-pool-table th:nth-child(1),
-.dashboard-pool-table td:nth-child(1) { width: 28%; }
+.dashboard-pool-table td:nth-child(1) { width: 24%; }
 
 .dashboard-pool-table th:nth-child(2),
 .dashboard-pool-table td:nth-child(2) { width: 8%; }
@@ -6357,13 +6349,16 @@ body > canvas {
 .dashboard-pool-table td:nth-child(3) { width: 8%; }
 
 .dashboard-pool-table th:nth-child(4),
-.dashboard-pool-table td:nth-child(4) { width: 20%; }
+.dashboard-pool-table td:nth-child(4) { width: 18%; }
 
 .dashboard-pool-table th:nth-child(5),
 .dashboard-pool-table td:nth-child(5) { width: 18%; }
 
 .dashboard-pool-table th:nth-child(6),
 .dashboard-pool-table td:nth-child(6) { width: 18%; }
+
+.dashboard-pool-table th:nth-child(7),
+.dashboard-pool-table td:nth-child(7) { width: 6%; text-align: center; }
 
 .dashboard-detail-table th:nth-child(1),
 .dashboard-detail-table td:nth-child(1) { width: 18%; }
@@ -7209,6 +7204,12 @@ body.dark-mode .dash-value-popover {
   #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(6),
   #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(6) {
     min-width: 92px;
+  }
+
+  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(7),
+  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(7) {
+    min-width: 36px;
+    text-align: center;
   }
 
   #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(1),
