@@ -6776,7 +6776,7 @@ function renderDashboard(logs) {
           <th>Fill Line/Hose</th>
           <th>Bleach Feeder Rate</th>
           <th>Facility Open/Closed</th>
-          <th style="white-space:nowrap;width:1%;text-align:center;">Weekly Backwash</th>
+          <th style="text-align:center;">Weekly Backwash</th>
         </tr></thead>
       `;
       const tbody = document.createElement('tbody');
@@ -6840,7 +6840,7 @@ function renderDashboard(logs) {
           <td></td>
           <td></td>
           <td></td>
-          <td style="text-align:center;font-size:1.2em;width:1%;white-space:nowrap;"></td>
+          <td style="text-align:center;font-size:1.2em;"></td>
         `;
 
         if (hasConsecutiveMajor) {

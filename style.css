@@ -7159,7 +7159,6 @@ body.dark-mode .dash-value-popover {
 
   #supervisorDashboard .table-scroll-wrap > .dashboard-pool-table {
     min-width: 100% !important;
-    width: max-content !important;
   }
 
   #supervisorDashboard .dashboard-pool-table th,
@@ -7173,7 +7172,6 @@ body.dark-mode .dash-value-popover {
 
   #supervisorDashboard #dashboardContent .table-scroll-wrap > .dashboard-pool-table {
     min-width: 100% !important;
-    width: max-content !important;
   }
 
   #supervisorDashboard #dashboardContent .dashboard-pool-table th,
