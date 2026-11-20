@@ -3646,6 +3646,7 @@ function setupSiteEditorTabs() {
 
 let currentAuditId = '';
 let currentAuditMode = null; // 'add' | 'edit'
+let currentAuditPublished = false;
 let auditAutoSaveTimer = null;
 
 function auditsCollectionRef() {
@@ -4027,7 +4028,7 @@ function setAuditEditorEnabled(enabled) {
   });
 }
 
-async function saveAuditEditor() {
+async function saveAuditEditor(publish = false) {
   const data = readAuditEditorToObject();
   if (!data.title) {
     showMessage('Audit title is required.', 'warning');
@@ -4035,10 +4036,12 @@ async function saveAuditEditor() {
   }
 
   try {
-    const id = await saveAuditDoc(currentAuditId || null, data);
+    const publishedValue = publish ? true : currentAuditPublished;
+    const id = await saveAuditDoc(currentAuditId || null, { ...data, published: publishedValue });
     currentAuditId = id;
+    if (publish) currentAuditPublished = true;
     document.getElementById('auditCurrentTitle').textContent = data.title;
-    showMessage('Audit saved.', 'success');
+    showMessage(publish ? 'Audit published.' : 'Draft saved.', 'success');
     await populateAuditSelect();
     const auditSelect = document.getElementById('auditSelect');
     if (auditSelect && id) auditSelect.value = id;
@@ -4059,7 +4062,7 @@ async function populateAuditSelect() {
     audits.forEach((a) => {
       const opt = document.createElement('option');
       opt.value = a.id;
-      opt.textContent = a.title || a.id;
+      opt.textContent = a.published ? (a.title || a.id) : `${a.title || a.id} (Draft)`;
       select.appendChild(opt);
     });
   } catch (err) {
@@ -4113,6 +4116,8 @@ function setupAuditModeButtons() {
   const editBtn = document.getElementById('auditModeEdit');
   const deleteBtn = document.getElementById('auditTopDeleteBtn');
   const saveAllBtn = document.getElementById('auditSaveAllBtn');
+  const publishBtn = document.getElementById('auditPublishBtn');
+  const republishBtn = document.getElementById('auditRepublishBtn');
   const selectWrapper = document.getElementById('auditSelectWrapper');
   const editorContent = document.getElementById('auditEditorContent');
   const auditSelect = document.getElementById('auditSelect');
@@ -4120,7 +4125,8 @@ function setupAuditModeButtons() {
 
   function showAuditEditor(startUnlocked = false) {
     editorContent?.removeAttribute('hidden');
-    if (saveAllBtn) saveAllBtn.hidden = false;
+    if (publishBtn) publishBtn.hidden = currentAuditMode !== 'add';
+    if (republishBtn) republishBtn.hidden = currentAuditMode !== 'edit';
     wireAuditSectionButtons();
     if (startUnlocked) {
       unlockAllAuditSections();
@@ -4132,12 +4138,13 @@ function setupAuditModeButtons() {
   addBtn?.addEventListener('click', () => {
     currentAuditId = '';
     currentAuditMode = 'add';
+    currentAuditPublished = false;
     addBtn.classList.add('active');
     editBtn?.classList.remove('active');
     selectWrapper?.classList.add('hidden');
     if (titleDisplay) titleDisplay.textContent = 'New Audit';
     loadAuditIntoEditor({ title: '', sections: [] });
-    showAuditEditor(true); // start unlocked so user can fill in fields
+    showAuditEditor(true);
     if (deleteBtn) deleteBtn.hidden = true;
   });
 
@@ -4150,6 +4157,8 @@ function setupAuditModeButtons() {
     selectWrapper?.classList.remove('hidden');
     await populateAuditSelect();
     if (deleteBtn) deleteBtn.hidden = false;
+    if (publishBtn) publishBtn.hidden = true;
+    if (republishBtn) republishBtn.hidden = false;
   });
 
   auditSelect?.addEventListener('change', async () => {
@@ -4159,8 +4168,10 @@ function setupAuditModeButtons() {
     try {
       const snap = await getDoc(doc(db, 'audits', id));
       if (snap.exists()) {
-        loadAuditIntoEditor(snap.data());
-        if (titleDisplay) titleDisplay.textContent = snap.data().title || id;
+        const auditData = snap.data();
+        currentAuditPublished = !!auditData.published;
+        loadAuditIntoEditor(auditData);
+        if (titleDisplay) titleDisplay.textContent = auditData.title || id;
         showAuditEditor();
       }
     } catch (err) {
@@ -4176,9 +4187,9 @@ function setupAuditModeButtons() {
       await deleteAuditDoc(currentAuditId);
       currentAuditId = '';
       currentAuditMode = null;
+      currentAuditPublished = false;
       if (titleDisplay) titleDisplay.textContent = '';
       editorContent?.setAttribute('hidden', '');
-      if (saveAllBtn) saveAllBtn.hidden = true;
       auditSelect.value = '';
       await populateAuditSelect();
       showMessage('Audit deleted.', 'success');
@@ -4188,13 +4199,30 @@ function setupAuditModeButtons() {
   });
 
   saveAllBtn?.addEventListener('click', async () => {
-    const prevText = saveAllBtn.textContent;
     saveAllBtn.disabled = true;
     saveAllBtn.textContent = 'Saving…';
     lockAllAuditSections();
-    await saveAuditEditor();
+    await saveAuditEditor(false);
     saveAllBtn.disabled = false;
-    saveAllBtn.textContent = prevText;
+    saveAllBtn.textContent = 'Save';
+  });
+
+  publishBtn?.addEventListener('click', async () => {
+    publishBtn.disabled = true;
+    publishBtn.textContent = 'Publishing…';
+    lockAllAuditSections();
+    await saveAuditEditor(true);
+    publishBtn.disabled = false;
+    publishBtn.textContent = 'Publish';
+  });
+
+  republishBtn?.addEventListener('click', async () => {
+    republishBtn.disabled = true;
+    republishBtn.textContent = 'Publishing…';
+    lockAllAuditSections();
+    await saveAuditEditor(true);
+    republishBtn.disabled = false;
+    republishBtn.textContent = 'Republish';
   });
 
   // Set up accordion-style sections with wrapSectionAccordion

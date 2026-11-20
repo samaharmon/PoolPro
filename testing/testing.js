@@ -3,7 +3,7 @@
 
 import {
   db, auth,
-  doc, getDoc, setDoc, addDoc, collection,
+  doc, getDoc, getDocs, setDoc, addDoc, collection,
   signOut, Timestamp
 } from '../firebase.js';
 
@@ -13,6 +13,7 @@ import {
 
 let employeesData = [];
 let rescuerOutsideClickBound = false;
+let firestoreRubrics = [];
 
 const CPR_RAPID_ASSESSMENT_ROWS = [
   { text: 'Rescuer ensured the scene was safe and put on gloves.', points: 2 },
@@ -250,6 +251,7 @@ document.getElementById('testLogoutBtn')?.addEventListener('click', async (e) =>
 
 async function initPage() {
   await loadEmployees();
+  await loadPublishedAudits();
   document.body.classList.add('page-loaded');
 
   document.getElementById('rubricSelect')?.addEventListener('change', (e) => {
@@ -257,10 +259,38 @@ async function initPage() {
     const container = document.getElementById('rubricFormContainer');
     container.innerHTML = '';
     if (key) {
-      const rubric = RUBRICS.find(r => r.key === key);
+      const rubric = RUBRICS.find(r => r.key === key) || firestoreRubrics.find(r => r.key === key);
       if (rubric) renderRubric(rubric);
     }
   });
+}
+
+async function loadPublishedAudits() {
+  try {
+    const snap = await getDocs(collection(db, 'audits'));
+    const select = document.getElementById('rubricSelect');
+    firestoreRubrics = [];
+    snap.docs.forEach(d => {
+      const a = { id: d.id, ...d.data() };
+      if (!a.published) return;
+      const rubric = {
+        key: `firestore:${a.id}`,
+        title: a.title || a.id,
+        rescuerLabel: 'Employee',
+        passPercent: typeof a.passScore === 'number' ? a.passScore : 80,
+        sections: Array.isArray(a.sections) ? a.sections : [],
+      };
+      firestoreRubrics.push(rubric);
+      if (select) {
+        const opt = document.createElement('option');
+        opt.value = rubric.key;
+        opt.textContent = rubric.title;
+        select.appendChild(opt);
+      }
+    });
+  } catch (err) {
+    console.error('[Testing] Could not load published audits:', err);
+  }
 }
 
 async function loadEmployees() {
@@ -298,7 +328,7 @@ function renderRubric(rubric) {
   fields.className = 'test-header-fields';
   fields.innerHTML = `
     <div class="test-header-field test-rescuer-picker-field">
-      <label for="testEmployeeName">${escHtml(rubric.rescuerLabel)}:</label>
+      <label for="testEmployeeName">${escHtml(rubric.rescuerLabel || 'Employee')}:</label>
       <div class="test-rescuer-search-wrap">
         <input
           type="text"
@@ -633,7 +663,9 @@ function updateScore(rubric) {
     maxScore = (scenario?.maxScore ?? 0) + baseMax;
   } else {
     maxScore = computeStaticMax(rubric);
-    passScore = rubric.passScore ?? Math.ceil((16 / 17) * maxScore);
+    passScore = rubric.passPercent != null
+      ? Math.ceil((rubric.passPercent / 100) * maxScore)
+      : (rubric.passScore ?? Math.ceil((16 / 17) * maxScore));
   }
 
   const passed = !autoFailed && score >= passScore;
@@ -884,7 +916,9 @@ async function handleSubmit(rubric) {
     maxScore = scenario.maxScore + computeBaseMax(rubric);
   } else {
     maxScore = computeStaticMax(rubric);
-    passScore = rubric.passScore ?? Math.ceil((16 / 17) * maxScore);
+    passScore = rubric.passPercent != null
+      ? Math.ceil((rubric.passPercent / 100) * maxScore)
+      : (rubric.passScore ?? Math.ceil((16 / 17) * maxScore));
   }
 
   const passed = !autoFailed && score >= passScore;
