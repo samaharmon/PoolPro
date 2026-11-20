@@ -1673,7 +1673,14 @@ table thead td {
 
 #auditModeAdd,
 #auditModeEdit,
-#auditTopDeleteBtn,
+#auditTopDeleteBtn {
+  min-width: 160px;
+  min-height: 52px;
+  font-size: 1rem;
+  padding: 12px 22px;
+  font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+}
+
 .audit-bottom-actions {
   display: flex;
   flex-wrap: wrap;

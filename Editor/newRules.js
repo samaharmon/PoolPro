@@ -4150,20 +4150,26 @@ function setupAuditModeButtons() {
 
   editBtn?.addEventListener('click', async () => {
     currentAuditMode = 'edit';
+    currentAuditId = '';
+    currentAuditPublished = false;
     editBtn.classList.add('active');
     addBtn?.classList.remove('active');
-    editorContent?.removeAttribute('hidden');
-    wireAuditSectionButtons();
+    editorContent?.setAttribute('hidden', '');
     selectWrapper?.classList.remove('hidden');
-    await populateAuditSelect();
-    if (deleteBtn) deleteBtn.hidden = false;
+    if (deleteBtn) deleteBtn.hidden = true;
     if (publishBtn) publishBtn.hidden = true;
-    if (republishBtn) republishBtn.hidden = false;
+    if (republishBtn) republishBtn.hidden = true;
+    await populateAuditSelect();
   });
 
   auditSelect?.addEventListener('change', async () => {
     const id = auditSelect.value;
-    if (!id) return;
+    if (!id) {
+      editorContent?.setAttribute('hidden', '');
+      if (deleteBtn) deleteBtn.hidden = true;
+      if (republishBtn) republishBtn.hidden = true;
+      return;
+    }
     currentAuditId = id;
     try {
       const snap = await getDoc(doc(db, 'audits', id));
@@ -4172,6 +4178,7 @@ function setupAuditModeButtons() {
         currentAuditPublished = !!auditData.published;
         loadAuditIntoEditor(auditData);
         if (titleDisplay) titleDisplay.textContent = auditData.title || id;
+        if (deleteBtn) deleteBtn.hidden = false;
         showAuditEditor();
       }
     } catch (err) {

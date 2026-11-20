@@ -5307,8 +5307,8 @@ td.concern-major {
 
 .dashboard-pool-table {
   width: 100%;
-  table-layout: auto;
-  --table-min-width: 1200px;
+  table-layout: fixed;
+  --table-min-width: 680px;
 }
 
 .dashboard-filter-bar {
@@ -7153,25 +7153,26 @@ body.dark-mode .dash-value-popover {
   }
 
   .dashboard-pool-table {
-    --table-min-width: 100%;
-    table-layout: auto;
+    --table-min-width: 680px;
+    table-layout: fixed;
   }
 
   #supervisorDashboard .table-scroll-wrap > .dashboard-pool-table {
-    min-width: 100% !important;
+    min-width: 680px !important;
   }
 
   #supervisorDashboard .dashboard-pool-table th,
   #supervisorDashboard .dashboard-pool-table td {
-    width: auto !important;
     max-width: none;
     min-width: 0;
     padding: 7px 7px;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
   #supervisorDashboard #dashboardContent .table-scroll-wrap > .dashboard-pool-table {
-    min-width: 100% !important;
+    min-width: 680px !important;
   }
 
   #supervisorDashboard #dashboardContent .dashboard-pool-table th,
