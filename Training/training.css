@@ -1728,6 +1728,14 @@ body.dark-mode .session-row-full td {
   color: #666 !important;
 }
 
+.training-signup-row.session-row-full {
+  cursor: not-allowed;
+}
+
+.training-signup-row.session-row-full:hover td {
+  background-color: rgba(105, 20, 14, 0.07) !important;
+}
+
 .training-row-makeup td {
   background-color: rgba(255, 128, 128, 0.13) !important;
 }
@@ -3455,7 +3463,7 @@ body {
 .training-table-body-overlay {
   position: absolute;
   left: 0;
-  right: var(--training-actions-col-width, 0px);
+  right: var(--training-actions-col-width, 112px);
   bottom: 0;
   top: var(--training-header-height, 44px);
   z-index: 8;
@@ -4186,8 +4194,8 @@ body {
 
 .attendance-table th:nth-child(2),
 .attendance-table td:nth-child(2) {
-  min-width: 150px;
-  text-align: left !important;
+  min-width: 100px;
+  text-align: center !important;
 }
 
 .attendance-table th:nth-child(3),
@@ -4676,4 +4684,51 @@ table thead td {
   max-height: calc(var(--poolpro-visual-vh, 100dvh) - 20px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) !important;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* 2a: Prevent the checkbox inside multi-day-label-row from forcing the row taller than a standard label */
+#scheduleTrainingsSection .multi-day-label-row input[type="checkbox"] {
+  height: auto !important;
+  min-height: auto !important;
+  width: auto !important;
+  padding: 0 !important;
+}
+
+/* 2b: Ensure right margin on main container */
+.training-main {
+  padding-left: 14px;
+  padding-right: 14px;
+  box-sizing: border-box;
+}
+
+/* 2d: Admin download button row */
+.admin-download-btn-row {
+  margin: 10px 0 14px;
+}
+
+/* 2e: Attendance search bar */
+.attendance-search-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.attendance-search-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.attendance-search-field input {
+  width: 100%;
+}
+
+@media (max-width: 700px) {
+  .attendance-search-row {
+    flex-direction: column;
+  }
+
+  .attendance-search-row #attendanceAddBtn {
+    width: 100%;
+  }
 }

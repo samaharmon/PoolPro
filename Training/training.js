@@ -1135,8 +1135,13 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
         row.addEventListener('click', () => selectAdminTrainingRow(session.id, mKey, el));
       }
       if (!isAdmin) {
-        row.classList.add('training-row-clickable', 'training-signup-row');
-        row.addEventListener('click', () => openTrainingSignupModal(session.id, el));
+        row.classList.add('training-signup-row');
+        if (isTrainingSessionFull(session)) {
+          row.setAttribute('title', 'Currently at capacity');
+        } else {
+          row.classList.add('training-row-clickable');
+          row.addEventListener('click', () => openTrainingSignupModal(session.id, el));
+        }
       }
       if (isAdmin && monthEditable && session.id === selectedAdminSessionId) {
         row.classList.add('training-row-selected');
@@ -1204,7 +1209,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
       requestAnimationFrame(() => {
         tableShell.style.setProperty('--training-header-height', `${thead.offsetHeight || 44}px`);
         const actionsHeader = thead.querySelector('th:last-child');
-        if (actionsHeader) tableShell.style.setProperty('--training-actions-col-width', `${actionsHeader.offsetWidth}px`);
+        if (actionsHeader) tableShell.style.setProperty('--training-actions-col-width', `${actionsHeader.offsetWidth || 112}px`);
       });
     }
     contentWrap.appendChild(tableShell);
@@ -1213,6 +1218,13 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
       const open = !contentWrap.classList.contains('hidden');
       stateMap[mKey] = open;
       toggle.querySelector('.emp-metrics-arrow').textContent = open ? 'v' : '>';
+      if (open && isAdmin) {
+        requestAnimationFrame(() => {
+          tableShell.style.setProperty('--training-header-height', `${thead.offsetHeight || 44}px`);
+          const actionsHeader = thead.querySelector('th:last-child');
+          if (actionsHeader) tableShell.style.setProperty('--training-actions-col-width', `${actionsHeader.offsetWidth || 112}px`);
+        });
+      }
     });
     section.appendChild(contentWrap);
     fragment.appendChild(section);
@@ -1224,7 +1236,13 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
 function applyFiltersAndSort(typeFilter, cityFilter) {
   let filtered = trainingSessions;
   if (typeFilter !== 'all') filtered = filtered.filter(s => s.trainingType === typeFilter);
-  if (cityFilter !== 'all') filtered = filtered.filter(s => getSessionMarket(s) === cityFilter);
+  if (cityFilter !== 'all') {
+    const cityName = cityFilter.replace(/ Area$/, '');
+    filtered = filtered.filter(s => {
+      const m = getSessionMarket(s);
+      return m === cityName || m === cityFilter;
+    });
+  }
   return [...filtered].sort((a, b) => {
     if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');
     return (a.startTime || '').localeCompare(b.startTime || '');
@@ -1256,6 +1274,11 @@ function renderAdminTables(el) {
 function renderPublicTables(el) {
   const container = el.publicTablesContainer;
   if (!container) return;
+
+  if (activePublicTypeFilter === 'all' || activePublicCityFilter === 'all') {
+    container.innerHTML = '<p style="text-align:center;color:#888;font-style:italic;margin:20px 0;">Select a training type and location above to view available sessions.</p>';
+    return;
+  }
 
   const sorted = applyFiltersAndSort(activePublicTypeFilter, activePublicCityFilter);
 
@@ -1390,6 +1413,10 @@ function setupAdmin(el) {
 
   document.getElementById('deleteTrainingSessionBtn')?.addEventListener('click', () => {
     if (selectedAdminSessionId) handleDeleteSessionClick(selectedAdminSessionId, el);
+  });
+
+  document.getElementById('adminDownloadAttendanceBtn')?.addEventListener('click', () => {
+    downloadFilteredAttendance();
   });
 
   document.getElementById('undoTrainingSessionBtn')?.addEventListener('click', async () => {
@@ -1556,102 +1583,89 @@ function openRosterModal(sessionId) {
 
   renderRosterRows();
 
-  const firstNameInput = document.getElementById('attendanceAddFirstName');
-  const emailInput = document.getElementById('attendanceAddEmployeeId');
-  const lastNameInputOriginal = document.getElementById('attendanceAddLastName');
-  let lastNameInput = lastNameInputOriginal;
-  const suggestionsEl = document.getElementById('attendanceLastNameSuggestions');
+  const searchInputOrig = document.getElementById('attendanceSearchInput');
+  const searchSuggestionsEl = document.getElementById('attendanceSearchSuggestions');
+  let searchInput = searchInputOrig;
 
-  if (lastNameInputOriginal?.parentNode) {
-    const clonedLastNameInput = lastNameInputOriginal.cloneNode(true);
-    lastNameInputOriginal.parentNode.replaceChild(clonedLastNameInput, lastNameInputOriginal);
-    lastNameInput = clonedLastNameInput;
+  if (searchInputOrig?.parentNode) {
+    const cloned = searchInputOrig.cloneNode(true);
+    searchInputOrig.parentNode.replaceChild(cloned, searchInputOrig);
+    searchInput = cloned;
   }
 
-  function hideRosterSuggestions() {
-    if (!suggestionsEl) return;
-    suggestionsEl.classList.remove('show');
-    suggestionsEl.innerHTML = '';
+  function hideSearchSuggestions() {
+    if (!searchSuggestionsEl) return;
+    searchSuggestionsEl.classList.remove('show');
+    searchSuggestionsEl.innerHTML = '';
   }
 
-  function chooseRosterEmployee(employee) {
-    selectedRosterEmployee = employee;
-    if (firstNameInput) firstNameInput.value = employee.firstName || '';
-    if (lastNameInput) lastNameInput.value = employee.lastName || '';
-    if (emailInput) emailInput.value = employee.email || employee.employeeId || '';
-    hideRosterSuggestions();
-  }
-
-  function renderRosterSuggestions() {
-    if (!suggestionsEl || !lastNameInput) return;
-    const query = lastNameInput.value.trim().toLowerCase();
+  function renderSearchSuggestions() {
+    if (!searchSuggestionsEl || !searchInput) return;
+    const query = searchInput.value.trim().toLowerCase();
     selectedRosterEmployee = null;
-    suggestionsEl.innerHTML = '';
-    if (!query) {
-      suggestionsEl.classList.remove('show');
-      return;
-    }
+    searchSuggestionsEl.innerHTML = '';
+    if (!query) { searchSuggestionsEl.classList.remove('show'); return; }
 
     const matches = getRosterEmployeeSuggestions()
-      .filter((employee) => {
-        const last = (employee.lastName || '').toLowerCase();
-        const first = (employee.firstName || '').toLowerCase();
-        return last.includes(query) || first.includes(query);
+      .filter((emp) => {
+        const name = `${emp.firstName || ''} ${emp.lastName || ''}`.toLowerCase();
+        const email = (emp.email || '').toLowerCase();
+        return name.includes(query) || email.includes(query);
       })
       .slice(0, 8);
 
-    if (!matches.length) {
-      suggestionsEl.classList.remove('show');
-      return;
-    }
+    if (!matches.length) { searchSuggestionsEl.classList.remove('show'); return; }
 
-    matches.forEach((employee) => {
+    matches.forEach((emp) => {
       const option = document.createElement('button');
       option.type = 'button';
       option.className = 'attendance-suggestion-option';
-      const name = [employee.firstName, employee.lastName].filter(Boolean).join(' ');
-      const detail = [employee.homePool, employee.email].filter(Boolean).join(' - ');
-      option.innerHTML = `<span>${name || employee.email}</span>${detail ? `<small>${detail}</small>` : ''}`;
+      const name = [emp.firstName, emp.lastName].filter(Boolean).join(' ');
+      const detail = [emp.homePool, emp.email].filter(Boolean).join(' - ');
+      option.innerHTML = `<span>${name || emp.email}</span>${detail ? `<small>${detail}</small>` : ''}`;
       option.addEventListener('mousedown', (event) => {
         event.preventDefault();
-        chooseRosterEmployee(employee);
+        selectedRosterEmployee = emp;
+        searchInput.value = [emp.firstName, emp.lastName].filter(Boolean).join(' ');
+        hideSearchSuggestions();
       });
-      suggestionsEl.appendChild(option);
+      searchSuggestionsEl.appendChild(option);
     });
-    suggestionsEl.classList.add('show');
+    searchSuggestionsEl.classList.add('show');
   }
 
-  lastNameInput?.addEventListener('input', renderRosterSuggestions);
-  lastNameInput?.addEventListener('focus', renderRosterSuggestions);
-  lastNameInput?.addEventListener('blur', () => window.setTimeout(hideRosterSuggestions, 150));
+  searchInput?.addEventListener('input', renderSearchSuggestions);
+  searchInput?.addEventListener('focus', renderSearchSuggestions);
+  searchInput?.addEventListener('blur', () => window.setTimeout(hideSearchSuggestions, 150));
 
-  // Wire Add/Save button - replace node to clear previous listeners
+  // Wire Add button - replace node to clear previous listeners
   const oldAddBtn = document.getElementById('attendanceAddBtn');
   if (oldAddBtn) {
     const newAddBtn = oldAddBtn.cloneNode(true);
     oldAddBtn.parentNode.replaceChild(newAddBtn, oldAddBtn);
     newAddBtn.addEventListener('click', () => {
       if (!Array.isArray(session.attendees)) session.attendees = [];
-      const firstName = document.getElementById('attendanceAddFirstName')?.value.trim() || '';
-      const typedLastName = document.getElementById('attendanceAddLastName')?.value.trim() || '';
-      const emailVal = (document.getElementById('attendanceAddEmployeeId')?.value.trim() || '').toLowerCase();
-      if (!firstName && !typedLastName && !emailVal) return;
+      const rawInput = searchInput ? searchInput.value.trim() : '';
+      if (!rawInput && !selectedRosterEmployee) return;
 
       const empRec = selectedRosterEmployee
-        || (emailVal && window.getEmployeeByEmail ? window.getEmployeeByEmail(emailVal) : null)
-        || findRosterEmployee(firstName, typedLastName, emailVal);
-      const lastName = empRec?.lastName || typedLastName || '';
+        || (rawInput.includes('@') && window.getEmployeeByEmail ? window.getEmployeeByEmail(rawInput) : null)
+        || findRosterEmployee('', '', rawInput);
+
+      const firstName = empRec?.firstName || (rawInput.includes('@') ? '' : (rawInput.split(' ')[0] || ''));
+      const lastName = empRec?.lastName || (rawInput.includes('@') ? '' : (rawInput.split(' ').slice(1).join(' ') || ''));
+      const email = (empRec?.email || empRec?.employeeId || (rawInput.includes('@') ? rawInput : '')).toLowerCase();
       const homePool = empRec?.homePool || '';
       const phone = empRec?.phone || '';
 
       const entry = {
         id: 'att_' + Math.random().toString(36).slice(2, 9),
-        firstName: empRec?.firstName || firstName,
+        firstName,
         lastName,
         homePool,
         phone,
-        email: emailVal || empRec?.email || '',
-        employeeId: emailVal || empRec?.employeeId || empRec?.email || '',
+        email,
+        employeeId: email || empRec?.employeeId || '',
         attended: false,
         signupTimestamp: new Date().toISOString()
       };
@@ -1660,10 +1674,17 @@ function openRosterModal(sessionId) {
       saveSessions();
       renderRosterRows();
       selectedRosterEmployee = null;
-      hideRosterSuggestions();
-      ['attendanceAddFirstName', 'attendanceAddLastName', 'attendanceAddEmployeeId']
-        .forEach(fid => { const fEl = document.getElementById(fid); if (fEl) fEl.value = ''; });
+      if (searchInput) searchInput.value = '';
+      hideSearchSuggestions();
     });
+  }
+
+  // Wire download button
+  const oldDownloadBtn = document.getElementById('attendanceSubmitBtn');
+  if (oldDownloadBtn) {
+    const newDownloadBtn = oldDownloadBtn.cloneNode(true);
+    oldDownloadBtn.parentNode.replaceChild(newDownloadBtn, oldDownloadBtn);
+    newDownloadBtn.addEventListener('click', () => downloadSessionAttendance(session));
   }
 
   openTrainingModal(modal);
@@ -1888,15 +1909,15 @@ async function submitTrainingSignupForSession(sessionId, el) {
       return false;
     }
 
-    const alreadySignedUp =
-      Array.isArray(session.attendees) &&
-      session.attendees.some((att) => {
+    const alreadySignedUp = trainingSessions
+      .filter(s => s.trainingType === session.trainingType)
+      .some(s => Array.isArray(s.attendees) && s.attendees.some((att) => {
         const attendeeKey = normalizeTrainingIdentityKey(att.employeeId || att.email || att.username || att.id);
         return attendeeKey && attendeeKey === employeeId;
-      });
+      }));
 
     if (alreadySignedUp) {
-      showTrainingSignupModalError('You are already signed up for this session.');
+      showTrainingSignupModalError('You are already signed up for a session of this training type.');
       return false;
     }
 
@@ -2154,6 +2175,73 @@ function setupLogin(el) {
       messageEl.classList.add('error');
     }
   });
+}
+
+function downloadSessionAttendance(session) {
+  if (!window.XLSX) { alert('Spreadsheet library not loaded. Please refresh and try again.'); return; }
+  const wb = window.XLSX.utils.book_new();
+  const sheetData = [
+    ['Training Type:', session.trainingType || ''],
+    ['Date & Time:', getTrainingSessionDateTimeText(session).replace(/\n/g, ' / ')],
+    ['Location:', getTrainingSessionLocationText(session).replace(/\n/g, ', ')],
+    [],
+    ['#', 'Attended', 'Preferred First Name', 'Last Name', 'Home Pool', 'Phone Number']
+  ];
+  if (Array.isArray(session.attendees) && session.attendees.length) {
+    session.attendees.forEach((a, idx) => {
+      const r = resolveRosterAttendee(a);
+      sheetData.push([idx + 1, a.attended ? 'Yes' : 'No', r.firstName || r.name || '', r.lastName || '', r.homePool || r.pool || '', r.phone || '']);
+    });
+  } else {
+    sheetData.push(['', '', 'No attendees', '', '', '']);
+  }
+  const ws = window.XLSX.utils.aoa_to_sheet(sheetData);
+  window.XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+  const safeName = (session.trainingType || 'training').replace(/[^a-z0-9]/gi, '_');
+  window.XLSX.writeFile(wb, `attendance_${safeName}_${session.date || 'date'}.xlsx`);
+}
+
+function downloadFilteredAttendance() {
+  if (!window.XLSX) { alert('Spreadsheet library not loaded. Please refresh and try again.'); return; }
+  const sorted = applyFiltersAndSort(activeAdminTypeFilter, activeAdminCityFilter);
+  if (!sorted.length) { alert('No sessions to download.'); return; }
+
+  const byMonth = {};
+  for (const session of sorted) {
+    const mKey = getMonthKeyFromDateString(session.date);
+    if (!mKey) continue;
+    if (!byMonth[mKey]) byMonth[mKey] = [];
+    byMonth[mKey].push(session);
+  }
+
+  const wb = window.XLSX.utils.book_new();
+  MONTH_KEYS.forEach((mKey, mIdx) => {
+    const sessions = byMonth[mKey];
+    if (!sessions?.length) return;
+    const sheetData = [];
+    for (const session of sessions) {
+      sheetData.push(['Training Type:', session.trainingType || '']);
+      sheetData.push(['Date & Time:', getTrainingSessionDateTimeText(session).replace(/\n/g, ' / ')]);
+      sheetData.push(['Location:', getTrainingSessionLocationText(session).replace(/\n/g, ', ')]);
+      sheetData.push([]);
+      sheetData.push(['#', 'Attended', 'Preferred First Name', 'Last Name', 'Home Pool', 'Phone Number']);
+      if (Array.isArray(session.attendees) && session.attendees.length) {
+        session.attendees.forEach((a, idx) => {
+          const r = resolveRosterAttendee(a);
+          sheetData.push([idx + 1, a.attended ? 'Yes' : 'No', r.firstName || r.name || '', r.lastName || '', r.homePool || r.pool || '', r.phone || '']);
+        });
+      } else {
+        sheetData.push(['', '', 'No attendees', '', '', '']);
+      }
+      sheetData.push([]);
+      sheetData.push([]);
+    }
+    const ws = window.XLSX.utils.aoa_to_sheet(sheetData);
+    window.XLSX.utils.book_append_sheet(wb, ws, (MONTH_LABELS[mIdx] || mKey).substring(0, 31));
+  });
+
+  if (!wb.SheetNames.length) { alert('No data to download.'); return; }
+  window.XLSX.writeFile(wb, 'training_attendance.xlsx');
 }
 
 function setupPublicFilters(el) {

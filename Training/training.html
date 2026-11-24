@@ -67,8 +67,7 @@
     <section class="card training-card">
         <h2>Scheduled Trainings</h2>
         <p>
-          These are the sessions your supervisors have created. Choose a monthly
-          in‑service training that works for your schedule.
+          Select a training type and location to view available sessions. Then choose the session that works for your schedule.
         </p>
 
         <div class="training-filter-bar" id="publicTrainingFilterBar">
@@ -77,17 +76,19 @@
             <option value="all">Training Type</option>
             <option value="HR Orientation">HR Orientation</option>
             <option value="On-Site Orientation">On-Site Orientation</option>
-            <option value="ARC Certification">ARC Certification</option>
-            <option value="ARC Recertification">ARC Recertification</option>
-            <option value="In-Service">In-Service</option>
-            <option value="Makeup In-Service">Makeup In-Service</option>
+            <option value="Lifeguard Certification">Lifeguard Certification</option>
+            <option value="Lifeguard Recertification">Lifeguard Recertification</option>
+            <option value="June In-Service">June In-Service</option>
+            <option value="Makeup June In-Service">Makeup June In-Service</option>
+            <option value="July In-Service">July In-Service</option>
+            <option value="Makeup July In-Service">Makeup July In-Service</option>
           </select>
           <select id="publicTrainingCityFilter" class="training-filter-select">
-            <option value="all">City</option>
-            <option value="Charleston">Charleston</option>
-            <option value="Charlotte">Charlotte</option>
-            <option value="Columbia">Columbia</option>
-            <option value="Greenville">Greenville</option>
+            <option value="all">Location</option>
+            <option value="Charleston Area">Charleston Area</option>
+            <option value="Charlotte Area">Charlotte Area</option>
+            <option value="Columbia Area">Columbia Area</option>
+            <option value="Greenville Area">Greenville Area</option>
           </select>
         </div>
 
@@ -114,10 +115,12 @@
                 <option value="">Select type</option>
                 <option value="HR Orientation">HR Orientation</option>
                 <option value="On-Site Orientation">On-Site Orientation</option>
-                <option value="ARC Certification">ARC Certification</option>
-                <option value="ARC Recertification">ARC Recertification</option>
-                <option value="In-Service">In-Service</option>
-                <option value="Makeup In-Service">Makeup In-Service</option>
+                <option value="Lifeguard Certification">Lifeguard Certification</option>
+                <option value="Lifeguard Recertification">Lifeguard Recertification</option>
+                <option value="June In-Service">June In-Service</option>
+                <option value="Makeup June In-Service">Makeup June In-Service</option>
+                <option value="July In-Service">July In-Service</option>
+                <option value="Makeup July In-Service">Makeup July In-Service</option>
               </select>
             </div>
             <div class="form-group">
@@ -218,18 +221,24 @@
           <option value="all">Training Type</option>
           <option value="HR Orientation">HR Orientation</option>
           <option value="On-Site Orientation">On-Site Orientation</option>
-          <option value="ARC Certification">ARC Certification</option>
-          <option value="ARC Recertification">ARC Recertification</option>
-          <option value="In-Service">In-Service</option>
-          <option value="Makeup In-Service">Makeup In-Service</option>
+          <option value="Lifeguard Certification">Lifeguard Certification</option>
+          <option value="Lifeguard Recertification">Lifeguard Recertification</option>
+          <option value="June In-Service">June In-Service</option>
+          <option value="Makeup June In-Service">Makeup June In-Service</option>
+          <option value="July In-Service">July In-Service</option>
+          <option value="Makeup July In-Service">Makeup July In-Service</option>
         </select>
         <select id="adminTrainingCityFilter" class="training-filter-select">
-          <option value="all">City</option>
-          <option value="Charleston">Charleston</option>
-          <option value="Charlotte">Charlotte</option>
-          <option value="Columbia">Columbia</option>
-          <option value="Greenville">Greenville</option>
+          <option value="all">Location</option>
+          <option value="Charleston Area">Charleston Area</option>
+          <option value="Charlotte Area">Charlotte Area</option>
+          <option value="Columbia Area">Columbia Area</option>
+          <option value="Greenville Area">Greenville Area</option>
         </select>
+      </div>
+
+      <div class="admin-download-btn-row">
+        <button type="button" id="adminDownloadAttendanceBtn" class="submit-btn">Download Signup/Attendance Spreadsheet</button>
       </div>
 
       <div id="adminScheduledTablesContainer"></div>
@@ -274,7 +283,7 @@
     <div class="attendance-modal-body">
       <div class="attendance-modal-actions">
         <button type="button" id="attendanceSubmitBtn" class="submit-btn attendance-submit-btn">
-          Submit &amp; Download Attendance Excel
+          Download Signup/Attendance Spreadsheet
         </button>
       </div>
 
@@ -298,16 +307,10 @@
 
       <div class="attendance-add-row">
         <h3>Add participant</h3>
-        <div class="attendance-add-grid">
-          <div class="attendance-add-field">
-            <input id="attendanceAddFirstName" type="text" placeholder="Preferred First Name">
-          </div>
-          <div class="attendance-add-field attendance-suggest-field">
-            <input id="attendanceAddLastName" type="text" placeholder="Last Name" autocomplete="off">
-            <div id="attendanceLastNameSuggestions" class="attendance-suggestions" role="listbox"></div>
-          </div>
-          <div class="attendance-add-field">
-            <input id="attendanceAddEmployeeId" type="email" placeholder="Email">
+        <div class="attendance-search-row">
+          <div class="attendance-search-field">
+            <input id="attendanceSearchInput" type="text" placeholder="Search by name or email…" autocomplete="off">
+            <div id="attendanceSearchSuggestions" class="attendance-suggestions" role="listbox"></div>
           </div>
           <button type="button" id="attendanceAddBtn" class="submit-btn">Add</button>
         </div>
