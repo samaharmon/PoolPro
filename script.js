@@ -6631,7 +6631,7 @@ function renderChemistryPoolDetail(container, logs, poolDoc) {
   section.appendChild(heading);
 
   const table = document.createElement('table');
-  table.className = 'data-table dashboard-pool-table dashboard-detail-table';
+  table.className = 'data-table dashboard-pool-table dashboard-detail-table dashboard-chemistry-table';
   table.innerHTML = `
     <thead><tr>
       <th>Facility Name</th>
@@ -6767,7 +6767,7 @@ function renderDashboard(logs) {
       panel.dataset.tabIdx = String(i);
 
       const table = document.createElement('table');
-      table.className = 'data-table dashboard-pool-table';
+      table.className = 'data-table dashboard-pool-table dashboard-chemistry-table';
       table.innerHTML = `
         <thead><tr>
           <th>Facility Name</th>

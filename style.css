@@ -5310,9 +5310,15 @@ td.concern-major {
   --table-min-width: 680px;
 }
 
-#dashboardContent .table-scroll-wrap > .dashboard-pool-table {
+.dashboard-chemistry-table {
   width: auto;
-  min-width: max-content;
+  table-layout: auto;
+  --table-min-width: 680px;
+}
+
+.table-scroll-wrap > .dashboard-chemistry-table {
+  width: auto;
+  min-width: 680px;
 }
 
 .dashboard-pool-table th {
@@ -7159,71 +7165,71 @@ body.dark-mode .dash-value-popover {
     white-space: nowrap;
   }
 
-  #supervisorDashboard #dashboardContent .table-scroll-wrap > .dashboard-pool-table {
-    min-width: 680px !important;
+  .table-scroll-wrap > .dashboard-chemistry-table {
+    min-width: 680px;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-pool-table th,
-  #supervisorDashboard #dashboardContent .dashboard-pool-table td {
+  #dashboardContent .dashboard-chemistry-table th,
+  #dashboardContent .dashboard-chemistry-table td {
     padding: 7px 7px;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-pool-table th:nth-child(1),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table td:nth-child(1) {
+  #dashboardContent .dashboard-chemistry-table th:nth-child(1),
+  #dashboardContent .dashboard-chemistry-table td:nth-child(1) {
     min-width: 108px;
     max-width: 136px;
     white-space: normal;
     overflow-wrap: anywhere;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(2),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(2),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(3),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(3) {
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) th:nth-child(2),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) td:nth-child(2),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) th:nth-child(3),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) td:nth-child(3) {
     min-width: 44px;
     text-align: center;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(4),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(4),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(5),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(5),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(6),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(6) {
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) th:nth-child(4),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) td:nth-child(4),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) th:nth-child(5),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) td:nth-child(5),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) th:nth-child(6),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) td:nth-child(6) {
     min-width: 92px;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) th:nth-child(7),
-  #supervisorDashboard #dashboardContent .dashboard-pool-table:not(.dashboard-detail-table) td:nth-child(7) {
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) th:nth-child(7),
+  #dashboardContent .dashboard-chemistry-table:not(.dashboard-detail-table) td:nth-child(7) {
     min-width: 36px;
     text-align: center;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(1),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(1) {
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table th:nth-child(1),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table td:nth-child(1) {
     min-width: 102px;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(2),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(2) {
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table th:nth-child(2),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table td:nth-child(2) {
     min-width: 78px;
     text-align: center;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(3),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(3),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(4),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(4) {
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table th:nth-child(3),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table td:nth-child(3),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table th:nth-child(4),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table td:nth-child(4) {
     min-width: 44px;
     text-align: center;
   }
 
-  #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(5),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(5),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(6),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(6),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table th:nth-child(7),
-  #supervisorDashboard #dashboardContent .dashboard-detail-table td:nth-child(7) {
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table th:nth-child(5),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table td:nth-child(5),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table th:nth-child(6),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table td:nth-child(6),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table th:nth-child(7),
+  #dashboardContent .dashboard-chemistry-table.dashboard-detail-table td:nth-child(7) {
     min-width: 86px;
   }
 
