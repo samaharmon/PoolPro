@@ -4156,6 +4156,7 @@ function setupAuditModeButtons() {
     addBtn?.classList.remove('active');
     editorContent?.setAttribute('hidden', '');
     selectWrapper?.classList.remove('hidden');
+    if (titleDisplay) titleDisplay.textContent = '';
     if (deleteBtn) deleteBtn.hidden = true;
     if (publishBtn) publishBtn.hidden = true;
     if (republishBtn) republishBtn.hidden = true;

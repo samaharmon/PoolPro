@@ -5306,9 +5306,18 @@ td.concern-major {
 }
 
 .dashboard-pool-table {
-  width: 100%;
-  table-layout: fixed;
+  width: auto;
+  table-layout: auto;
   --table-min-width: 680px;
+}
+
+.dashboard-pool-table th {
+  white-space: nowrap;
+}
+
+#supervisorDashboard .table-scroll-wrap > .dashboard-pool-table {
+  width: auto;
+  min-width: 680px;
 }
 
 .dashboard-filter-bar {
@@ -6338,27 +6347,8 @@ body > canvas {
   margin-right: 0;
 }
 
-/* Dashboard widths: Facility Name, pH, Cl, Fill Line/Hose, Bleach Feeder Rate, Facility Open/Closed, Weekly Backwash */
-.dashboard-pool-table th:nth-child(1),
-.dashboard-pool-table td:nth-child(1) { width: 24%; }
-
-.dashboard-pool-table th:nth-child(2),
-.dashboard-pool-table td:nth-child(2) { width: 8%; }
-
-.dashboard-pool-table th:nth-child(3),
-.dashboard-pool-table td:nth-child(3) { width: 8%; }
-
-.dashboard-pool-table th:nth-child(4),
-.dashboard-pool-table td:nth-child(4) { width: 18%; }
-
-.dashboard-pool-table th:nth-child(5),
-.dashboard-pool-table td:nth-child(5) { width: 18%; }
-
-.dashboard-pool-table th:nth-child(6),
-.dashboard-pool-table td:nth-child(6) { width: 18%; }
-
 .dashboard-pool-table th:nth-child(7),
-.dashboard-pool-table td:nth-child(7) { width: 6%; text-align: center; }
+.dashboard-pool-table td:nth-child(7) { text-align: center; }
 
 .dashboard-detail-table th:nth-child(1),
 .dashboard-detail-table td:nth-child(1) { width: 18%; }
@@ -7154,7 +7144,6 @@ body.dark-mode .dash-value-popover {
 
   .dashboard-pool-table {
     --table-min-width: 680px;
-    table-layout: fixed;
   }
 
   #supervisorDashboard .table-scroll-wrap > .dashboard-pool-table {
