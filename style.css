@@ -5306,18 +5306,12 @@ td.concern-major {
 }
 
 .dashboard-pool-table {
-  width: auto;
   table-layout: auto;
   --table-min-width: 680px;
 }
 
 .dashboard-pool-table th {
   white-space: nowrap;
-}
-
-#supervisorDashboard .table-scroll-wrap > .dashboard-pool-table {
-  width: auto;
-  min-width: 680px;
 }
 
 .dashboard-filter-bar {
