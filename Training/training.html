@@ -407,7 +407,7 @@
                 <input
                 type="file"
                 id="employeeFileInput"
-                accept=".csv,.xlsx,.xls"
+                accept=".csv,.txt,.xlsx,.xls"
                 />
             </div>
 
@@ -452,6 +452,10 @@
 
             <div class="training-filter-bar employee-filter-bar" id="employeeFilterBar" style="margin: 20px 0 4px;">
               <span class="filter-by-label">Filter By:</span>
+              <div class="settings-field roles-search-field employee-search-field">
+                <label for="employeeSettingsSearch">Search</label>
+                <input type="text" id="employeeSettingsSearch" class="employee-search-input" autocomplete="off" placeholder="Search employees">
+              </div>
               <select id="employeeMarketFilter" class="training-filter-select">
                 <option value="all">Market</option>
                 <option value="Charleston">Charleston</option>
@@ -478,6 +482,9 @@
                 </thead>
                 <tbody id="employeesTableBody"></tbody>
             </table>
+            </div>
+            <div style="margin-top:10px;">
+              <button type="button" id="employeeDeleteAllBtn" class="submit-btn danger-button">Delete All Employees</button>
             </div>
             </section>
             <div class="settings-section">

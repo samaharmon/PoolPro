@@ -8369,7 +8369,7 @@ function setupEmployeeManagement() {
       await saveEmployees();
       renderEmployeesTable();
       if (linkedAccessResult?.authDeleteError) {
-        alert('Employee removed from PoolPro, but the Firebase Auth credential could not be deleted automatically. If this email needs to be reused later, delete it from Firebase Authentication manually.');
+        alert('Employee removed from PoolPro. Their Firebase Authentication entry was not deleted automatically — this requires the Cloud Functions to be deployed. Enable billing in the Firebase/GCP console and run "firebase deploy --only functions" to activate automatic Auth cleanup.');
       }
     });
   }

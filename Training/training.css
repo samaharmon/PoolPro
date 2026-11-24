@@ -2561,7 +2561,7 @@ body.dark-mode #settingsModal .modal-header {
 
 .employee-add-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 260px));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   justify-content: flex-start;
   gap: 12px 16px;
   margin: 10px 0 16px;
@@ -2570,7 +2570,6 @@ body.dark-mode #settingsModal .modal-header {
 .employee-add-row .settings-field,
 .employee-add-row .employee-add-btn-cell {
   width: 100%;
-  max-width: 260px;
 }
 
 .employee-add-btn-cell {

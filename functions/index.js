@@ -148,3 +148,22 @@ exports.deleteAuthUserByEmail = functions.https.onRequest(async (req, res) => {
     res.status(err.status || 500).json({ error: err.message || 'Unable to delete Firebase Auth user.' });
   }
 });
+
+// Automatically delete the Firebase Auth user whenever a lifeguardAccounts doc is deleted.
+// This fires server-side regardless of which code path deletes the doc, so no HTTP call or
+// auth check is required. If the auth user doesn't exist the error is silently swallowed.
+exports.onLifeguardAccountDeleted = functions.firestore
+  .document('lifeguardAccounts/{username}')
+  .onDelete(async (snap) => {
+    const data = snap.data() || {};
+    const email = (data.authEmail || data.employeeEmail || data.email || data.id || '').toString().trim().toLowerCase();
+    if (!email) return;
+    try {
+      const user = await admin.auth().getUserByEmail(email);
+      await admin.auth().deleteUser(user.uid);
+    } catch (err) {
+      if (err?.code !== 'auth/user-not-found') {
+        console.error('[PoolPro] onLifeguardAccountDeleted: could not delete Firebase Auth user:', err);
+      }
+    }
+  });
