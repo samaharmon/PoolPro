@@ -90,16 +90,25 @@ function escapeHtmlUnsafe(str) {
 }
 
 function showMessage(message, type = 'info') {
-  const content = document.getElementById('ruleEditorContent') || document.body;
-  let messageEl = document.getElementById('editorMessage');
+  const auditPanel = document.getElementById('auditsInspectionsPanel');
+  const isAuditTab = auditPanel && !auditPanel.classList.contains('hidden');
+  const targetAnchor = isAuditTab
+    ? document.getElementById('auditModeRow')
+    : document.getElementById('editorModeRow');
+  const content = isAuditTab
+    ? (document.getElementById('auditTopControls') || auditPanel || document.body)
+    : (document.getElementById('ruleEditorContent') || document.body);
 
+  let messageEl = document.getElementById('editorMessage');
   if (!messageEl) {
     messageEl = document.createElement('div');
     messageEl.id = 'editorMessage';
     messageEl.className = 'editor-message';
-    const anchor = document.getElementById('editorModeRow') || content.firstElementChild;
-    if (anchor?.parentNode) anchor.parentNode.insertBefore(messageEl, anchor.nextSibling);
-    else content.prepend(messageEl);
+  }
+  if (targetAnchor?.parentNode) {
+    targetAnchor.parentNode.insertBefore(messageEl, targetAnchor.nextSibling);
+  } else if (!messageEl.parentNode) {
+    content.prepend(messageEl);
   }
 
   const normalizedType = type === true ? 'error' : (type || 'info');

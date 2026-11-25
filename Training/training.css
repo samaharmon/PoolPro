@@ -1730,6 +1730,29 @@ body.dark-mode .session-row-full td {
 
 .training-signup-row.session-row-full {
   cursor: not-allowed;
+  position: relative;
+}
+
+.training-signup-row.session-row-full::after {
+  content: 'This event is currently full.';
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(30, 30, 30, 0.95);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 100;
+}
+
+.training-signup-row.session-row-full:hover::after {
+  opacity: 1;
 }
 
 .training-signup-row.session-row-full:hover td {
@@ -3453,6 +3476,38 @@ body {
 
 .training-month-controls {
   min-width: 142px;
+  height: auto;
+  overflow: visible;
+  border: none;
+  background: none;
+  box-shadow: none;
+  gap: 8px;
+}
+
+.training-month-controls .sanitation-controls-thumb {
+  display: none;
+}
+
+.training-month-controls .editAndSave {
+  background: var(--poolpro-accent-gradient, linear-gradient(135deg, #69140e, #202834));
+  color: #fff;
+  padding: 15px 30px;
+  font-size: 18px;
+  font-weight: bold;
+  max-width: none;
+  min-width: 0;
+  opacity: 0.45;
+  position: static;
+  z-index: auto;
+}
+
+.training-month-controls .editAndSave.active {
+  opacity: 1;
+  color: #fff;
+}
+
+.training-month-controls .editAndSave:disabled {
+  cursor: not-allowed;
 }
 
 .training-edit-table-shell {
@@ -3463,7 +3518,7 @@ body {
   position: absolute;
   left: 0;
   right: var(--training-actions-col-width, 112px);
-  bottom: 0;
+  bottom: 8px;
   top: var(--training-header-height, 44px);
   z-index: 8;
   background: rgba(0, 0, 0, 0.28);
@@ -4302,7 +4357,7 @@ body {
 
 #attendanceAddBtn {
   height: 36px;
-  align-self: end;
+  align-self: center;
 }
 
 @media (max-width: 700px) {
@@ -4709,7 +4764,7 @@ table thead td {
 .attendance-search-row {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .attendance-search-field {

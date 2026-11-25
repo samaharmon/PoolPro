@@ -1137,6 +1137,7 @@ function buildScheduleTableSection(sessions, isAdmin, el = null) {
       if (!isAdmin) {
         row.classList.add('training-signup-row');
         if (isTrainingSessionFull(session)) {
+          row.classList.add('session-row-full');
           row.setAttribute('title', 'Currently at capacity');
         } else {
           row.classList.add('training-row-clickable');

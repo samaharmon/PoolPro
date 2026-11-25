@@ -1674,11 +1674,17 @@ table thead td {
 #auditModeAdd,
 #auditModeEdit,
 #auditTopDeleteBtn {
-  min-width: 160px;
-  min-height: 52px;
-  font-size: 1rem;
-  padding: 12px 22px;
+  min-width: 200px;
+  min-height: 72px;
+  font-size: 1.15rem;
+  padding: 18px 32px;
+  background: var(--poolpro-accent-gradient, linear-gradient(135deg, #69140e, #202834));
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  border: 2px solid #fff;
   font-family: 'Franklin Gothic Medium', Arial, sans-serif;
+  font-weight: bold;
+  cursor: pointer;
 }
 
 .audit-bottom-actions {
